@@ -1,0 +1,8 @@
+# Machine-specific paths. Copy to config/paths.toml (git-ignored) and edit,
+# or point the LPSTGP_PATHS environment variable at another file.
+# A leading "~" is expanded. cache_dir must not be inside a cloud-synced folder.
+
+data_dir = "~/llm-primitives-stgp-data"        # raw + processed market data (tierA, tierB, tierC)
+results_dir = "/path/to/project/results"       # per-run summaries and best individuals
+reports_dir = "/path/to/project/reports/wp1"   # generated data, smoke-test and projection reports
+cache_dir = "~/Library/Caches/llm-primitives-stgp"  # disposable, size-capped caches

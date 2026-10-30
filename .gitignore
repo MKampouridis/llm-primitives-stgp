@@ -1,0 +1,57 @@
+# Python build and environment
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Tool caches (all disposable)
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.mypy_cache/
+.coverage
+htmlcov/
+*.nbi
+*.nbc
+cache/
+
+# Data, results and reports are never committed
+data/
+results/
+reports/
+*.parquet
+*.feather
+*.arrow
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.csv
+*.zip
+*.gz
+
+# Secrets and credentials are never committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials*
+.pgpass
+*.token
+
+# Machine-specific configuration
+config/paths.toml
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/

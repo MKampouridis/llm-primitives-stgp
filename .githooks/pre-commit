@@ -1,0 +1,4 @@
+#!/bin/sh
+# Block commits that add data files, large files or secret-like strings.
+# Enabled per clone with: git config core.hooksPath .githooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/check_hygiene.py" --staged
