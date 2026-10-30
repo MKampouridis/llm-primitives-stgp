@@ -12,6 +12,8 @@ import ast
 
 ALLOWED_OPERATOR_IMPORTS = (
     "__future__",
+    "collections.abc",  # type hints only
+    "typing",
     "math",
     "numpy",
     "numba",
