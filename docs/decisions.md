@@ -203,3 +203,36 @@ The lock hashes each contract's module, the lpstgp helper modules it imports, an
 - **Real-data gate:** P01 VALIDATE sandboxes, scoring the fit and validation years (2005-07 to 2008-06), all before the first test year. All instruments with full warm-up then (crypto excluded). Pass if the output is finite on ≥ 99% of bars with defined inputs and non-constant on ≥ 90% of instruments.
 - **Scoring change:** a single validation year was too short for rare-event booleans at extreme thresholds (e.g. `ExceedsKSd(252, k = 2)`).
 - **Kleene crossovers:** AND(false, unknown) = false, so "a is not above b now" rules out a cross even when the previous bar is unknown.
+
+### D-028 Backtest conventions and cost model — Decided (plan approval); cost levels provisional
+- **Rule semantics** (long-only):
+  - flat → long when entry = 1 and exit ≠ 1 (an unknown exit does not block an entry);
+  - long → flat when exit = 1;
+  - an unknown entry or exit means no action;
+  - flat and inactive before its first scored bar.
+- **Execution:** the position held over bar t is the decision of bar t − 1 (`execution_lag = 1`: trade at the signal bar's close, earn the next close-to-close return). `execution_lag = 2` (next close) is available for robustness. The primary lag is an open question for WP2.
+- **Returns and costs:**
+  - simple returns from point-in-time total log returns;
+  - a bar with an unknown return contributes 0, and the next valid return spans the gap;
+  - costs are charged on every change of the held position (buy and sell rates may differ, e.g. UK stamp duty for Tier B), times a global multiplier (sensitivity sweep 0.5/1/2/3×).
+- **Base one-way costs (broker-spread model v1, pilot):**
+
+  | Asset class | One-way cost (bps) |
+  |---|---|
+  | Equity indices | 2 (HSI, KOSPI 3) |
+  | FX majors | 1 (EURUSD, GBPUSD, USDJPY) |
+  | Other FX | 1.5 |
+  | WTI, Brent | 3 |
+  | Natural gas | 8 |
+  | Gold | 2 |
+  | Silver, copper | 4 |
+  | Bond ETFs | 1 |
+  | Crypto | 10 |
+
+  These are engineering assumptions in line with typical institutional spreads plus commissions. They should be replaced by contemporaneous spreads where available (the engine accepts per-bar cost arrays).
+- **Metrics:**
+  - Sharpe and Sortino annualised with 252 (business calendar) or 365 (crypto) periods; a series with no variation has Sharpe 0;
+  - maximum drawdown of compounded equity;
+  - Calmar;
+  - total and annualised return;
+  - annualised one-way turnover (position changes per year), number of entries, exposure.
