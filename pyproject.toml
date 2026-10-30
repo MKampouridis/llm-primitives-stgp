@@ -62,6 +62,7 @@ ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers --import-mode=importlib"
 xfail_strict = true
 markers = [

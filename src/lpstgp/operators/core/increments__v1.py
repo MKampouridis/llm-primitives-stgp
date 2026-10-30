@@ -30,5 +30,4 @@ SPEC = OperatorSpec(
     impl=increments,
     invariances=("shift",),
     size_weight=0,
-    tolerance=1e-12,
 )

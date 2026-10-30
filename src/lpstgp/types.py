@@ -123,8 +123,8 @@ class Alpha(Param):
 
 
 class Epsilon(Param):
-    grid = (0.05, 0.1, 0.5)
-    description = "entropic regularisation (squared z-score units)"
+    grid = (0.25, 0.5, 1.0)
+    description = "entropic regularisation (squared z-score units; bins are 0.5 wide)"
 
 
 class PVar(Param):

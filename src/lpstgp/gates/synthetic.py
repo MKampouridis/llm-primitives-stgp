@@ -18,9 +18,10 @@ def garch_returns(n: int, seed: int) -> np.ndarray:
     r = np.empty(n)
     var = omega / (1 - alpha - beta)
     for t in range(n):
-        regime = 2.0 if (t // 400) % 2 else 1.0
-        r[t] = np.sqrt(var) * shocks[t] * regime
-        var = omega + alpha * r[t] ** 2 + beta * var
+        innovation = np.sqrt(var) * shocks[t]
+        var = omega + alpha * innovation**2 + beta * var  # stationary GARCH(1,1) recursion
+        regime = 2.0 if (t // 400) % 2 else 1.0  # volatility regime applied outside the recursion
+        r[t] = innovation * regime
     return r + 2e-4
 
 
