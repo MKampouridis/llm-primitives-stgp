@@ -7,8 +7,9 @@ roll-free proxies without inspecting values.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Mapping, Sequence
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -18,26 +19,45 @@ import pandas as pd
 from lpstgp.splits import Period, is_eligible
 
 
-@lru_cache(maxsize=32)
+def _weekdays(first: np.datetime64, last: np.datetime64) -> np.ndarray:
+    if last < first:
+        return np.array([], dtype="datetime64[D]")
+    days = np.arange(first, last + np.timedelta64(1, "D"))
+    return days[np.is_busday(days)]
+
+
+@lru_cache(maxsize=64)
 def _exchange_sessions(code: str, first: date, last: date) -> np.ndarray:
+    """Exchange sessions in [first, last]; weekdays outside the calendar's supported range."""
     import exchange_calendars as xc
 
-    cal = xc.get_calendar(code, start=pd.Timestamp(first), end=pd.Timestamp(last))
-    sessions = cal.sessions_in_range(pd.Timestamp(first), pd.Timestamp(last))
-    return sessions.to_numpy().astype("datetime64[D]")
+    lo, hi = pd.Timestamp(first), pd.Timestamp(last)
+    calendar_type = type(xc.get_calendar(code))
+    bound_min, bound_max = calendar_type.bound_min(), calendar_type.bound_max()
+    supported_lo = max(lo, bound_min) if bound_min is not None else lo
+    supported_hi = min(hi, bound_max) if bound_max is not None else hi
+    if supported_hi < supported_lo:
+        return _weekdays(np.datetime64(first, "D"), np.datetime64(last, "D"))
+    # Build a little past the end so that a holiday on the last day is not "out of bounds".
+    cal = xc.get_calendar(code, start=supported_lo, end=supported_hi + pd.Timedelta(days=7))
+    s_lo, s_hi = max(supported_lo, cal.first_session), min(supported_hi, cal.last_session)
+    sessions = cal.sessions_in_range(s_lo, s_hi) if s_lo <= s_hi else pd.DatetimeIndex([])
+    one_day = np.timedelta64(1, "D")
+    # Weekdays only outside the calendar's *supported range* (not merely before its first session).
+    before = _weekdays(np.datetime64(first, "D"), np.datetime64(supported_lo.date(), "D") - one_day)
+    after = _weekdays(np.datetime64(supported_hi.date(), "D") + one_day, np.datetime64(last, "D"))
+    return np.concatenate([before, sessions.to_numpy().astype("datetime64[D]"), after])
 
 
 def expected_sessions(calendar: str, qa_calendar: str, first: date, last: date) -> np.ndarray:
     """Sessions a complete series would have: all days (7day), an exchange calendar, or weekdays."""
-    days = np.arange(np.datetime64(first, "D"), np.datetime64(last, "D") + np.timedelta64(1, "D"))
     if calendar == "7day":
-        return days
+        return np.arange(
+            np.datetime64(first, "D"), np.datetime64(last, "D") + np.timedelta64(1, "D")
+        )
     if qa_calendar:
-        try:
-            return _exchange_sessions(qa_calendar, first, last)
-        except Exception:  # calendar range not covered: fall back to weekdays
-            pass
-    return days[np.is_busday(days)]
+        return _exchange_sessions(qa_calendar, first, last)
+    return _weekdays(np.datetime64(first, "D"), np.datetime64(last, "D"))
 
 
 def longest_gap(present: np.ndarray, expected: np.ndarray) -> int:
@@ -56,7 +76,7 @@ def stale_runs(close: np.ndarray, min_len: int) -> int:
     if len(values) < min_len:
         return 0
     count, run = 0, 1
-    for prev, cur in zip(values[:-1], values[1:], strict=True):
+    for prev, cur in itertools.pairwise(values):
         if cur == prev:
             run += 1
         else:
@@ -101,12 +121,21 @@ def assess(
     flag_counts = flags["flag"].value_counts().to_dict() if len(flags) else {}
     q = settings["quality"]
     splits_cfg = settings["splits"]
-    # The eligibility calendar spans all periods, not just the data range.
-    full_expected = expected_sessions(calendar, qa_calendar, min(first, periods[0].fit_start), periods[-1].test_end)
+    # The eligibility calendar spans all periods (the last test end is exclusive).
+    last_day = periods[-1].test_end - timedelta(days=1)
+    full_expected = expected_sessions(
+        calendar, qa_calendar, min(first, periods[0].fit_start), last_day
+    )
     eligible = [
         p.id
         for p in periods
-        if is_eligible(valid_dates, full_expected, p, splits_cfg["lookback_max_bars"], splits_cfg["min_session_coverage"])
+        if is_eligible(
+            valid_dates,
+            full_expected,
+            p,
+            splits_cfg["lookback_max_bars"],
+            splits_cfg["min_session_coverage"],
+        )
     ]
     volume = frame["volume"].to_numpy(dtype="float64")
     return {
@@ -143,7 +172,9 @@ def render_table(rows: Sequence[tuple[Mapping[str, Any], Mapping[str, Any]]]) ->
     lines = []
     for meta, result in rows:
         if not result.get("bars"):
-            lines.append(f"| {meta['instrument_id']} | {meta['asset_class']} | {meta['source']}:{meta['source_symbol']} | | | | 0 | | | | | | | | | none |")
+            lines.append(
+                f"| {meta['instrument_id']} | {meta['asset_class']} | {meta['source']}:{meta['source_symbol']} | | | | 0 | | | | | | | | | none |"
+            )
             continue
         lines.append(
             f"| {meta['instrument_id']} | {meta['asset_class']} | {meta['source']}:{meta['source_symbol']} | "

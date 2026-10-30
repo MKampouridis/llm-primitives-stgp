@@ -69,7 +69,9 @@ def load_manifest(tier_dir: Path) -> list[TierCDataset]:
     return datasets
 
 
-def load_file(tier_dir: Path, dataset: TierCDataset, file: str) -> tuple[pd.DataFrame, pd.DataFrame, str]:
+def load_file(
+    tier_dir: Path, dataset: TierCDataset, file: str
+) -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """One file mapped to schema v1 (+ extra columns). Returns ``(bars, flags, sha256)``."""
     path = Path(tier_dir) / file
     raw = pd.read_csv(path)
@@ -79,7 +81,11 @@ def load_file(tier_dir: Path, dataset: TierCDataset, file: str) -> tuple[pd.Data
         frame[target] = raw[column]
     bars, flags = schema.normalise(frame)
     for extra in dataset.extra_columns:
-        bars[extra] = raw.set_index(dates.to_numpy().astype("datetime64[D]"))[extra].reindex(bars["date"]).to_numpy()
+        bars[extra] = (
+            raw.set_index(dates.to_numpy().astype("datetime64[D]"))[extra]
+            .reindex(bars["date"])
+            .to_numpy()
+        )
     return bars, flags, mf.sha256_file(path)
 
 
@@ -87,6 +93,8 @@ def inventory(tier_dir: Path) -> dict[str, Any]:
     """What is in tierC/: files present and manifest status (for the data report)."""
     tier_dir = Path(tier_dir)
     files = sorted(
-        str(p.relative_to(tier_dir)) for p in tier_dir.rglob("*") if p.is_file() and not p.name.startswith(".")
+        str(p.relative_to(tier_dir))
+        for p in tier_dir.rglob("*")
+        if p.is_file() and not p.name.startswith(".")
     )
     return {"files": files, "datasets": load_manifest(tier_dir)}

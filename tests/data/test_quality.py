@@ -14,7 +14,8 @@ def test_expected_sessions_variants():
     weekdays = quality.expected_sessions("business", "", date(2020, 12, 24), date(2020, 12, 28))
     assert len(weekdays) == 3  # Thu, Fri, Mon
     nyse = quality.expected_sessions("business", "XNYS", date(2020, 12, 24), date(2020, 12, 28))
-    assert np.datetime64("2020-12-25") not in nyse and len(nyse) == 2
+    assert np.datetime64("2020-12-25") not in nyse
+    assert len(nyse) == 2
 
 
 def test_longest_gap_and_stale_runs():
@@ -53,6 +54,16 @@ def test_assess_counts_and_eligibility():
     meta = {"calendar": "business", "qa_calendar": "", "close_only": True}
     result = quality.assess(frame, flags, meta, periods, settings)
     assert result["bars"] == len(dates) - 1
-    assert result["missing"] == 1 and result["longest_gap"] == 1
+    assert result["missing"] == 1
+    assert result["longest_gap"] == 1
     assert result["volume_share"] == 0.0
     assert result["eligible"] == [p.id for p in periods]
+
+
+def test_expected_sessions_outside_calendar_bounds_use_weekdays():
+    """XTKS is only defined from 1997: earlier days fall back to weekdays, later ones use holidays."""
+    days = quality.expected_sessions("business", "XTKS", date(1996, 12, 30), date(1997, 1, 6))
+    assert np.datetime64("1996-12-31") in days  # weekday fallback before the calendar starts
+    assert np.datetime64("1997-01-02") not in days  # Tokyo new-year holiday inside the calendar
+    hk = quality.expected_sessions("business", "XHKG", date(2026, 6, 25), date(2026, 7, 1))
+    assert np.datetime64("2026-06-30") in hk

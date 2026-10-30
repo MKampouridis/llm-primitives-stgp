@@ -29,7 +29,25 @@ MARKETS = ("US", "EUROPE", "UK", "JAPAN_ASIA")
 DEFAULT_COUNTRY_MARKET = {
     "US": "US",
     "GB": "UK",
-    **{c: "EUROPE" for c in ("AT", "BE", "CH", "DE", "DK", "ES", "FI", "FR", "IE", "IT", "NL", "NO", "PT", "SE")},
+    **{
+        c: "EUROPE"
+        for c in (
+            "AT",
+            "BE",
+            "CH",
+            "DE",
+            "DK",
+            "ES",
+            "FI",
+            "FR",
+            "IE",
+            "IT",
+            "NL",
+            "NO",
+            "PT",
+            "SE",
+        )
+    },
     **{c: "JAPAN_ASIA" for c in ("JP", "HK", "KR", "SG", "TW")},
 }
 
@@ -105,7 +123,9 @@ class SelectionRule:
                 selected[market].append(s.security_id)
         return selected
 
-    def run(self, source: TierBSource, periods: Sequence[Period]) -> dict[date, dict[str, list[str]]]:
+    def run(
+        self, source: TierBSource, periods: Sequence[Period]
+    ) -> dict[date, dict[str, list[str]]]:
         """Selections keyed by selection date; snapshots are taken as of each date (point in time)."""
         return {d: self.select(source.snapshot(d), d) for d in self.selection_dates(periods)}
 
@@ -132,7 +152,9 @@ class InMemoryTierBSource:
     def bars(self, security_id: str, start: date, horizon: date) -> pd.DataFrame:
         frame = self._bars[security_id]
         dates = pd.to_datetime(frame["date"])
-        return frame[(dates >= pd.Timestamp(start)) & (dates < pd.Timestamp(horizon))].reset_index(drop=True)
+        return frame[(dates >= pd.Timestamp(start)) & (dates < pd.Timestamp(horizon))].reset_index(
+            drop=True
+        )
 
     def delisting(self, security_id: str) -> Delisting | None:
         return self._delistings.get(security_id)

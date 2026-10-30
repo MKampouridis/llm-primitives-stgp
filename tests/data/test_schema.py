@@ -29,16 +29,23 @@ META = {
 def test_normalise_adds_defaults_and_orders_columns():
     bars, flags = schema.normalise(frame(close=[1.0, 2.0, 3.0, 4.0]))
     assert list(bars.columns) == list(schema.COLUMNS)
-    assert bars["dividend"].eq(0).all() and bars["split"].eq(1).all()
+    assert bars["dividend"].eq(0).all()
+    assert bars["split"].eq(1).all()
     assert bars[["open", "high", "low", "volume"]].isna().all().all()
     assert flags.empty
 
 
 def test_nonpositive_close_is_invalidated_and_flagged():
-    bars, flags = schema.normalise(frame(close=[1.0, -36.98, 0.0, np.nan], open=[1.0, 1.0, 1.0, 1.0]))
-    assert np.isnan(bars["close"].iloc[1]) and np.isnan(bars["open"].iloc[1])
+    bars, flags = schema.normalise(
+        frame(close=[1.0, -36.98, 0.0, np.nan], open=[1.0, 1.0, 1.0, 1.0])
+    )
+    assert np.isnan(bars["close"].iloc[1])
+    assert np.isnan(bars["open"].iloc[1])
     assert np.isnan(bars["close"].iloc[2])
-    assert list(flags["flag"]) == ["invalid_close", "invalid_close"]  # a missing close is not flagged
+    assert list(flags["flag"]) == [
+        "invalid_close",
+        "invalid_close",
+    ]  # a missing close is not flagged
 
 
 def test_ohlc_violation_keeps_close_drops_extremes():
@@ -66,7 +73,9 @@ def test_duplicates_are_rejected():
 
 
 def test_rows_are_sorted():
-    unsorted = pd.DataFrame({"date": pd.to_datetime(["2005-01-04", "2005-01-03"]), "close": [2.0, 1.0]})
+    unsorted = pd.DataFrame(
+        {"date": pd.to_datetime(["2005-01-04", "2005-01-03"]), "close": [2.0, 1.0]}
+    )
     bars, _ = schema.normalise(unsorted)
     assert list(bars["close"]) == [1.0, 2.0]
 
@@ -77,7 +86,9 @@ def test_roundtrip_with_monthly_row_groups(tmp_path):
     schema.write_parquet(bars, META, path)
     assert pq.ParquetFile(path).num_row_groups == 2  # January and February
     back = schema.read_frame(path)
-    pd.testing.assert_frame_equal(back.reset_index(drop=True), bars.reset_index(drop=True), check_dtype=False)
+    pd.testing.assert_frame_equal(
+        back.reset_index(drop=True), bars.reset_index(drop=True), check_dtype=False
+    )
     assert schema.read_meta(path)["instrument_id"] == "TEST"
 
 
@@ -105,5 +116,9 @@ def test_normalise_is_row_local():
     for cut in (1, 57, 200, n - 1):
         part, part_flags = schema.normalise(raw.iloc[:cut])
         pd.testing.assert_frame_equal(part, full.iloc[:cut])
-        expected_flags = full_flags[full_flags["date"] < raw["date"].iloc[cut]].reset_index(drop=True)
-        pd.testing.assert_frame_equal(part_flags.reset_index(drop=True), expected_flags, check_dtype=False)
+        expected_flags = full_flags[full_flags["date"] < raw["date"].iloc[cut]].reset_index(
+            drop=True
+        )
+        pd.testing.assert_frame_equal(
+            part_flags.reset_index(drop=True), expected_flags, check_dtype=False
+        )

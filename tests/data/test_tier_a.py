@@ -13,7 +13,7 @@ from lpstgp.data.store import DataStore
 def test_universe_composition():
     universe = tier_a.load_universe()
     classes = Counter(i.asset_class for i in universe)
-    assert classes == {"equity_index": 10, "fx": 8, "commodity": 6, "bond": 3, "crypto": 5}
+    assert classes == {"equity_index": 10, "fx": 8, "commodity": 6, "bond": 2, "crypto": 5}
     assert all(i.cost_bps > 0 for i in universe)
     assert {i.calendar for i in universe if i.asset_class == "crypto"} == {"7day"}
     assert {i.calendar for i in universe if i.asset_class != "crypto"} == {"business"}
@@ -22,7 +22,8 @@ def test_universe_composition():
 def test_series_components_are_unique():
     components = tier_a.series_components(tier_a.load_universe(), include_alternates=True)
     assert len(components) == len(set(components))
-    assert ("ecb", "USD") in components and ("ecb", "GBP") in components
+    assert ("ecb", "USD") in components
+    assert ("ecb", "GBP") in components
 
 
 def _write_raw(tier_dir, source, symbol, content: bytes, suffix: str, day="20261030"):
@@ -43,12 +44,16 @@ def _write_raw(tier_dir, source, symbol, content: bytes, suffix: str, day="20261
 
 
 def _ecb_csv(currency: str, dates, values) -> bytes:
-    rows = "\n".join(f"EXR.D.{currency}.EUR.SP00.A,{d},{v}" for d, v in zip(dates, values, strict=True))
+    rows = "\n".join(
+        f"EXR.D.{currency}.EUR.SP00.A,{d},{v}" for d, v in zip(dates, values, strict=True)
+    )
     return f"KEY,TIME_PERIOD,OBS_VALUE\n{rows}\n".encode()
 
 
 def _instrument(primary: tier_a.SeriesRef) -> tier_a.Instrument:
-    return tier_a.Instrument("XUSD", "Test pair", "fx", "Global", "USD", "business", "", 1.0, primary)
+    return tier_a.Instrument(
+        "XUSD", "Test pair", "fx", "Global", "USD", "business", "", 1.0, primary
+    )
 
 
 @pytest.fixture
@@ -68,7 +73,8 @@ def test_build_cross_rate_and_metadata(ecb_tier):
     inst = _instrument(tier_a.SeriesRef("ecb", "USD", divide_by="GBP"))
     path, bars, _ = tier_a.build_series(inst, inst.primary, tier_dir, date(2026, 6, 30), "primary")
     meta = schema.read_meta(path)
-    assert meta["source_symbol"] == "USD/GBP" and meta["close_only"] is True
+    assert meta["source_symbol"] == "USD/GBP"
+    assert meta["close_only"] is True
     assert len(meta["raw_files"]) == 2
     assert bars["date"].min() > pd.Timestamp("2004-01-07")  # common dates only
     assert bars[["open", "high", "low"]].isna().all().all()
@@ -83,7 +89,7 @@ def test_build_drops_rows_after_design_end(ecb_tier):
 
 def test_causal_build(ecb_tier, tmp_path_factory):
     """Building from raw files cut at date d reproduces every earlier row bit for bit."""
-    tier_dir, dates = ecb_tier
+    tier_dir, _dates = ecb_tier
     inst = _instrument(tier_a.SeriesRef("ecb", "USD", divide_by="GBP"))
     _, full, _ = tier_a.build_series(inst, inst.primary, tier_dir, date(2026, 6, 30), "primary")
     for cut in ("2004-03-15", "2005-07-01", "2006-06-30"):

@@ -50,7 +50,7 @@ def test_arrays_are_read_only_copies(store):
         array = getattr(bars, name)
         assert not array.flags.writeable
         assert array.base is None or not array.base.flags.writeable
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="read-only"):
             array[0] = 0
 
 
@@ -70,7 +70,7 @@ def test_rows_after_horizon_cannot_influence_a_read(tmp_path):
 
 
 def test_invalid_window_rejected(store):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="must precede"):
         store.read("TST", date(2005, 1, 1), date(2005, 1, 1))
 
 
@@ -78,7 +78,9 @@ def test_causal_returns_without_events_is_log_close():
     close = np.array([1.0, 1.1, np.nan, 1.21, 1.0])
     r, p = causal_returns(close, np.zeros(5), np.ones(5))
     np.testing.assert_array_equal(p[[0, 1, 3, 4]], np.log(close[[0, 1, 3, 4]]))
-    assert np.isnan(r[0]) and np.isnan(r[2]) and np.isnan(p[2])
+    assert np.isnan(r[0])
+    assert np.isnan(r[2])
+    assert np.isnan(p[2])
     assert r[3] == pytest.approx(np.log(1.21 / 1.1))  # the return after a gap spans the gap
 
 

@@ -46,7 +46,9 @@ def parse(content: bytes) -> pd.DataFrame:
     if "Date" not in raw or "Close" not in raw:
         raise SourceError("unexpected yahoo CSV layout")
     # Timestamps are exchange-local midnight with an offset; the local calendar date is the session.
-    dates = pd.to_datetime(raw["Date"].astype(str).str.slice(0, 10)).to_numpy().astype("datetime64[D]")
+    dates = (
+        pd.to_datetime(raw["Date"].astype(str).str.slice(0, 10)).to_numpy().astype("datetime64[D]")
+    )
     frame = pd.DataFrame(
         {
             "date": dates,
@@ -62,7 +64,9 @@ def parse(content: bytes) -> pd.DataFrame:
         frame["dividend"] = frame["dividend"].fillna(0.0) + raw["Capital Gains"].fillna(0.0)
     frame["split"] = 1.0  # prices are already split-adjusted by the vendor
     prices = frame[["open", "high", "low", "close"]]
-    frame = frame[prices.notna().any(axis=1).to_numpy()]  # rows with no price at all are not sessions
+    frame = frame[
+        prices.notna().any(axis=1).to_numpy()
+    ]  # rows with no price at all are not sessions
     # Yahoo occasionally repeats a date (e.g. a provisional and a final row): keep the last one.
     frame = frame.drop_duplicates("date", keep="last")
     frame["volume"] = frame["volume"].astype("float64")

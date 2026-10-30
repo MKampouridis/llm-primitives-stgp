@@ -47,8 +47,12 @@ def parse(content: bytes) -> pd.DataFrame:
     if not rows:
         raise SourceError("coinbase: empty raw file")
     frame = pd.DataFrame(rows, columns=["time", "low", "high", "open", "close", "volume"])
-    frame["date"] = pd.to_datetime([utc_date(t) for t in frame["time"]]).to_numpy().astype("datetime64[D]")
-    frame = frame.drop(columns="time").astype({c: "float64" for c in ("low", "high", "open", "close", "volume")})
+    frame["date"] = (
+        pd.to_datetime([utc_date(t) for t in frame["time"]]).to_numpy().astype("datetime64[D]")
+    )
+    frame = frame.drop(columns="time").astype(
+        {c: "float64" for c in ("low", "high", "open", "close", "volume")}
+    )
     frame = frame.drop_duplicates("date", keep="first")
     return frame.sort_values("date", kind="stable").reset_index(drop=True)[
         ["date", "open", "high", "low", "close", "volume"]

@@ -25,7 +25,11 @@ class RawDownload:
 
 
 def http_get(
-    url: str, params: dict | None = None, timeout: float = 60.0, retries: int = 4, backoff: float = 5.0
+    url: str,
+    params: dict | None = None,
+    timeout: float = 60.0,
+    retries: int = 4,
+    backoff: float = 5.0,
 ) -> requests.Response:
     """GET with a descriptive User-Agent and exponential backoff on errors and 429/5xx."""
     last: Exception | None = None

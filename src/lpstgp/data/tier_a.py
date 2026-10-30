@@ -96,7 +96,9 @@ def raw_dir(tier_dir: Path, source: str, symbol: str) -> Path:
     return tier_dir / "raw" / source / safe_name(symbol)
 
 
-def series_components(instruments: Iterable[Instrument], include_alternates: bool) -> list[tuple[str, str]]:
+def series_components(
+    instruments: Iterable[Instrument], include_alternates: bool
+) -> list[tuple[str, str]]:
     seen: dict[tuple[str, str], None] = {}
     for inst in instruments:
         refs = (inst.primary, *inst.alternates) if include_alternates else (inst.primary,)
@@ -157,7 +159,11 @@ def download_universe(
     for source, symbol in series_components(instruments, include_alternates):
         try:
             entry = download_series(tier_dir, source, symbol, start, end, force=force)
-            status = "skipped (exists)" if entry is None else f"ok {entry['rows']} rows {entry['first_date']}..{entry['last_date']}"
+            status = (
+                "skipped (exists)"
+                if entry is None
+                else f"ok {entry['rows']} rows {entry['first_date']}..{entry['last_date']}"
+            )
             if entry is not None and source == "yahoo":
                 time.sleep(pause)  # be gentle with Yahoo's per-IP rate limits
         except Exception as exc:  # report and continue; the manifest stays consistent
@@ -167,7 +173,9 @@ def download_universe(
     return results
 
 
-def load_raw_series(tier_dir: Path, source: str, symbol: str) -> tuple[pd.DataFrame, dict[str, str]]:
+def load_raw_series(
+    tier_dir: Path, source: str, symbol: str
+) -> tuple[pd.DataFrame, dict[str, str]]:
     entry = mf.latest_entry(tier_dir / "manifest.csv", source, symbol)
     if entry is None:
         raise FileNotFoundError(f"no raw download for {source}:{symbol}")
@@ -179,24 +187,34 @@ def load_raw_series(tier_dir: Path, source: str, symbol: str) -> tuple[pd.DataFr
 
 def combine(numerator: pd.DataFrame, denominator: pd.DataFrame) -> pd.DataFrame:
     """Ratio of two close-only series on common dates (row-local)."""
-    merged = numerator[["date", "close"]].merge(denominator[["date", "close"]], on="date", suffixes=("_n", "_d"))
+    merged = numerator[["date", "close"]].merge(
+        denominator[["date", "close"]], on="date", suffixes=("_n", "_d")
+    )
     return pd.DataFrame({"date": merged["date"], "close": merged["close_n"] / merged["close_d"]})
 
 
 def git_revision() -> str:
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return out.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
 
 
-def assemble(ref: SeriesRef, frames: list[pd.DataFrame], end: date) -> tuple[pd.DataFrame, pd.DataFrame]:
+def assemble(
+    ref: SeriesRef, frames: list[pd.DataFrame], end: date
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Parsed component frames -> normalised bars (capped at ``end``) and flags. Pure."""
     frame = frames[0] if ref.divide_by is None else combine(frames[0], frames[1])
-    frame = frame[pd.to_datetime(frame["date"]).to_numpy().astype("datetime64[D]") <= np.datetime64(end)]
+    frame = frame[
+        pd.to_datetime(frame["date"]).to_numpy().astype("datetime64[D]") <= np.datetime64(end)
+    ]
     return schema.normalise(frame)
 
 
@@ -234,11 +252,18 @@ def build_series(
     if role == "primary":
         path = tier_dir / "processed" / f"{inst.id}.parquet"
     else:
-        path = tier_dir / "processed" / "alternates" / f"{inst.id}__{ref.source}_{safe_name(ref.label)}.parquet"
+        path = (
+            tier_dir
+            / "processed"
+            / "alternates"
+            / f"{inst.id}__{ref.source}_{safe_name(ref.label)}.parquet"
+        )
     schema.write_parquet(bars, meta, path)
     if not flags.empty:
         flags_path = path.with_suffix(".flags.parquet")
-        flags.assign(date=flags["date"].to_numpy().astype("datetime64[D]")).to_parquet(flags_path, index=False)
+        flags.assign(date=flags["date"].to_numpy().astype("datetime64[D]")).to_parquet(
+            flags_path, index=False
+        )
     return path, bars, flags
 
 

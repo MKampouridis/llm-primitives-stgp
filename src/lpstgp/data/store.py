@@ -46,8 +46,12 @@ class Bars:
     volume: np.ndarray
     dividend: np.ndarray
     split: np.ndarray
-    log_return: np.ndarray  # point-in-time total log return; NaN on the first valid bar and invalid bars
-    log_price: np.ndarray  # log close + cumulative event adjustment since `start`; NaN on invalid bars
+    log_return: (
+        np.ndarray
+    )  # point-in-time total log return; NaN on the first valid bar and invalid bars
+    log_price: (
+        np.ndarray
+    )  # log close + cumulative event adjustment since `start`; NaN on invalid bars
     meta: Mapping[str, Any]
 
     def __len__(self) -> int:
@@ -98,7 +102,9 @@ class DataStore:
 
     def instruments(self) -> list[str]:
         return sorted(
-            p.stem for p in self._processed.glob("*.parquet") if not p.name.endswith(".flags.parquet")
+            p.stem
+            for p in self._processed.glob("*.parquet")
+            if not p.name.endswith(".flags.parquet")
         )
 
     def path(self, instrument_id: str) -> Path:
@@ -116,11 +122,18 @@ class DataStore:
         path = self.path(instrument_id)
         table = pq.read_table(path, filters=[("date", ">=", start), ("date", "<", horizon)])
         dates = _readonly(table["date"].to_numpy(), "datetime64[D]")
-        columns = {name: _readonly(table[name].to_numpy(zero_copy_only=False), "float64") for name in schema.COLUMNS[1:]}
+        columns = {
+            name: _readonly(table[name].to_numpy(zero_copy_only=False), "float64")
+            for name in schema.COLUMNS[1:]
+        }
         del table
-        if len(dates) and not (dates[0] >= np.datetime64(start) and dates[-1] < np.datetime64(horizon)):
+        if len(dates) and not (
+            dates[0] >= np.datetime64(start) and dates[-1] < np.datetime64(horizon)
+        ):
             raise AssertionError("store returned rows outside [start, horizon)")
-        log_return, log_price = causal_returns(columns["close"], columns["dividend"], columns["split"])
+        log_return, log_price = causal_returns(
+            columns["close"], columns["dividend"], columns["split"]
+        )
         meta = schema.read_meta(path)
         return Bars(
             instrument_id=instrument_id,

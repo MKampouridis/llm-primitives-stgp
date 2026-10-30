@@ -1,6 +1,7 @@
 from datetime import date
 
 import pandas as pd
+import pytest
 
 from lpstgp.data.tier_b import InMemoryTierBSource, SecurityRecord, SelectionRule, WRDSSource
 from lpstgp.splits import walk_forward
@@ -8,7 +9,9 @@ from lpstgp.splits import walk_forward
 AS_OF = date(2005, 7, 1)
 
 
-def sec(sid, issuer, country, mcap, primary=True, common=True, listed=date(1990, 1, 1), delisted=None):
+def sec(
+    sid, issuer, country, mcap, primary=True, common=True, listed=date(1990, 1, 1), delisted=None
+):
     return SecurityRecord(sid, issuer, sid, country, mcap, primary, common, listed, delisted)
 
 
@@ -72,11 +75,10 @@ def test_in_memory_bars_respect_horizon():
     frame = pd.DataFrame({"date": pd.bdate_range("2005-01-03", periods=10), "close": range(10)})
     source = InMemoryTierBSource({}, bars={"S": frame})
     window = source.bars("S", date(2005, 1, 4), date(2005, 1, 10))
-    assert window["date"].min() >= pd.Timestamp("2005-01-04") and window["date"].max() < pd.Timestamp("2005-01-10")
+    assert window["date"].min() >= pd.Timestamp("2005-01-04")
+    assert window["date"].max() < pd.Timestamp("2005-01-10")
 
 
 def test_vendor_stubs_name_their_credentials():
-    try:
+    with pytest.raises(NotImplementedError, match="WRDS_USERNAME"):
         WRDSSource().snapshot(AS_OF)
-    except NotImplementedError as exc:
-        assert "WRDS_USERNAME" in str(exc)

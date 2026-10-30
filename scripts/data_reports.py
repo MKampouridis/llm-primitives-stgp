@@ -30,7 +30,8 @@ KNOWN_ISSUES_A = """\
   USD crosses are ratios of two EUR rates on the same date. Close only.
 - **EIA spot prices:** official assessments, close only, U.S. federal holiday calendar; the files are
   not range-limited (later rows are dropped at build). WTI printed a negative price on 2020-04-20,
-  which the schema marks invalid.
+  which the schema marks invalid. The WTI history has real gaps (about 113 missing sessions in
+  2003, 67 in 2004, 48 in 2005, 25 in 2006 and 40 in 2011), which makes WTI ineligible for P01.
 - **Bitstamp / Coinbase:** exchange-specific prices (not composite), UTC days, native 7-day calendar;
   exchange outages appear as gaps. Coinbase XRP has a trading suspension (2021–2023).
 - **Close times differ across markets** (Asia, Europe, US, crypto at 00:00 UTC): irrelevant for

@@ -30,16 +30,16 @@ cost_bps = 2.0
 primary = { source = "yahoo", symbol = "^NDX" }
 
 [[instrument]]
-id = "SX5E"
-name = "Euro Stoxx 50"
+id = "SMI"
+name = "Swiss Market Index"
 asset_class = "equity_index"
 region = "Europe"
-currency = "EUR"
+currency = "CHF"
 calendar = "business"
-qa_calendar = "XETR"
+qa_calendar = "XSWX"
 cost_bps = 2.0
-primary = { source = "yahoo", symbol = "^STOXX50E" }
-alternates = [{ source = "yahoo", symbol = "^SSMI" }]
+primary = { source = "yahoo", symbol = "^SSMI" }
+alternates = [{ source = "yahoo", symbol = "^STOXX50E" }]  # Euro Stoxx 50: Yahoo history starts 2007-03
 
 [[instrument]]
 id = "DAX"
@@ -312,17 +312,6 @@ qa_calendar = "XNYS"
 cost_bps = 1.0
 primary = { source = "yahoo", symbol = "TLT" }
 alternates = [{ source = "yahoo", symbol = "ZB=F" }]
-
-[[instrument]]
-id = "BUND"
-name = "German Bund (S&P Euro-Bund total-return index)"
-asset_class = "bond"
-region = "Europe"
-currency = "EUR"
-calendar = "business"
-qa_calendar = "XETR"
-cost_bps = 2.0
-primary = { source = "yahoo", symbol = "^SPEUBDTR" }
 
 # ---------------------------------------------------------------- crypto (native 7-day calendar, UTC days)
 [[instrument]]

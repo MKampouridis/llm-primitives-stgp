@@ -7,6 +7,7 @@ from a raw file cut at any date reproduces the earlier rows exactly (causal buil
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 from collections.abc import Mapping
@@ -52,7 +53,9 @@ def normalise(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     out = pd.DataFrame({"date": pd.to_datetime(frame["date"]).values.astype("datetime64[D]")})
     for name in ("open", "high", "low", "close", "volume"):
         out[name] = pd.to_numeric(frame[name], errors="coerce") if name in frame else np.nan
-    out["dividend"] = pd.to_numeric(frame["dividend"], errors="coerce") if "dividend" in frame else 0.0
+    out["dividend"] = (
+        pd.to_numeric(frame["dividend"], errors="coerce") if "dividend" in frame else 0.0
+    )
     out["split"] = pd.to_numeric(frame["split"], errors="coerce") if "split" in frame else 1.0
     out = out.astype({name: "float64" for name in COLUMNS[1:]})
 
@@ -79,7 +82,9 @@ def normalise(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     lo = out[["open", "close", "high"]].min(axis=1)
     violation = complete & ((out["high"] < hi) | (out["low"] > lo))
     flag(violation, "ohlc_violation")
-    out.loc[violation, ["open", "high", "low"]] = np.nan  # keep the close, drop inconsistent extremes
+    out.loc[violation, ["open", "high", "low"]] = (
+        np.nan
+    )  # keep the close, drop inconsistent extremes
 
     bad_volume = out["volume"].notna() & (~np.isfinite(out["volume"]) | (out["volume"] < 0))
     flag(bad_volume, "invalid_volume")
@@ -100,7 +105,9 @@ def normalise(frame: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def to_table(bars: pd.DataFrame) -> pa.Table:
     arrays = [pa.array(bars["date"].to_numpy().astype("datetime64[D]"), type=pa.date32())]
-    arrays += [pa.array(bars[name].to_numpy(dtype="float64"), type=pa.float64()) for name in COLUMNS[1:]]
+    arrays += [
+        pa.array(bars[name].to_numpy(dtype="float64"), type=pa.float64()) for name in COLUMNS[1:]
+    ]
     return pa.Table.from_arrays(arrays, schema=ARROW_SCHEMA)
 
 
@@ -110,13 +117,15 @@ def write_parquet(bars: pd.DataFrame, meta: Mapping[str, Any], path: Path) -> No
     if missing:
         raise SchemaError(f"metadata missing {missing}")
     table = to_table(bars)
-    schema = ARROW_SCHEMA.with_metadata({META_KEY: json.dumps(dict(meta), sort_keys=True, default=str)})
+    schema = ARROW_SCHEMA.with_metadata(
+        {META_KEY: json.dumps(dict(meta), sort_keys=True, default=str)}
+    )
     months = bars["date"].to_numpy().astype("datetime64[M]")
     starts = [0, *list(np.flatnonzero(months[1:] != months[:-1]) + 1), len(bars)]
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".parquet.tmp")
     with pq.ParquetWriter(tmp, schema, compression="zstd") as writer:
-        for lo, hi in zip(starts[:-1], starts[1:], strict=True):
+        for lo, hi in itertools.pairwise(starts):
             if hi > lo:
                 writer.write_table(table.slice(lo, hi - lo))
     os.replace(tmp, path)

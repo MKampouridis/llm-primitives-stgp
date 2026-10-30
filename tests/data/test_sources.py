@@ -29,7 +29,9 @@ def test_yahoo_parse_drops_empty_rows_keeps_last_duplicate_and_ignores_vendor_sp
 
 
 def test_yahoo_parse_adds_capital_gains_to_distributions():
-    csv = YAHOO_CSV.replace(b"Stock Splits\n", b"Stock Splits,Capital Gains\n").replace(b",0.0\n", b",0.0,0.0\n")
+    csv = YAHOO_CSV.replace(b"Stock Splits\n", b"Stock Splits,Capital Gains\n").replace(
+        b",0.0\n", b",0.0,0.0\n"
+    )
     csv = csv.replace(b"1100,0.2,0.0,0.0", b"1100,0.2,0.0,0.05")
     frame = yahoo.parse(csv)
     assert frame["dividend"].tolist() == pytest.approx([0.0, 0.25, 0.0])
@@ -64,13 +66,30 @@ def test_eia_parse_sheet_rejects_unknown_layout():
 
 def _candle(day: date, close: float):
     ts = base.unix_seconds(day)
-    return {"timestamp": str(ts), "open": "1", "high": "2", "low": "0.5", "close": str(close), "volume": "3"}
+    return {
+        "timestamp": str(ts),
+        "open": "1",
+        "high": "2",
+        "low": "0.5",
+        "close": str(close),
+        "volume": "3",
+    }
 
 
 def test_bitstamp_parse_dedupes_overlapping_pages():
     pages = [
-        {"params": {}, "response": {"data": {"ohlc": [_candle(date(2012, 1, 1), 5.0), _candle(date(2012, 1, 2), 6.0)]}}},
-        {"params": {}, "response": {"data": {"ohlc": [_candle(date(2012, 1, 2), 6.0), _candle(date(2012, 1, 3), 7.0)]}}},
+        {
+            "params": {},
+            "response": {
+                "data": {"ohlc": [_candle(date(2012, 1, 1), 5.0), _candle(date(2012, 1, 2), 6.0)]}
+            },
+        },
+        {
+            "params": {},
+            "response": {
+                "data": {"ohlc": [_candle(date(2012, 1, 2), 6.0), _candle(date(2012, 1, 3), 7.0)]}
+            },
+        },
     ]
     frame = bitstamp.parse(json.dumps(pages).encode())
     assert frame["close"].tolist() == [5.0, 6.0, 7.0]
@@ -105,7 +124,10 @@ def test_bitstamp_fetch_pages_windows_skips_empty_and_stops_at_end(monkeypatch):
 
 def test_coinbase_parse_reorders_columns_and_sorts():
     t0 = base.unix_seconds(date(2016, 5, 18))
-    windows = [{"params": {}, "response": [[t0 + 86400, 9, 12, 10, 11, 100], [t0, 8, 11, 9, 10, 90]]}, {"params": {}, "response": []}]
+    windows = [
+        {"params": {}, "response": [[t0 + 86400, 9, 12, 10, 11, 100], [t0, 8, 11, 9, 10, 90]]},
+        {"params": {}, "response": []},
+    ]
     frame = coinbase.parse(json.dumps(windows).encode())
     assert list(frame.columns) == ["date", "open", "high", "low", "close", "volume"]
     assert frame["close"].tolist() == [10.0, 11.0]
