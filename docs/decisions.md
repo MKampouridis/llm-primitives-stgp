@@ -236,3 +236,28 @@ The lock hashes each contract's module, the lpstgp helper modules it imports, an
   - Calmar;
   - total and annualised return;
   - annualised one-way turnover (position changes per year), number of entries, exposure.
+
+### D-029 STGP implementation — Decided (plan approval); parameters provisional
+- **What DEAP 1.4.4 is used for:** only the typed primitive registry (`PrimitiveSetTyped`) and prefix-list trees.
+- **Own components**, all driven by one seeded `random.Random` and iterating ordered lists only, so a seed reproduces a run bit for bit across processes (tested in a fresh process):
+  - the generator: aware of minimum depth and the lookback budget, never fails;
+  - homologous crossover: entry×entry or exit×exit; 90% internal points; never at parameter leaves; the second point is drawn among same-type nodes in tree order;
+  - mutation: subtree 0.5, point 0.2, parameter 0.2, shrink 0.1;
+  - tournament selection, elitism and the hall of fame.
+- **Why own components:** DEAP's typed generator fails when a type has no terminal at the depth limit, and `cxOnePoint` draws from an unordered set (DEAP issue #765).
+- **Evaluation and storage:** trees are interpreted, never compiled with `eval`, and rules are stored as JSON lists of node names.
+- **Constraints:** depth ≤ 12, ≤ 60 nodes per tree, lookback ≤ 504. Any offspring that violates one is replaced by its parent.
+- **Defaults (`config/settings.toml`, placeholders for WP2):** population 500; 50 generations; tournament 5; elitism 5; crossover 0.8; mutation 0.2; ramped half-and-half with depth 2–5.
+- **Hall of fame:** 10 members, deduplicated by identical fit-period signals. The final rule is the member with the best validation fitness (one rule per run).
+- **Fitness (D-020, D-028):** calendar half-year segments (4 in the fit years, 2 in validation). Placeholder weights: λ_dd = 0.5 per unit of MDD/σ, λ_turnover = 0.005 per annual position change, λ_size = 0.01 per weighted node. Minimum exposure 10 bars per segment; no-trade value −1; lag 1; cost multiplier 1. The weights are to be set on named pilot periods in WP2 and then frozen.
+- **Budget:** both requested evaluations (population × (generations + 1)) and unique evaluations (fitness-cache misses) are recorded; which one defines the matched budget is open for WP2.
+- **Memoisation:** a subtree cache per run, stage and instrument, keyed by node sequence, LRU-capped at 512 MB per run. Cached outputs are read-only. Per-operator compute time is recorded.
+- **Run records:** one compact JSON per run, containing:
+  - configuration, and code and contract hashes;
+  - the sandbox access log;
+  - per-generation aggregates, including operator usage in the elite;
+  - the hall of fame with fit and validation components;
+  - timings, peak memory and environment.
+
+  No populations are stored. Records go under `results_dir/tier<T>/<experiment>/`.
+- **Orchestration:** `runner.py` is the only module that opens sandboxes and writes files. Parallel runs use spawned processes with one BLAS/numba thread each.

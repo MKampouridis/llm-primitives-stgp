@@ -22,3 +22,27 @@ jump_window = 63              # trailing window (bars) for the robust scale of t
 
 [costs]
 multipliers = [0.5, 1.0, 2.0, 3.0]
+
+[gp]                          # defaults; budgets per experiment are set in WP2 (placeholders)
+population = 500
+generations = 50
+tournament = 5
+elitism = 5
+p_crossover = 0.8
+p_mutation = 0.2
+init_depth = [2, 5]
+max_depth = 12
+max_nodes = 60                # per tree
+hof_size = 10
+final_selection = "validation"
+cache_mb = 512
+
+[fitness]                     # robustness composite; weights are placeholders until the WP2 pilot
+lambda_drawdown = 0.5         # per unit of segment max drawdown / annualised volatility
+lambda_turnover = 0.005       # per annual one-way position change
+lambda_size = 0.01            # per weighted node (parameters, data terminals, constructors weigh 0)
+min_exposure_bars = 10        # segment Sharpe counts only with at least this many bars in the market
+no_trade_value = -1.0
+segment_months = 6
+execution_lag = 1
+cost_multiplier = 1.0
