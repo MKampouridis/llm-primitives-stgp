@@ -2,8 +2,10 @@
 
 Every module under ``lpstgp.operators.<domain>`` defines ``SPEC`` (one OperatorSpec) or
 ``TERMINALS`` (a tuple of TerminalSpecs). ``registry.lock.toml`` stores, per contract key, the
-sha256 of its module plus every ``lpstgp`` module that module imports (transitively); once a key is
-locked its code may not change: a modification must be added as a new version.
+sha256 of its module, the lpstgp helper modules it imports (transitively, excluding the metadata
+modules ``types`` and ``contract``) and a canonical fingerprint of its semantic contract (types,
+parameter grids, lookbacks, missing-data policy, invariances, bins). Once a key is locked none of
+these may change: a modification must be added as a new version.
 """
 
 from __future__ import annotations
@@ -24,6 +26,10 @@ from lpstgp.operators.contract import CROSS_DOMAINS, OperatorSpec, TerminalSpec
 PACKAGE_ROOT = Path(lpstgp.__file__).resolve().parent
 OPERATORS_DIR = PACKAGE_ROOT / "operators"
 LOCK_FILE = OPERATORS_DIR / "registry.lock.toml"
+INFRASTRUCTURE = ("contract", "registry", "catalogue")
+# Metadata modules: their text does not determine any computation, so they are not hashed.
+# (Semantic content they define for a contract is hashed via `fingerprint` instead.)
+UNHASHED = ("lpstgp.types", "lpstgp.operators.contract")
 
 # Named primitive sets. "seed" is the arm-6 library; "conventional" the GP-TA/DC baseline set.
 LIBRARIES: dict[str, dict[str, tuple[str, ...]]] = {
@@ -54,7 +60,7 @@ class Registry:
 def _iter_modules() -> Iterable[str]:
     for info in pkgutil.walk_packages([str(OPERATORS_DIR)], prefix="lpstgp.operators."):
         leaf = info.name.rsplit(".", 1)[-1]
-        if not info.ispkg and not leaf.startswith("_") and leaf not in ("contract", "registry"):
+        if not info.ispkg and not leaf.startswith("_") and leaf not in INFRASTRUCTURE:
             yield info.name
 
 
@@ -98,12 +104,12 @@ def _lpstgp_imports(path: Path) -> set[str]:
 
 
 def dependency_files(module: str) -> list[Path]:
-    """The module's file plus every lpstgp module file it imports, transitively."""
+    """The module's file plus the lpstgp modules it imports, transitively (metadata modules excluded)."""
     seen: dict[str, Path] = {}
     stack = [module]
     while stack:
         current = stack.pop()
-        if current in seen:
+        if current in seen or current in UNHASHED:
             continue
         path = module_path(current)
         if not path.is_file():  # a package: its __init__
@@ -115,11 +121,42 @@ def dependency_files(module: str) -> list[Path]:
     return [seen[m] for m in sorted(seen)]
 
 
-def contract_hash(module: str) -> str:
+def fingerprint(spec: OperatorSpec | TerminalSpec) -> str:
+    """Canonical text of everything in a contract that changes what it computes or accepts."""
+    from lpstgp.types import BIN_EDGES, N_BINS
+
+    parts = [
+        spec.key,
+        spec.output.__name__,
+        spec.missing.value,
+        spec.memory.value,
+        str(spec.size_weight),
+    ]
+    parts.append(f"bins={N_BINS}:{','.join(f'{e:.17g}' for e in BIN_EDGES)}")
+    if isinstance(spec, OperatorSpec):
+        parts.append(",".join(t.__name__ for t in spec.inputs))
+        parts.append(";".join(f"{p.name}:{p.kind.__name__}:{p.grid}" for p in spec.params))
+        parts.append(f"{spec.min_valid:.17g}|{','.join(spec.invariances)}|{spec.tolerance:.17g}")
+        if spec.params:
+            extremes = [
+                {p.name: min(p.grid) for p in spec.params},
+                {p.name: max(p.grid) for p in spec.params},
+            ]
+        else:
+            extremes = [{}]
+        parts.append(",".join(str(spec.lookback_for(e)) for e in extremes))
+    else:
+        parts.append(f"lookback={spec.lookback}|{spec.tolerance:.17g}")
+    return "\n".join(parts)
+
+
+def contract_hash(key: str) -> str:
+    registry = discover()
     digest = hashlib.sha256()
-    for path in dependency_files(module):
+    for path in dependency_files(registry.modules[key]):
         digest.update(str(path.relative_to(PACKAGE_ROOT.parent)).encode())
         digest.update(path.read_bytes())
+    digest.update(fingerprint(registry.all()[key]).encode())
     return digest.hexdigest()
 
 
@@ -131,7 +168,7 @@ def read_lock() -> dict[str, str]:
 
 def write_lock(entries: dict[str, str]) -> None:
     lines = [
-        "# Version lock: sha256 of each contract's module and its lpstgp imports.",
+        "# Version lock: sha256 of each contract's code (module + helper modules) and its fingerprint.",
         "# Locked entries are immutable; a modified implementation must be added as a new version.",
         "# Regenerate only with: uv run python scripts/update_lock.py",
         "",
@@ -146,8 +183,8 @@ def lock_status() -> tuple[list[str], list[str]]:
     registry = discover()
     locked = read_lock()
     changed, unlocked = [], []
-    for key, module in sorted(registry.modules.items()):
-        current = contract_hash(module)
+    for key in sorted(registry.modules):
+        current = contract_hash(key)
         if key not in locked:
             unlocked.append(key)
         elif locked[key] != current:

@@ -138,3 +138,68 @@ plus an exact declared-lookback check (garbage before the window changes nothing
 
 ### D-021 Numerical kernels — Decided
 Rolling statistics are computed from each window's own values (never running sums), so prefix invariance and window locality hold bit for bit. numba is used without `fastmath` (which may drop NaN checks) or `parallel` (order-dependent reductions); parallelism is across runs, one thread each. The numba cache lives in `__pycache__` inside the local, git-ignored clone. Rolling operators default to a minimum valid fraction of 0.9. Histograms use 16 bins on robust z-scores in [−4, 4] (trailing 252-bar median/MAD at t; outer bins absorb tails) with Jeffreys (+½) smoothing. All of these are provisional.
+
+### D-022 Seed library composition — Decided (plan approval); deviations from the plan listed
+- **Cross-domain operators.** 28, exactly 4 per domain (the plan's fixed quota):
+  - information theory: ShannonEntropy, PermutationEntropy, LZCompressibility, LaggedMutualInfo;
+  - information geometry: FisherRaoHist, FisherRaoGauss, FisherInformation, AlphaDivergence;
+  - optimal transport: W1Hist, SinkhornDivergence, W2ToGaussian, TransportAsymmetry;
+  - rough paths: LevyArea, ChordArea, PVariation, SignatureSimilarity;
+  - fractal: HurstRS, DFA, HiguchiFD, GeneralizedHurst;
+  - statistical physics: CriticalSlowing, KramersMoyalDrift, TsallisEntropy, HillTailIndex;
+  - spectral: SpectralEntropy, SpectralSlope (GPH), WaveletEnergyShare, SSATrendShare.
+- **Core.** 17 operators: RollingHist, PastHist, ToPath, Increments, RollingPercentile, MeanKSd, ExceedsQuantile, ExceedsKSd, Gt, Lt, CrossAbove, CrossBelow, And, Or, Not, QuantileRegime, RegimeIs.
+- **Data terminals.** 3: log price, log return, |log return|.
+- **Window changes against the plan's signatures.** HiguchiFD, CriticalSlowing and KramersMoyalDrift take `LongWindow` (60–252) instead of `Window`: Higuchi with kmax up to 10 needs well over 20 points, and lag-1 autocorrelation and kernel drift are unusable on 10 bars.
+- **Rough-path operators.** All four standardise increments within their window, so they are scale- and shift-invariant.
+- **Every cross-domain output is scale-free.** Path consumers are shift-invariant (D-020).
+
+### D-023 Estimator conventions — Decided (documented in each contract and docs/operators.md)
+- **R/S:**
+  - population sd;
+  - non-overlapping blocks of 6–64 bars with at least 2 per scale;
+  - blocks aligned to the latest bar (the oldest remainder is dropped);
+  - no Anis–Lloyd correction;
+  - equals `nolds.hurst_rs` on the reversed window.
+- **DFA-1:**
+  - standard F(n) = RMS of the residuals over all boxes (Peng et al. 1994), as in nolds 0.6.3;
+  - boxes of 6–64 bars, at least 4 per scale, aligned to the latest bar.
+- **Higuchi:** the textbook formula. antropy's loop omits the last increment of each subsequence, so the two agree only to about 0.05.
+- **Generalised Hurst:** τ = 1–10.
+- **Hill:** k = max(5, 10% of the window).
+- **Kramers–Moyal drift:** Nadaraya–Watson with a Gaussian kernel and Silverman bandwidth on window z-scores; "unknown" when every kernel weight underflows.
+- **W2 to Gaussian:** exact closed form (per-atom integrals of Φ⁻¹ and (Φ⁻¹)²).
+- **TransportAsymmetry:** sign(mean gain − mean loss) × W1(gains, losses) / mean |x|.
+- **LZ76:** on within-window equal-frequency symbols, normalised by n / log_k n with k the distinct symbols (as antropy).
+- **Lagged mutual information:** on within-window quartile symbols, divided by log 4.
+- **Spectral entropy:** one-sided periodogram with scipy "density" weights (as antropy).
+- **GPH:** m = ⌊√w⌋ frequencies.
+- **Wavelet energy share:** Haar DWT, 4 levels, over the most recent 16⌊w/16⌋ bars.
+- **SSA:** embedding dimension 10; only eigenvalues of the lag-covariance matrix are used, so results are deterministic.
+
+### D-024 Sinkhorn divergence — Decided; departs from the plan's ε grid
+- **Algorithm:** debiased Sinkhorn divergence (Feydy et al. 2019 objective), using kernel-domain scaling iterations. Each row has its own stopping rule (L1 marginal error < 1e-9, at most 10,000 iterations), so prefix invariance is exact.
+- **ε grid:** changed from the plan's {0.05, 0.1, 0.5} to **{0.25, 0.5, 1.0}** squared z-units (bins are 0.5 wide).
+- **Why:** log-domain iterations at ε ≤ 0.1 needed 1,000–6,000 iterations per row (35–93 s per 1,200-bar call).
+- **Cost:** it is still the most expensive operator, at 0.16–0.87 s per call. Per-run memoisation computes it once per distinct subtree.
+
+### D-025 Conventional terminals — Decided; departs from the plan in three places
+**Technical analysis (23 terminals, close-only):**
+- MAGap 20/50/200, MACross 5/20 10/50 50/200, ROC 5/20/60, RSI 7/14/28, StochK 14/28, BollingerZ 20/50;
+- Donchian-style breakout high/low 20/55 (Bool), Volatility 20/60, MACD histogram (log EMA12/EMA26 minus EMA9).
+- Williams %R and Donchian position are omitted: on closes alone they are affine maps of StochK.
+- EMA/Wilder smoothers are truncated after 6×span / 8×n bars (at most 252) and renormalised. Memory is therefore finite and checkable; agreement with `ta`/pandas after warm-up is within 0.1 RSI points.
+
+**Directional change (20 terminals):**
+- Outputs: trend (Regime), event (Bool), overshoot, total move, age (Real).
+- θ ∈ {0.5, 1, 2, 4}%. 0.25% was dropped from the plan's grid: it is below the daily noise of most instruments, and dropping it keeps the set at 20.
+- The online state machine is restarted on each trailing 252-bar window, giving finite memory equal to the lookback. With θ ≤ 4% it re-synchronises well within a year.
+
+### D-026 Version lock semantics — Decided
+The lock hashes each contract's module, the lpstgp helper modules it imports, and a canonical fingerprint of the contract: types, parameter grids, lookbacks at the grid extremes, missing-data policy, invariances, memory, size weight and bin edges. The metadata modules (`types.py`, `contract.py`) are not hashed as text, so editing their documentation does not re-version every operator. The seed library was frozen at the end of M4 (30 Oct 2026). Review notes go to `docs/arm6_review.md`, not into code, for the same reason.
+
+### D-027 Gate data and thresholds — Provisional
+- **Synthetic gates:** seeded GARCH(1,1) with Student-t(5) shocks and alternating volatility regimes; the regime is applied outside the variance recursion, which keeps it stationary. Bars: 1,200. Cuts at 600 and 1,000. Appended tails of 1, 7 and 63 bars in five adversarial modes.
+- **Real-data gate:** P01 VALIDATE sandboxes, scoring the fit and validation years (2005-07 to 2008-06), all before the first test year. All instruments with full warm-up then (crypto excluded). Pass if the output is finite on ≥ 99% of bars with defined inputs and non-constant on ≥ 90% of instruments.
+- **Scoring change:** a single validation year was too short for rare-event booleans at extreme thresholds (e.g. `ExceedsKSd(252, k = 2)`).
+- **Kleene crossovers:** AND(false, unknown) = false, so "a is not above b now" rules out a cross even when the previous bar is unknown.
