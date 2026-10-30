@@ -1,0 +1,24 @@
+# Experiment settings (committed). Machine-specific paths live in config/paths.toml.
+# Every value here is recorded in docs/decisions.md.
+
+[data]
+download_start = 1990-01-01   # earliest history requested; sources may start later
+design_end = 2026-06-30       # last date of the last test year; the build drops anything later
+
+[splits]
+first_fit_start = 2005-07-01  # July anchor, matching the provisional post-cutoff test year 2025-07..2026-06
+n_periods = 18
+fit_years = 2
+validation_years = 1
+test_years = 1
+step_years = 1
+lookback_max_bars = 504       # L_max: global cap on any rule's lookback, in bars
+min_session_coverage = 0.95   # share of expected sessions present in [fit_start, test_end)
+
+[quality]
+stale_run_min = 5             # this many identical consecutive closes count as one stale run
+jump_sigma = 8.0              # |log return| above this many trailing robust sds counts as a jump flag
+jump_window = 63              # trailing window (bars) for the robust scale of the jump flag
+
+[costs]
+multipliers = [0.5, 1.0, 2.0, 3.0]

@@ -15,12 +15,12 @@ dist/
 htmlcov/
 *.nbi
 *.nbc
-cache/
+/cache/
 
-# Data, results and reports are never committed
-data/
-results/
-reports/
+# Data, results and reports are never committed (anchored: src/lpstgp/data is code)
+/data/
+/results/
+/reports/
 *.parquet
 *.feather
 *.arrow

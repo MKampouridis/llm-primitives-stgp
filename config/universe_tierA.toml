@@ -1,0 +1,386 @@
+# Tier A pilot universe: cross-asset instruments from free sources (pilot only; see docs/decisions.md).
+#
+# primary     the series used by default (source + symbol; `divide_by` builds a ratio of two series)
+# alternates  other series for the same exposure, downloaded for comparison in the data report
+# calendar    "business" (exchange or fixing days) or "7day" (crypto)
+# qa_calendar exchange_calendars code used for expected sessions in the data report ("" = weekdays)
+# cost_bps    base one-way transaction cost in basis points (broker-spread model v1, provisional)
+
+# ---------------------------------------------------------------- equity indices (price, not total return)
+[[instrument]]
+id = "SPX"
+name = "S&P 500"
+asset_class = "equity_index"
+region = "US"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XNYS"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^GSPC" }
+
+[[instrument]]
+id = "NDX"
+name = "Nasdaq-100"
+asset_class = "equity_index"
+region = "US"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XNYS"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^NDX" }
+
+[[instrument]]
+id = "SX5E"
+name = "Euro Stoxx 50"
+asset_class = "equity_index"
+region = "Europe"
+currency = "EUR"
+calendar = "business"
+qa_calendar = "XETR"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^STOXX50E" }
+alternates = [{ source = "yahoo", symbol = "^SSMI" }]
+
+[[instrument]]
+id = "DAX"
+name = "DAX 40"
+asset_class = "equity_index"
+region = "Europe"
+currency = "EUR"
+calendar = "business"
+qa_calendar = "XETR"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^GDAXI" }
+
+[[instrument]]
+id = "CAC"
+name = "CAC 40"
+asset_class = "equity_index"
+region = "Europe"
+currency = "EUR"
+calendar = "business"
+qa_calendar = "XPAR"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^FCHI" }
+
+[[instrument]]
+id = "UKX"
+name = "FTSE 100"
+asset_class = "equity_index"
+region = "UK"
+currency = "GBP"
+calendar = "business"
+qa_calendar = "XLON"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^FTSE" }
+
+[[instrument]]
+id = "NKY"
+name = "Nikkei 225"
+asset_class = "equity_index"
+region = "Japan"
+currency = "JPY"
+calendar = "business"
+qa_calendar = "XTKS"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^N225" }
+
+[[instrument]]
+id = "HSI"
+name = "Hang Seng"
+asset_class = "equity_index"
+region = "Asia"
+currency = "HKD"
+calendar = "business"
+qa_calendar = "XHKG"
+cost_bps = 3.0
+primary = { source = "yahoo", symbol = "^HSI" }
+
+[[instrument]]
+id = "KOSPI"
+name = "KOSPI Composite"
+asset_class = "equity_index"
+region = "Asia"
+currency = "KRW"
+calendar = "business"
+qa_calendar = "XKRX"
+cost_bps = 3.0
+primary = { source = "yahoo", symbol = "^KS11" }
+
+[[instrument]]
+id = "AS51"
+name = "S&P/ASX 200"
+asset_class = "equity_index"
+region = "Asia"
+currency = "AUD"
+calendar = "business"
+qa_calendar = "XASX"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^AXJO" }
+
+# ---------------------------------------------------------------- FX (ECB euro reference rates; crosses via EUR)
+[[instrument]]
+id = "EURUSD"
+name = "EUR/USD"
+asset_class = "fx"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.0
+primary = { source = "ecb", symbol = "USD" }
+alternates = [{ source = "yahoo", symbol = "EURUSD=X" }]
+
+[[instrument]]
+id = "GBPUSD"
+name = "GBP/USD"
+asset_class = "fx"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.0
+primary = { source = "ecb", symbol = "USD", divide_by = "GBP" }
+alternates = [{ source = "yahoo", symbol = "GBPUSD=X" }]
+
+[[instrument]]
+id = "USDJPY"
+name = "USD/JPY"
+asset_class = "fx"
+region = "Global"
+currency = "JPY"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.0
+primary = { source = "ecb", symbol = "JPY", divide_by = "USD" }
+alternates = [{ source = "yahoo", symbol = "JPY=X" }]
+
+[[instrument]]
+id = "AUDUSD"
+name = "AUD/USD"
+asset_class = "fx"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.5
+primary = { source = "ecb", symbol = "USD", divide_by = "AUD" }
+alternates = [{ source = "yahoo", symbol = "AUDUSD=X" }]
+
+[[instrument]]
+id = "USDCAD"
+name = "USD/CAD"
+asset_class = "fx"
+region = "Global"
+currency = "CAD"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.5
+primary = { source = "ecb", symbol = "CAD", divide_by = "USD" }
+alternates = [{ source = "yahoo", symbol = "CAD=X" }]
+
+[[instrument]]
+id = "USDCHF"
+name = "USD/CHF"
+asset_class = "fx"
+region = "Global"
+currency = "CHF"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.5
+primary = { source = "ecb", symbol = "CHF", divide_by = "USD" }
+alternates = [{ source = "yahoo", symbol = "CHF=X" }]
+
+[[instrument]]
+id = "NZDUSD"
+name = "NZD/USD"
+asset_class = "fx"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.5
+primary = { source = "ecb", symbol = "USD", divide_by = "NZD" }
+alternates = [{ source = "yahoo", symbol = "NZDUSD=X" }]
+
+[[instrument]]
+id = "EURGBP"
+name = "EUR/GBP"
+asset_class = "fx"
+region = "Global"
+currency = "GBP"
+calendar = "business"
+qa_calendar = ""
+cost_bps = 1.5
+primary = { source = "ecb", symbol = "GBP" }
+alternates = [{ source = "yahoo", symbol = "EURGBP=X" }]
+
+# ---------------------------------------------------------------- commodities
+[[instrument]]
+id = "WTI"
+name = "WTI crude oil (Cushing spot)"
+asset_class = "commodity"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XNYS"
+cost_bps = 3.0
+primary = { source = "eia", symbol = "RWTC" }
+alternates = [{ source = "yahoo", symbol = "CL=F" }, { source = "yahoo", symbol = "USO" }]
+
+[[instrument]]
+id = "BRENT"
+name = "Brent crude oil (Europe spot)"
+asset_class = "commodity"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XLON"
+cost_bps = 3.0
+primary = { source = "eia", symbol = "RBRTE" }
+alternates = [{ source = "yahoo", symbol = "BZ=F" }, { source = "yahoo", symbol = "BNO" }]
+
+[[instrument]]
+id = "NATGAS"
+name = "Natural gas (Henry Hub spot)"
+asset_class = "commodity"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XNYS"
+cost_bps = 8.0
+primary = { source = "eia", symbol = "RNGWHHD" }
+alternates = [{ source = "yahoo", symbol = "NG=F" }, { source = "yahoo", symbol = "UNG" }]
+
+[[instrument]]
+id = "GOLD"
+name = "Gold (COMEX continuous front month)"
+asset_class = "commodity"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = "CMES"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "GC=F" }
+alternates = [{ source = "yahoo", symbol = "GLD" }]
+
+[[instrument]]
+id = "SILVER"
+name = "Silver (COMEX continuous front month)"
+asset_class = "commodity"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = "CMES"
+cost_bps = 4.0
+primary = { source = "yahoo", symbol = "SI=F" }
+alternates = [{ source = "yahoo", symbol = "SLV" }]
+
+[[instrument]]
+id = "COPPER"
+name = "Copper (COMEX continuous front month)"
+asset_class = "commodity"
+region = "Global"
+currency = "USD"
+calendar = "business"
+qa_calendar = "CMES"
+cost_bps = 4.0
+primary = { source = "yahoo", symbol = "HG=F" }
+alternates = [{ source = "yahoo", symbol = "CPER" }]
+
+# ---------------------------------------------------------------- government bonds (roll-free proxies)
+[[instrument]]
+id = "US10Y"
+name = "US Treasury 7-10y (IEF ETF, proxy for 10Y futures)"
+asset_class = "bond"
+region = "US"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XNYS"
+cost_bps = 1.0
+primary = { source = "yahoo", symbol = "IEF" }
+alternates = [{ source = "yahoo", symbol = "ZN=F" }]
+
+[[instrument]]
+id = "US20Y"
+name = "US Treasury 20y+ (TLT ETF, proxy for 30Y futures)"
+asset_class = "bond"
+region = "US"
+currency = "USD"
+calendar = "business"
+qa_calendar = "XNYS"
+cost_bps = 1.0
+primary = { source = "yahoo", symbol = "TLT" }
+alternates = [{ source = "yahoo", symbol = "ZB=F" }]
+
+[[instrument]]
+id = "BUND"
+name = "German Bund (S&P Euro-Bund total-return index)"
+asset_class = "bond"
+region = "Europe"
+currency = "EUR"
+calendar = "business"
+qa_calendar = "XETR"
+cost_bps = 2.0
+primary = { source = "yahoo", symbol = "^SPEUBDTR" }
+
+# ---------------------------------------------------------------- crypto (native 7-day calendar, UTC days)
+[[instrument]]
+id = "BTC"
+name = "Bitcoin / USD"
+asset_class = "crypto"
+region = "Global"
+currency = "USD"
+calendar = "7day"
+qa_calendar = ""
+cost_bps = 10.0
+primary = { source = "bitstamp", symbol = "btcusd" }
+alternates = [{ source = "coinbase", symbol = "BTC-USD" }]
+
+[[instrument]]
+id = "ETH"
+name = "Ether / USD"
+asset_class = "crypto"
+region = "Global"
+currency = "USD"
+calendar = "7day"
+qa_calendar = ""
+cost_bps = 10.0
+primary = { source = "coinbase", symbol = "ETH-USD" }
+alternates = [{ source = "bitstamp", symbol = "ethusd" }]
+
+[[instrument]]
+id = "LTC"
+name = "Litecoin / USD"
+asset_class = "crypto"
+region = "Global"
+currency = "USD"
+calendar = "7day"
+qa_calendar = ""
+cost_bps = 10.0
+primary = { source = "coinbase", symbol = "LTC-USD" }
+alternates = [{ source = "bitstamp", symbol = "ltcusd" }]
+
+[[instrument]]
+id = "XRP"
+name = "XRP / USD"
+asset_class = "crypto"
+region = "Global"
+currency = "USD"
+calendar = "7day"
+qa_calendar = ""
+cost_bps = 10.0
+primary = { source = "bitstamp", symbol = "xrpusd" }
+alternates = [{ source = "coinbase", symbol = "XRP-USD" }]
+
+[[instrument]]
+id = "BCH"
+name = "Bitcoin Cash / USD"
+asset_class = "crypto"
+region = "Global"
+currency = "USD"
+calendar = "7day"
+qa_calendar = ""
+cost_bps = 10.0
+primary = { source = "bitstamp", symbol = "bchusd" }
+alternates = [{ source = "coinbase", symbol = "BCH-USD" }]

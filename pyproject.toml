@@ -13,6 +13,7 @@ dependencies = [
     "deap==1.4.4",
     "requests>=2.32",
     "exchange-calendars>=4.13",
+    "xlrd>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -61,7 +62,7 @@ ignore = ["E501", "RUF001", "RUF002", "RUF003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers --import-mode=importlib"
 xfail_strict = true
 markers = [
     "realdata: needs local Tier A data; skipped when the data directory is absent",
