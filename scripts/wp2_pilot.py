@@ -72,6 +72,29 @@ def step_calibrate(paths, settings, workers: int) -> None:
     choice = calibration.choose_candidate(records(plan))
     REPORTS.mkdir(parents=True, exist_ok=True)
     (REPORTS / "calibration.json").write_text(json.dumps(choice, indent=1))
+    lines = [
+        "# WP2 calibration: GP parameters at equal budget (protocol §6.1)",
+        "",
+        f"Arms 2c and 6 pooled; {', '.join(CALIBRATION_INSTRUMENTS)}; PL1 training data only; "
+        f"10 runs per arm and instrument; {CAL_BUDGET:,} requested evaluations per candidate.",
+        "",
+        "| population | tournament | runs | median validation F | median convergence gen | "
+        "generations | evaluations |",
+        "|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    lines += [
+        f"| {r['population']} | {r['tournament']} | {r['runs']} | {r['median_validation']:.4f} | "
+        f"{r['median_convergence']:.0f} | {r['generations']} | {r['requested_evaluations']:,} |"
+        for r in choice["table"]
+    ]
+    lines += [
+        "",
+        f"**Chosen:** population {choice['population']}, tournament {choice['tournament']}, "
+        f"{choice['generations']} generations ({choice['requested_evaluations']:,} requested "
+        f"evaluations): the cheapest candidate within {choice['tolerance']} of the best median "
+        f"validation F ({choice['best_median_validation']:.4f}).",
+    ]
+    (REPORTS / "calibration.md").write_text("\n".join(lines) + "\n")
     print(json.dumps({k: v for k, v in choice.items() if k != "table"}, indent=1))
 
 
@@ -89,6 +112,29 @@ def step_budget_check(paths, settings, workers: int) -> None:
     recs = records(plan)
     out = {"budget_unit": calibration.budget_unit(recs), "lambda": calibration.lambda_check(recs)}
     (REPORTS / "budget_check.json").write_text(json.dumps(out, indent=1))
+    timing = defaultdict(list)
+    for r in recs:
+        timing[r["library"]["name"]].append(r["timings"]["per_requested_evaluation_ms"])
+    lines = [
+        "# WP2 budget unit and fitness weights (protocol §6.2-6.3)",
+        "",
+        f"Every GP arm at the chosen parameters, 3 runs on {', '.join(CALIBRATION_INSTRUMENTS)} (PL1).",
+        "",
+        "| arm (library) | median unique share | ms per requested evaluation (median) |",
+        "|---|---:|---:|",
+    ]
+    for arm, share in out["budget_unit"]["median_unique_share"].items():
+        lines.append(f"| {arm} | {share:.3f} | {np.median(timing[arm]):.2f} |")
+    lam = out["lambda"]
+    lines += [
+        "",
+        f"Spread of unique shares: {out['budget_unit']['spread']:.2f}x -> budget unit "
+        f"**{out['budget_unit']['unit']}** (rule: unique if > 2x).",
+        f"Final rules never trading on validation: {lam['no_trade_share']:.1%}; median validation "
+        f"turnover {lam['median_turnover']:.1f} per year -> raise lambda_turnover: "
+        f"**{lam['raise_lambda_turnover']}** (rule: > 25% or > 50).",
+    ]
+    (REPORTS / "budget_check.md").write_text("\n".join(lines) + "\n")
     print(json.dumps(out, indent=1))
 
 
@@ -188,6 +234,28 @@ def step_pilot_test(paths, settings) -> None:
     result = pilot.go_no_go(pooled, yearly)
     result["manifest_commit"] = manifest.commit
     (REPORTS / "pilot_go_no_go.json").write_text(json.dumps(result, indent=1, default=float))
+    lines = [
+        "# WP2 pilot go/no-go (protocol §8)",
+        "",
+        f"Freeze manifest committed in {manifest.commit[:12]}; test years 2006-07..2008-06 read "
+        f"once; {len(PILOT_INSTRUMENTS)} instruments; equal-weight portfolios of all runs.",
+        "",
+        f"**Decision: {result['decision']}** ({result['rule']}; difference "
+        f"{result['difference']:+.3f}).",
+        "",
+        "| arm | pooled Sharpe | PL1 test | PL2 test |",
+        "|---|---:|---:|---:|",
+    ]
+    for arm, value in sorted(result["pooled_sharpe"].items()):
+        y = result["yearly_sharpe"]
+        lines.append(f"| {arm} | {value:.3f} | {y['PL1'][arm]:.3f} | {y['PL2'][arm]:.3f} |")
+    lines += ["", "| comparison | difference | 95% CI | p |", "|---|---:|---|---:|"]
+    for name, c in result["comparisons"].items():
+        lines.append(
+            f"| {name} | {c['difference']:+.3f} | [{c['ci_low']:+.3f}, {c['ci_high']:+.3f}] | "
+            f"{c['p_value']:.3f} |"
+        )
+    (REPORTS / "pilot_go_no_go.md").write_text("\n".join(lines) + "\n")
     np.savez_compressed(paths.results_dir / "campaigns" / "wp2-pilot-test-portfolios.npz", **raw)
     print(json.dumps({k: result[k] for k in ("decision", "difference", "pooled_sharpe")}, indent=1))
 
