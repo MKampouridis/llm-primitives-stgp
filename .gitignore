@@ -17,10 +17,10 @@ htmlcov/
 *.nbc
 /cache/
 
-# Data, results and reports are never committed (anchored: src/lpstgp/data is code)
+# Data, results and caches are never committed (anchored: src/lpstgp/data is code).
+# Generated reports (small markdown, reports/<wp>/) are tracked.
 /data/
 /results/
-/reports/
 *.parquet
 *.feather
 *.arrow

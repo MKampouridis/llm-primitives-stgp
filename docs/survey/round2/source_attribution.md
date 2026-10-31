@@ -1,0 +1,134 @@
+# Which external survey cited which paper
+
+This file was compiled by the coordinator from the four pasted or supplied survey outputs. The Claude survey's own coverage is its 153-row table in `reports/LLM GP trading strategy survey.md`, plus verification-round notes. Papers are identified by arXiv ID, DOI or short name.
+
+## ChatGPT (45 rows)
+- EvoQuantLab 2610.17130
+- LineageEvo 2610.29663
+- CogAlpha 2511.18850
+- TreEvo 2508.16334
+- InsightSR 2608.25291
+- QuantaAlpha 2602.07085
+- AlphaPROBE 2602.11917
+- EvoAlpha (NeurIPS'25 workshop)
+- LLQ (CIFEr 2026)
+- LLEGO 2503.14217
+- Kobilov & Lan 2502.07772
+- LLM-SR 2404.18400
+- EvoMO-SR 2609.36187
+- AlphaAgent 2502.16789
+- R&D-Agent-Quant 2505.15155
+- Alpha-GPT 2308.00016
+- QuantAgent 2402.03755
+- Kou et al. 2409.06289
+- AutoAlpha 2002.08245
+- Warm-start GP 2412.00896
+- AlphaGen 2306.12964
+- AlphaForge 2406.18394
+- FunSearch (Nature)
+- ELM 2206.08896
+- LMX 2302.12170
+- EoH 2401.02051
+- ReEvo 2402.01145
+- LLaMEA 2405.20132
+- Hemberg LLM_GP 2401.07102
+- Brownlee GI SSBSE 2310.19813
+- Liventsev 2304.10423
+- LLM-Meta-SR 2505.18602
+- Hazman grammar prompt 2507.10326
+- Christodoulaki & Kampouridis ASOC 2026
+- Christodoulaki, Kampouridis, Kyropoulou KBS 2025
+- Long, Kampouridis, Kanellopoulos PPSN 2022
+- Gypteau, Otero, Kampouridis 2015
+- Kampouridis & Tsang IJCIS 2012
+- Neely et al. 1997
+- Allen & Karjalainen 1999
+- Brabazon, Kampouridis, O'Neill GPEM 2020
+- Futter, Horvath, Wiese 2308.15135
+- Guidetti Fisher pruning 2610.24753
+- AlphaEvolve (DeepMind) 2506.13131
+- Navigating the Alpha Jungle 2505.11122
+
+## Gemini (50 rows)
+- ALPHAS2 (OpenReview QjycCr3zns)
+- AlgoEvolve 2606.26173
+- CogAlpha
+- Alpha-GPT
+- Alpha-GPT 2.0 2402.09746
+- EFS 2507.17211
+- QuantaAlpha
+- LaSR 2409.09359
+- LLQ
+- Christodoulaki KBS 2025
+- Christodoulaki ASOC 2026
+- AlphaPROBE
+- AlphaAgent
+- AlphaAgentEvo (ICLR 2026)
+- Alpha Jungle
+- Chain-of-Alpha 2508.06312
+- FactorMiner 2602.14670
+- AQuA 2608.12841
+- Hemberg LLM_GP
+- AlphaEvolve (DeepMind)
+- LLM-SR
+- LLM-FE 2503.14434
+- EFE 2607.01548
+- Mutation Without Variation 2606.05408
+- QuantAgent
+- R&D-Agent-Quant
+- Kou et al.
+- AlphaLogics 2603.20247
+- AlphaPilot 2610.15488
+- Yu et al. EC alpha survey 2608.01789
+- FunSearch
+- ELM
+- LMX
+- EoH
+- ReEvo
+- LLaMEA
+- Saemundsdottir & Haraldsson GECCO'24 GI (misattributed to Brownlee)
+- Promptbreeder 2309.16797
+- CAAFE 2305.03403
+- AlphaEvolve (Cui, SIGMOD 2021)
+- AutoAlpha
+- Warm-start GP
+- AlphaGen
+- Long, Kampouridis, Papastylianou AI Review 2026
+- Guo/Jin et al. signature pairs trading (J. Futures Markets 2026)
+- Neely 1997
+- Allen & Karjalainen 1999
+- Dempsey et al. CEC 2006
+- EDDIE-Automation (Tsang et al. 2004)
+- Potvin et al. 2004
+- Also mentioned in the text: Continuous Program Search 2602.07659, pwb-alphaevolve, FactorBench 2610.06947, AgenticEvolve 2610.31326, QuantBench 2504.18600
+
+## Undermind (13 references)
+- LLQ
+- EvoQuantLab
+- Christodoulaki ASOC 2026
+- LLM-GA (Zhang et al. SMC 2025)
+- CogAlpha
+- ProFiT
+- Chen & Qi Applied Sciences 2026
+- PACE 2608.07395
+- Continual Abstraction Discovery 2608.17947
+- MadEvolve 2605.23007
+- QuantaAlpha
+- CoEvo 2412.18890
+- Long et al. AI Review 2026
+
+## Kimi (9 rows; was given an "already known" exclusion list, so its rows are new-only by design)
+- ALPHAS2 (found independently; it was not on Kimi's exclusion list)
+- EvoAlpha ICASSP 2026 (Wu et al., 10.1109/ICASSP55912.2026.11463591)
+- Chen & Qi Applied Sciences 2026
+- AlphaMemo 2606.20625
+- AlphaBench (ICLR 2026)
+- Huatai "GPT Factor Factory" 1.0 report (2024)
+- Huatai "GPT Factor Factory" 2.0 report (2024)
+- Li, Shi, Li 2006 (wavelet GP, 10.1191/0142331206tim177oa)
+- Liu, Ji, Jin 2016 (Entropy)
+- Kimi's text also mentions AlphaRLM, AQuA, AlphaSchema, FactorMiner, Chain-of-Alpha and Huang et al. (Investment Analysts Journal) as excluded or checked.
+
+## Found only via the coordinator's follow-up checks (no survey listed them as rows)
+- Chen & Qi was hinted at by the Gemini-checking agent before Kimi and Undermind listed it.
+- AlphaSchema 2607.26642.

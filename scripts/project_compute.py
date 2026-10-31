@@ -2,7 +2,7 @@
 
 Reads results_dir/tierA/wp1_smoke/summary.json and results_dir/tierA/wp1_calibration/calibration.json,
 counts eligible (instrument, period) pairs from the processed Tier A data (availability only), and
-writes reports_dir/smoke_and_projections.md plus results_dir/tierA/wp1_projections.json.
+writes reports_dir/wp1/smoke_and_projections.md plus results_dir/tierA/wp1_projections.json.
 
 Usage: uv run python scripts/project_compute.py
 """
@@ -297,7 +297,7 @@ def main() -> None:
         "",
     ]
     report = "\n".join(lines)
-    out = paths.reports_dir / "smoke_and_projections.md"
+    out = paths.reports_dir / "wp1" / "smoke_and_projections.md"
     out.write_text(report, encoding="utf-8")
     (paths.results_dir / "tierA" / "wp1_projections.json").write_text(
         json.dumps(

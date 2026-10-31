@@ -1,4 +1,4 @@
-"""Write the per-tier data reports (coverage, gaps, date ranges; counts only) to reports_dir.
+"""Write the per-tier data reports (coverage, gaps, date ranges; counts only) to reports_dir/wp1.
 
 Usage: uv run python scripts/data_reports.py
 """
@@ -192,7 +192,7 @@ def tier_c_report(paths) -> str:
 
 def main() -> None:
     paths, settings = load_paths(), load_settings()
-    out = Path(paths.reports_dir)
+    out = Path(paths.reports_dir) / "wp1"
     out.mkdir(parents=True, exist_ok=True)
     reports = {
         "data_tierA.md": tier_a_report(paths, settings),

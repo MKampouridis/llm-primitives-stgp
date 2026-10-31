@@ -1,6 +1,6 @@
 # Decisions and assumptions
 
-Every assumption and design choice made while building the code base, in the order made. The research plan (`docs/research_plan.md` in the Box project folder) is authoritative; where an entry departs from it or fills a gap, it says so.
+Every assumption and design choice made while building the code base, in the order made. The research plan (`docs/research_plan.md`) is authoritative; where an entry departs from it or fills a gap, it says so.
 
 Status: **Decided** = agreed with the PI. **Provisional** = engineer's default, open for review. **Open** = needs a decision before the work package named.
 
@@ -8,7 +8,7 @@ Status: **Decided** = agreed with the PI. **Provisional** = engineer's default, 
 
 ## WP1 (from 30 Oct 2026)
 
-### D-001 Repository location — Decided
+### D-001 Repository location — Decided; layout superseded by D-032
 The git repository is a local clone at `~/code/llm-primitives-stgp`, outside Box; the private GitHub repository is the code backup. The Box project folder keeps the plan, survey and notes, and receives generated reports (`reports/wp1/`) and results (`results/`) through paths in `config/paths.toml`.
 *Why:* Box Drive syncs files while git rewrites `.git` (index, refs, packs), which can corrupt the repository or leave conflict copies; Box would also sync `.venv` and caches.
 
@@ -310,3 +310,97 @@ The lock hashes each contract's module, the lpstgp helper modules it imports, an
 14. **Arm 6 review.** The PI should review the 45 seed-library contracts and log minutes in `docs/arm6_review.md`; the plan's Method §1 and arm-6 wording need updating (D-002).
 15. **Tier C.** The Essex DC-GP and ActTrade datasets still need copying into `tierC/` with a `manifest.toml`.
 16. **Licence.** Choose one before the repository is made public.
+
+---
+
+## Between WP1 and WP2 (31 Oct 2026)
+
+### D-032 One project location — Decided (PI, 31 Oct 2026)
+Everything lives in the repository folder `~/code/llm-primitives-stgp`, which supersedes the three locations of D-001.
+- **Tracked in git:** code; the research plan and survey (`docs/research_plan.md`, `docs/survey.md`); the survey working notes (`docs/survey/`, renamed from the Box `research_notes/` and survey reports, contents checksum-verified); and generated reports (`reports/<wp>/`, small markdown). WP1 kept reports out of git; they are now versioned with the code that produced them.
+- **Git-ignored subfolders:** `data/` (moved from `~/llm-primitives-stgp-data`; all 58 raw files re-verified against the manifest), `results/` (copied from Box) and `cache/`.
+- **Paths:** `config/paths.toml` uses paths relative to the repository root. Working paths may not be inside a cloud-synced folder (enforced in `load_paths`).
+- **Box** becomes a one-way backup mirror written only by `scripts/backup.py`, at milestones: docs, reports, results, raw data and manifests (processed Parquet is rebuilt from raw). Files that later change or disappear are moved to `_superseded/<timestamp>/` in the mirror, never deleted. The old Box `research_notes/` folder went to `_superseded/` once its copy was verified.
+- **Claude Code:** sessions start in the repository folder. `CLAUDE.md` carries the standing rules of the WP1 brief, and the project memory moved to that folder's key.
+- **Release:** the survey working notes are internal. Decide at release whether they go public (D-007).
+
+*Why:* the PI asked for a single location. The repository folder is the only one that can hold code safely (D-001), and GitHub backs up everything tracked. The Box mirror protects what git cannot hold: free-source raw downloads, which providers revise, and run records.
+
+### D-033 Review of related code bases — Decided (what is adopted); protocol items go to WP2
+Reviewed on 31 Oct 2026, at the PI's suggestion:
+- LLQ_CIFEr (andrewclayman, `dc4b9c7`): prompt, strategies, provenance, portfolio GA, harness;
+- Evolutionary-Algorithms (MKampouridis, `0d7a480`);
+- the Markdown documents of regime-fusion-gp (MKampouridis, `5786b99`; its code and results were not read).
+
+**No code is ported.** Our harness already covers what these repositories implement, and each has conventions we must not copy (below).
+
+**Adopted as engineering practice** (all Provisional; built in WP2):
+1. `CLAUDE.md` with the standing rules (done).
+2. **Seeds** derive from (instruments, period, run index) only, never from the arm or library, so arms are paired. Today the seed is the run index, which already pairs arms.
+3. **Campaign machinery** (from regime-fusion-gp):
+   - a planned task list that freezes digests of settings and data;
+   - result files written atomically, with completed tasks skipped;
+   - a `collect` step that refuses mixed settings;
+   - a "pilot periods only" guard on top of the sealed test stage.
+4. **Validation checkpoints** every 10 generations in validation-stage run records: the best individual's fit score, validation Sharpe and trades. Never used for selection. They inform the budget decision and H3's validation–test gap.
+5. **Configuration register** from the first WP2 run. Every distinct configuration tried counts as a trial for the Deflated Sharpe Ratio.
+6. **Long local runs:**
+   - a free-disk guard (stop below 5 GB) and clean-up of worker processes;
+   - runs under `caffeinate`;
+   - laptop thermal throttling noted in the projections.
+7. **Uniform execution** for whole LLM strategies: they must not shift their own signals; the harness applies `execution_lag`. In LLQ, 2 of 13 strategy files do not shift and 11 do.
+8. **One Sharpe definition** everywhere: mean/sd × √periods. LLQ uses three.
+9. **Content-keyed caches** only, which we already have. LLQ keys by `id(df)`.
+
+**For the WP2 protocol (PI decision):**
+1. **Protocol document first.** Write `docs/protocol.md` before any pilot run. For each D-031 item the pilot settles, it states the options, the data and the deciding rule, plus a pre-stated go/no-go rule.
+2. **Confirmatory test.** The paired difference in equal-weight portfolio Sharpe, using a stationary block bootstrap of days with both arms resampled on the same days, Holm-adjusted. Per-unit Mann–Whitney tests become descriptive only, because units sharing a market year are not independent. regime-fusion-gp made this change after review, and LLQ's aggregate tests were borderline (mixed model p = 0.061) although its per-seed tests were significant.
+3. **Aggregation.** Average the daily returns of all runs per (instrument, period), so no run is picked after the fact; then weight instruments equally (D-031 Q7).
+4. **Execution lag 2** (next close), at least as a pre-registered robustness setting. ECB fixings and EIA spot prices are not tradable closes (D-031 Q2).
+5. **GP parameter pilot** at equal budget, with a convergence rule:
+   - candidates: populations × tournament sizes;
+   - convergence: the first generation reaching 99% of the run's total rise;
+   - choice: the cheapest candidate within 0.05 of the best;
+   - data: training data only.
+
+   regime-fusion-gp's pilot chose 2,000 × 40, i.e. 80,000 evaluations. 30 versus 50 runs per configuration is settled by a stability rule.
+6. **Secondary analyses:** the Deflated Sharpe Ratio, the probability of backtest overfitting (CSCV), Hansen's SPA test against the best benchmark, and a random-entry null at the method's trade count.
+7. **Fitness:** require a minimum number of round trips. The Essex GP requires 6 trades; our 10-bar minimum exposure admits one-trade rules (D-031 Q5).
+8. **CERES:**
+   - Sun Grid Engine arrays, at most 60 concurrent per array and about 250 per user;
+   - about half the M1's per-core speed;
+   - CentOS 7 with glibc 2.17: check that our lock installs (numba, pyarrow, roughpy wheels).
+
+   At that speed, Tier A at 25k evaluations is about 7,800 core-hours (D-031 Q12).
+9. **Tier B, if free data are ever used:**
+   - check fractional "split" days, because Yahoo books spin-offs as splits and some ratios are wrong;
+   - handle reused and renamed tickers;
+   - freeze the draw once made.
+10. **DC reference:** ask to reuse regime-fusion-gp's Java-derived DC fixtures as an extra reference test.
+
+**Hazards in the related code bases** (relevant to the WP4 baselines):
+- **LLQ's strategy design data overlap our test years.**
+  - Its development and test years (2013–2024) overlap most of our test years, so its strategies are contaminated as a baseline everywhere except a post-cutoff year. Disclose this.
+  - Its strategy pool was pruned on out-of-sample trade counts.
+  - A legacy tuning path averages validation years that are other periods' test years.
+- **LLQ portfolio GA:** three inconsistent descriptions.
+
+  | Source | Crossover | Population | Tournament | Objective |
+  |---|---|---|---|---|
+  | code | two-point | 300 | 4 | portfolio Sharpe |
+  | `GA_DESCRIPTION.md` | uniform | — | — | — |
+  | pseudocode | — | 100 | 2 | Σ w·R |
+
+  Ask the authors which is canonical. Re-implement it on our sandboxes and costs, starting from our warm-up: LLQ starts every slice cold, which is why one of its strategies never traded. Fit the allocator on FIT only if rules are selected on VALIDATE.
+- **Evolutionary-Algorithms trading fitness:**
+  - losses are never realised and open positions are excluded, so the per-trade Sharpe is always positive;
+  - one task opens overlapping trades;
+  - the "test" file is the validation file.
+
+  Its settings are kept only as a reference for a Tier C replication: population 500 × 25 generations, depth 2–4, crossover 0.95, tournament 4, elitism 1, at least 6 trades.
+
+**Where regime-fusion-gp differs from us:**
+- **Execution:** it trades at the next open; we trade at the signal close.
+- **Final rule:** it re-evolves on all four training years and keeps the final generation's best; we select on validation, which H3 needs.
+- **Stock data:** it accepts free Yahoo stock data with the survivorship bias stated.
+- **Tier C:** ActTrade's original datasets no longer exist.

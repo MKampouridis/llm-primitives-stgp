@@ -14,7 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = REPO_ROOT / "config"
 PATH_KEYS = ("data_dir", "results_dir", "reports_dir", "cache_dir")
 
-# Path fragments of cloud-synced folders; caches must never live inside one.
+# Path fragments of cloud-synced folders. Working paths must never live inside one; only the
+# optional backup mirror (written by scripts/backup.py) may.
 CLOUD_SYNC_MARKERS = ("Library/CloudStorage", "Library/Mobile Documents", "Dropbox", "OneDrive")
 
 
@@ -28,13 +29,16 @@ class Paths:
     results_dir: Path
     reports_dir: Path
     cache_dir: Path
+    backup_dir: Path | None = None
 
     def tier_dir(self, tier: str) -> Path:
         return self.data_dir / f"tier{tier}"
 
 
 def _expand(value: str) -> Path:
-    return Path(os.path.expanduser(value)).resolve()
+    """Expand ``~``; a relative path is relative to the repository root, not the working dir."""
+    path = Path(os.path.expanduser(value))
+    return (path if path.is_absolute() else REPO_ROOT / path).resolve()
 
 
 def is_cloud_synced(path: Path) -> bool:
@@ -53,9 +57,14 @@ def load_paths(path: Path | str | None = None) -> Paths:
     missing = [key for key in PATH_KEYS if key not in raw]
     if missing:
         raise ConfigError(f"{source}: missing keys {missing}")
-    paths = Paths(**{key: _expand(raw[key]) for key in PATH_KEYS})
-    if is_cloud_synced(paths.cache_dir):
-        raise ConfigError(f"cache_dir {paths.cache_dir} is inside a cloud-synced folder")
+    backup = raw.get("backup_dir")
+    paths = Paths(
+        **{key: _expand(raw[key]) for key in PATH_KEYS},
+        backup_dir=_expand(backup) if backup else None,
+    )
+    for key in PATH_KEYS:
+        if is_cloud_synced(getattr(paths, key)):
+            raise ConfigError(f"{key} {getattr(paths, key)} is inside a cloud-synced folder")
     return paths
 
 

@@ -1,8 +1,12 @@
 # Machine-specific paths. Copy to config/paths.toml (git-ignored) and edit,
-# or point the LPSTGP_PATHS environment variable at another file.
-# A leading "~" is expanded. cache_dir must not be inside a cloud-synced folder.
+# or point the LPSTGP_PATHS environment variable at another file (e.g. on a cluster).
+# A leading "~" is expanded; relative paths are relative to the repository root.
+# Working paths must not be inside a cloud-synced folder (Box, Dropbox, iCloud, OneDrive).
 
-data_dir = "~/llm-primitives-stgp-data"        # raw + processed market data (tierA, tierB, tierC)
-results_dir = "/path/to/project/results"       # per-run summaries and best individuals
-reports_dir = "/path/to/project/reports/wp1"   # generated data, smoke-test and projection reports
-cache_dir = "~/Library/Caches/llm-primitives-stgp"  # disposable, size-capped caches
+data_dir = "data"         # raw + processed market data (tierA, tierB, tierC); git-ignored
+results_dir = "results"   # per-run summaries and best individuals; git-ignored
+reports_dir = "reports"   # generated reports, one subfolder per work package; tracked in git
+cache_dir = "cache"       # disposable, size-capped caches; git-ignored
+
+# Optional one-way backup mirror, written only by scripts/backup.py (may be cloud-synced).
+# backup_dir = "~/Library/CloudStorage/Box-Box/.../llm-primitives-stgp"
