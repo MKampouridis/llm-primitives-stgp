@@ -141,15 +141,16 @@ Arms 1, 2a, 2b and 2c share the same mathematics; they differ only in granularit
 1. **GP parameters, at equal budget.**
    - Candidates: population {250, 500, 1000} × tournament {3, 5}, each with 50,000 requested
      evaluations.
-   - Runs: arms 2c and 6, 6 instruments (2 indices, 2 FX, 2 commodities, fixed in advance),
-     10 runs each, on PL1.
+   - Runs: arms 2c and 6, 6 instruments fixed in advance (SPX, NKY; EURUSD, USDJPY; GOLD,
+     NATGAS), 10 runs each, on PL1; the comparison pools both arms (120 runs per candidate).
    - Convergence of a run: the first generation whose best fit F reaches 99% of the run's total
      rise. A candidate's generations are the median convergence generation, rounded up to 10.
    - **Choice:** the cheapest candidate whose median validation F is within 0.05 of the best.
-2. **Budget unit.** Budget in unique evaluations if the median unique share of evaluations differs
-   by more than 2× between arms in step 1; otherwise in requested evaluations.
-3. **Fitness weights.** The minimum activity is fixed in §5. Keep λ unless, on PL1/PL2
-   validation, more than 25% of final rules never trade, or the median turnover exceeds 50
+2. **Budget unit.** With the chosen parameters, every GP arm (2a, 2b, 2c, 6, GP-TA) is run
+   3 times on the same 6 instruments (PL1). Budget in unique evaluations if the median unique
+   share of evaluations differs by more than 2× between arms; otherwise in requested evaluations.
+3. **Fitness weights.** The minimum activity is fixed in §5. Keep λ unless, in the runs of
+   steps 1–2 (PL1 validation), more than 25% of final rules never trade, or the median turnover exceeds 50
    position changes a year. In that case, raise λ_to stepwise (×2, ×4) until both conditions
    hold.
 4. **Runs per configuration for WP4**, run at the start of WP4 on PL1/PL2 training data, not in
@@ -229,3 +230,9 @@ Configurations tried and dropped stay in the register.
   - Reads outside the folder were refused.
   - There was no shell or web tool, and no CLAUDE.md, memory or skills were loaded.
   - The model was `claude-opus-5-5` throughout.
+- **31 Oct 2026, before any calibration run:** §6 made operational.
+  - The six calibration instruments are fixed (SPX, NKY, EURUSD, USDJPY, GOLD, NATGAS).
+  - Candidates are compared over both arms pooled.
+  - The budget-unit rule is applied to a 3-run check of every GP arm.
+  - Strategy generation had started (session s01); no calibration or pilot data had been
+    looked at.

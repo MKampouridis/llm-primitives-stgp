@@ -46,7 +46,8 @@ class Config:
 
     def digest(self, settings: Mapping[str, Any]) -> str:
         gp_cfg, fit_cfg = self.resolved(settings)
-        lock = STRATEGY_LOCK if self.library.startswith("s2") else OPERATOR_LOCK
+        uses_strategies = self.kind == "select" or self.library.startswith("s2")
+        lock = STRATEGY_LOCK if uses_strategies else OPERATOR_LOCK
         return digest(
             {
                 "library": self.library,
