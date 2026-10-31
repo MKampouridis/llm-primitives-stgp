@@ -330,6 +330,7 @@ def run_session(
     timeout: float = 3 * 3600,
     claude_version: str = "",
 ) -> dict[str, Any]:
+    from lpstgp.data.tier_a import git_revision
     from lpstgp.runner import configs_from_settings
     from lpstgp.splits import Stage
 
@@ -353,6 +354,7 @@ def run_session(
         "effort": EFFORT,
         "budget": BUDGET,
         "claude_version": claude_version,
+        "code_version": git_revision(),
         "brief_template_sha12": sha12(template),
         "brief_sha12": sha12(brief),
         "earlier": list(earlier),
@@ -372,12 +374,19 @@ def run_session(
         (archive / "summary.json").write_text(json.dumps(record, indent=1, default=float))
         return record
     result = finalize(folder, archive, paths, settings)
-    if not result["accepted"] and (folder / "strategy.py").exists():
-        failures = json.dumps(result.get("check", {}).get("failures", []), default=float)[:4000]
-        repair = (
-            "The final check failed. Fix strategy.py so that it passes check (you may run check "
-            f"again; do not use more backtests than you have left). Problems:\n{failures}"
-        )
+    if not result["accepted"]:
+        if (folder / "strategy.py").exists():
+            failures = json.dumps(result.get("check", {}).get("failures", []), default=float)
+            repair = (
+                "The final check failed. Fix strategy.py so that it passes check (you may run "
+                "check again; do not use more backtests than you have left). Problems:\n"
+                + failures[:4000]
+            )
+        else:
+            repair = (
+                "There is no strategy.py in your folder. Save your final strategy as strategy.py "
+                "and make sure it passes check."
+            )
         cmd = claude_command(folder, archive, session_id, resume=repair)
         record["runs"].append(run_claude(cmd, folder, archive, "repair", timeout / 2))
         result = finalize(folder, archive, paths, settings)
