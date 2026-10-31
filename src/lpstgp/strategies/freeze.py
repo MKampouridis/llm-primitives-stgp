@@ -77,7 +77,8 @@ def _usage(s: Mapping[str, Any]) -> dict[str, float]:
         total["cache_read"] += u.get("cache_read_input_tokens", 0) or 0
         total["cache_write"] += u.get("cache_creation_input_tokens", 0) or 0
         total["output"] += u.get("output_tokens", 0) or 0
-        total["cost_usd"] += run.get("total_cost_usd") or 0.0
+        # Claude Code reports the session's cumulative cost in every run of a resumed session.
+        total["cost_usd"] = max(total["cost_usd"], run.get("total_cost_usd") or 0.0)
         total["turns"] += run.get("num_turns") or 0
         total["minutes"] += (run.get("duration_ms") or 0) / 60000
     return total

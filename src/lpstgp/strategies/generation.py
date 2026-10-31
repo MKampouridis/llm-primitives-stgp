@@ -20,7 +20,7 @@ import time
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from string import Template
 from typing import Any
@@ -191,8 +191,46 @@ RESUME_WAIT_S = 30 * 60
 MAX_RESUMES = 10
 
 
+LIMIT_WAITS = 96  # usage-limit waits allowed per session (they do not count as failures)
+_RESET = re.compile(r"resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\s*\(([^)]+)\)", re.I)
+
+
 def completed(run: Mapping[str, Any]) -> bool:
     return run.get("exit") == 0 and run.get("subtype") == "success" and not run.get("is_error")
+
+
+def limited(run: Mapping[str, Any]) -> bool:
+    """The run stopped on a usage or spend limit (not a failure of the session itself)."""
+    text = str(run.get("result", "")).lower()
+    return bool(run.get("is_error")) and "limit" in text and ("resets" in text or "spend" in text)
+
+
+def seconds_until_reset(run: Mapping[str, Any], now: datetime | None = None) -> float:
+    """Seconds from ``now`` until the reset stated in a limit notice (+2 min, at least 1 min).
+
+    The stated clock time is the first one after the notice was issued (``ended_utc``), so a
+    driver restarted after the reset resumes at once. Unparseable notices wait RESUME_WAIT_S.
+    """
+    match = _RESET.search(str(run.get("result", "")))
+    if not match:
+        return RESUME_WAIT_S
+    from zoneinfo import ZoneInfo
+
+    hour, minute, half, zone = int(match[1]) % 12, int(match[2] or 0), match[3].lower(), match[4]
+    try:
+        tz = ZoneInfo(zone)
+    except Exception:
+        return RESUME_WAIT_S
+    now = (now or datetime.now(UTC)).astimezone(tz)
+    issued = (
+        datetime.fromisoformat(run["ended_utc"]).astimezone(tz) if run.get("ended_utc") else now
+    )
+    reset = issued.replace(
+        hour=hour + (12 if half == "pm" else 0), minute=minute, second=0, microsecond=0
+    )
+    if reset <= issued:
+        reset += timedelta(days=1)
+    return min(max((reset - now).total_seconds() + 120, 60.0), 6 * 3600)
 
 
 def claude_command(
@@ -251,7 +289,11 @@ def run_claude(cmd: Sequence[str], folder: Path, archive: Path, name: str, timeo
             code = proc.returncode
         except subprocess.TimeoutExpired:
             code = "timeout"
-    return {"exit": code, **usage(stream)}
+    return {
+        "exit": code,
+        "ended_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        **usage(stream),
+    }
 
 
 def usage(stream: Path) -> dict[str, Any]:
@@ -264,7 +306,7 @@ def usage(stream: Path) -> dict[str, Any]:
             continue
         if event.get("type") == "assistant":
             model = event.get("message", {}).get("model")
-            if model:
+            if model and model != "<synthetic>":  # client-side notices (e.g. usage limits)
                 models.add(model)
         elif event.get("type") == "result":
             result = event
@@ -277,7 +319,9 @@ def usage(stream: Path) -> dict[str, Any]:
         "usage",
         "session_id",
     )
-    return {"models": sorted(models), **{k: result.get(k) for k in keys}}
+    out = {"models": sorted(models), **{k: result.get(k) for k in keys}}
+    out["result"] = str(result.get("result", ""))[:2000]
+    return out
 
 
 def copy_transcript(folder: Path, session_id: str, archive: Path) -> None:
@@ -337,38 +381,58 @@ def run_session(
     _, fitness = configs_from_settings(settings)
     archive = archive_root / slot.name
     archive.mkdir(parents=True, exist_ok=True)
-    dev = devtool.build(paths, settings, Stage.FIT, archive / "inputs")
-    template = BRIEF.read_text(encoding="utf-8")
-    brief = render_brief(slot, earlier, vars(fitness), dev, template)
-    session_id = str(uuid.uuid4())
-    folder = root / session_id
-    prepare_session(folder, brief)
-    record: dict[str, Any] = {
-        "slot": slot.name,
-        "sid": slot.sid,
-        "domain": slot.domain,
-        "session_id": session_id,
-        "folder": str(folder),
-        "started_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "model": MODEL,
-        "effort": EFFORT,
-        "budget": BUDGET,
-        "claude_version": claude_version,
-        "code_version": git_revision(),
-        "brief_template_sha12": sha12(template),
-        "brief_sha12": sha12(brief),
-        "earlier": list(earlier),
-    }
-    (archive / "BRIEF.md").write_text(brief, encoding="utf-8")
-    cmd = claude_command(folder, archive, session_id)
-    record["command"] = cmd
-    record["runs"] = [run_claude(cmd, folder, archive, "stream", timeout)]
-    # A session cut short (usage limit, crash, timeout) is resumed, never accepted half-way.
-    while not completed(record["runs"][-1]) and len(record["runs"]) <= MAX_RESUMES:
-        time.sleep(RESUME_WAIT_S)
+    state = archive / "session.json"
+    record: dict[str, Any]
+
+    def save() -> None:
+        state.write_text(json.dumps(record, indent=1, default=float), encoding="utf-8")
+
+    if state.exists():  # an earlier driver started this slot: continue the same conversation
+        record = json.loads(state.read_text(encoding="utf-8"))
+        folder, session_id = Path(record["folder"]), record["session_id"]
+    else:
+        dev = devtool.build(paths, settings, Stage.FIT, archive / "inputs")
+        template = BRIEF.read_text(encoding="utf-8")
+        brief = render_brief(slot, earlier, vars(fitness), dev, template)
+        session_id = str(uuid.uuid4())
+        folder = root / session_id
+        prepare_session(folder, brief)
+        record = {
+            "slot": slot.name,
+            "sid": slot.sid,
+            "domain": slot.domain,
+            "session_id": session_id,
+            "folder": str(folder),
+            "started_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+            "model": MODEL,
+            "effort": EFFORT,
+            "budget": BUDGET,
+            "claude_version": claude_version,
+            "code_version": git_revision(),
+            "brief_template_sha12": sha12(template),
+            "brief_sha12": sha12(brief),
+            "earlier": list(earlier),
+            "runs": [],
+        }
+        (archive / "BRIEF.md").write_text(brief, encoding="utf-8")
+        record["command"] = claude_command(folder, archive, session_id)
+        save()
+        record["runs"].append(run_claude(record["command"], folder, archive, "stream", timeout))
+        save()
+    # A session cut short is resumed in the same conversation, never accepted half-way: usage
+    # limits wait for the stated reset; other interruptions are retried up to MAX_RESUMES times.
+    while not completed(record["runs"][-1]):
+        last = record["runs"][-1]
+        waits = sum(1 for r in record["runs"] if limited(r))
+        failures = sum(1 for r in record["runs"] if not limited(r) and not completed(r))
+        if waits > LIMIT_WAITS or failures > MAX_RESUMES:
+            break
+        time.sleep(seconds_until_reset(last) if limited(last) else RESUME_WAIT_S)
         cmd = claude_command(folder, archive, session_id, resume=RESUME_PROMPT)
-        name = f"resume{len(record['runs'])}"
-        record["runs"].append(run_claude(cmd, folder, archive, name, timeout))
+        record["runs"].append(
+            run_claude(cmd, folder, archive, f"resume{len(record['runs'])}", timeout)
+        )
+        save()
     if not completed(record["runs"][-1]):
         record.update({"accepted": False, "reason": "session did not complete"})
         (archive / "summary.json").write_text(json.dumps(record, indent=1, default=float))

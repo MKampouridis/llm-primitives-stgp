@@ -103,3 +103,42 @@ def test_only_successful_runs_count_as_completed():
         {"exit": 0, "subtype": "error_during_execution", "is_error": True}
     )
     assert not generation.completed({"exit": "timeout"})
+
+
+NOTICE = (
+    "You've hit your org's monthly spend limit · run /usage-credits to raise it, or visit "
+    "https://claude.ai/admin-settings/usage · your 5-hour limit resets 2:50pm (Europe/London)"
+)
+
+
+def test_usage_ignores_synthetic_limit_notices(tmp_path):
+    stream = tmp_path / "s.jsonl"
+    events = [
+        {
+            "type": "assistant",
+            "message": {"model": "<synthetic>", "content": []},
+            "error": "rate_limit",
+        },
+        {"type": "result", "subtype": "success", "is_error": True, "result": NOTICE},
+    ]
+    stream.write_text("\n".join(json.dumps(e) for e in events))
+    out = generation.usage(stream)
+    assert out["models"] == []
+    assert generation.limited({**out, "exit": 1})
+    assert not generation.limited({"is_error": True, "result": "Error: connection reset"})
+
+
+def test_wait_until_the_stated_reset():
+    from datetime import UTC, datetime
+
+    run = {"is_error": True, "result": NOTICE, "ended_utc": "2026-10-31T10:40:00+00:00"}
+    before = datetime(2026, 10, 31, 14, 40, tzinfo=UTC)  # London = UTC on 31 Oct (GMT)
+    assert generation.seconds_until_reset(run, before) == 12 * 60  # 10 min + 2 min margin
+    after = datetime(2026, 10, 31, 15, 0, tzinfo=UTC)  # a restarted driver resumes at once
+    assert generation.seconds_until_reset(run, after) == 60
+    late_notice = {**run, "ended_utc": "2026-10-31T23:00:00+00:00"}  # resets 2:50pm next day
+    assert (
+        generation.seconds_until_reset(late_notice, datetime(2026, 10, 31, 23, 1, tzinfo=UTC))
+        == 6 * 3600
+    )
+    assert generation.seconds_until_reset({"result": "boom"}) == generation.RESUME_WAIT_S
