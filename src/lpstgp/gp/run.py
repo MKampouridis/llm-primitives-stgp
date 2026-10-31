@@ -141,6 +141,19 @@ def _tournament(population: list[Rule], k: int, lib: PrimitiveLibrary, rng: rand
     return best
 
 
+def _quantiles(values: list[float]) -> dict[str, float]:
+    if not values:
+        return {}
+    q = np.percentile(values, [50, 90, 99])
+    return {
+        "mean": float(np.mean(values)),
+        "p50": float(q[0]),
+        "p90": float(q[1]),
+        "p99": float(q[2]),
+        "max": float(max(values)),
+    }
+
+
 def _usage(rules: list[Rule], lib: PrimitiveLibrary) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for rule in rules:
@@ -166,27 +179,33 @@ def run_gp(
     scores: dict[str, fit.Score] = {}
     eval_seconds = 0.0
     requested = 0
+    eval_ms: list[float] = []  # time of every unique (cache-miss) evaluation
 
-    def evaluate(population: list[Rule]) -> None:
+    def evaluate(population: list[Rule]) -> float:
         nonlocal eval_seconds, requested
+        spent = 0.0
         for rule in population:
             requested += 1
             key = rule.key()
             if key not in scores:
                 t0 = time.perf_counter()
                 scores[key] = fit_problem.score(rule)
-                eval_seconds += time.perf_counter() - t0
+                dt = time.perf_counter() - t0
+                spent += dt
+                eval_ms.append(1000 * dt)
             rule.fitness = scores[key].fitness
+        eval_seconds += spent
+        return spent
 
     population = _initial(lib, gen, cfg)
-    evaluate(population)
+    spent = evaluate(population)
     hof: dict[str, tuple[float, int, str, Rule]] = {}
     generations = []
 
     def rank_key(e: tuple[float, int, str, Rule]) -> tuple[float, int, str]:
         return (-e[0], e[1], e[2])  # higher fitness, then smaller size, then key
 
-    def update(population: list[Rule], g: int) -> None:
+    def update(population: list[Rule], g: int, spent: float, before: int) -> None:
         for rule in population:
             s = scores[rule.key()]
             size_w = lib.weighted_size(rule.entry) + lib.weighted_size(rule.exit)
@@ -213,6 +232,8 @@ def run_gp(
                 "unique_share": len({r.key() for r in population}) / len(population),
                 "evaluations": requested,
                 "unique_evaluations": len(scores),
+                "new_unique": len(scores) - before,
+                "eval_s": spent,
                 "cache_hit_rate": stats["hit_rate"],
                 "elapsed_s": time.perf_counter() - started,
                 "elite_usage": _usage(elite, lib),
@@ -221,7 +242,7 @@ def run_gp(
         if progress:
             progress(generations[-1])
 
-    update(population, 0)
+    update(population, 0, spent, 0)
     for g in range(1, cfg.generations + 1):
         ranked = _ranked(population, lib)
         offspring = [r.copy() for r in ranked[: cfg.elitism]]
@@ -238,8 +259,9 @@ def run_gp(
                 b = mutate(b, lib, gen, cfg.limits, rng)
             offspring.extend([a, b])
         population = offspring[: cfg.population]
-        evaluate(population)
-        update(population, g)
+        before = len(scores)
+        spent = evaluate(population)
+        update(population, g, spent, before)
 
     members = sorted(hof.values(), key=rank_key)
     hall = []
@@ -274,6 +296,7 @@ def run_gp(
             "evaluation_s": eval_seconds,
             "per_unique_evaluation_ms": 1000 * eval_seconds / max(unique, 1),
             "per_requested_evaluation_ms": 1000 * total / max(requested, 1),
+            "unique_evaluation_ms": _quantiles(eval_ms),
         },
         "cache": fit_problem.cache_stats(),
         "operator_seconds": fit_problem.operator_seconds(),

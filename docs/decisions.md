@@ -261,3 +261,52 @@ The lock hashes each contract's module, the lpstgp helper modules it imports, an
 
   No populations are stored. Records go under `results_dir/tier<T>/<experiment>/`.
 - **Orchestration:** `runner.py` is the only module that opens sandboxes and writes files. Parallel runs use spawned processes with one BLAS/numba thread each.
+
+### D-030 Smoke test, calibration and projection method — Decided (WP1 deliverable); projection assumptions provisional
+- **Smoke test (as specified):**
+  - S&P 500 and EUR/USD on P01 (fit 2005-07 to 2007-06, validation 2007-07 to 2008-06; test year sealed);
+  - seed library; population 200 × 10 generations; 2 seeds per asset; 4 parallel workers.
+- **Calibration** (training and validation data only):
+  - per-operator micro-benchmarks on P01 sandbox arrays;
+  - the conventional library at smoke size;
+  - a single-worker baseline;
+  - 6 concurrent workers;
+  - one full-budget run (population 500 × 50 generations).
+- **Projection model:** core-seconds = Σ over GP configurations × eligible (instrument, period) pairs × 30 seeds × requested evaluations × cost per evaluation.
+- **Cost per evaluation:**
+  - central value from the full-budget run (warm caches); high value from the small-budget single-worker run (cold caches);
+  - terminal-only configurations (arms 2a/2b/7b, GP-TA, DC-GP, ActTrade) scaled by the measured conventional/cross-domain ratio;
+  - crypto scaled by its longer fit windows;
+  - arms 4 and 7 get +5% evaluations for maintenance evidence and gates.
+- **Hardware:** laptop throughput as measured with 6 workers; cluster nodes assumed at one M1 core's speed and 90% parallel efficiency.
+- **Disk:** measured record sizes as a function of the number of generations.
+- **Tier B:**
+  - option 1: 100 stocks × 18 periods, one rule each;
+  - option 2: 4 markets × 18 periods, each evaluation scoring 25 stocks.
+- **Not projected:** LLM tokens and API time.
+- **Cost sweep:** evaluating fixed rules at 0.5/1/2/3× costs is negligible; re-evolving at each level would multiply the affected arms by 4.
+- **Where the results are:** `reports/wp1/smoke_and_projections.md` in the project folder; run records in `results/tierA/wp1_*`.
+
+### D-031 Open questions for WP2 — Open
+1. **Pilot periods.** Which periods are used for calibration (fitness weights, GP parameters) and for the February go/no-go? Proposal: P01–P02, excluded from the primary outcome.
+2. **Execution lag.** Primary lag 1 (trade at the signal bar's close, current default) or 2 (next close)?
+3. **Final-rule selection.** On validation (default; best of a 10-member hall of fame) or on fit? H3 uses the validation–test gap, which validation selection inflates.
+4. **Budget unit.** Requested or unique evaluations? The STGP converges: in the full-budget run 17% of requested evaluations were new rules, so the two definitions differ in cost by about 5×. Consider diversity control or deduplication.
+5. **Fitness.** Weights (λ_dd, λ_turnover, λ_size), minimum exposure, no-trade value and segment length; or NSGA-II instead.
+6. **Cost sweep.** Re-evaluate fixed rules at 0.5/1/2/3× (default; negligible compute), or re-evolve at each level (×4 compute for the affected arms)?
+7. **Portfolio aggregation for the primary outcome.** How to combine 5-day and 7-day calendars, instruments entering at different periods, and flat periods.
+8. **Arm 3 protocol.** Free authoring from the domain list, or implementing arm 6's specification list (same mathematics, different author)? Which LLM(s), and therefore the post-cutoff test year.
+9. **Arm 2c source.** This seed library (arm 6), or operators decomposed from the ~30 whole LLM strategies (a cleaner granularity comparison for RQ1)?
+10. **Tier B.**
+    - Vendor: WRDS/CRSP, Refinitiv or Bloomberg.
+    - Selection mode: once vs per period.
+    - Composition of "Japan/Asia".
+    - One rule per stock vs one per market: same compute; pooling gives 25× fewer runs, run records and LLM maintenance cycles.
+11. **Final cross-asset data (WP4).**
+    - Vendor back-adjusted continuous futures instead of the pilot proxies (COMEX metals have roll gaps; no Bund; WTI spot has gaps that make it ineligible for P01).
+    - Euro Stoxx 50 history before 2007, if it is wanted instead of the SMI.
+12. **Compute.** The full Tier A design needs about 4,100 core-hours at 25k evaluations per run (central), and up to about 5× more under a unique-evaluation budget. Tier B needs about 3.6× Tier A. This is 1.5–7.5 days of a 128-core node for Tier A, versus 46+ days on this laptop, so a cluster allocation is needed from WP4.
+13. **Sinkhorn divergence.** At 0.1–0.4 s per call it is the costliest operator. Keep it, restrict ε to {0.5, 1}, or replace it in a v2.
+14. **Arm 6 review.** The PI should review the 45 seed-library contracts and log minutes in `docs/arm6_review.md`; the plan's Method §1 and arm-6 wording need updating (D-002).
+15. **Tier C.** The Essex DC-GP and ActTrade datasets still need copying into `tierC/` with a `manifest.toml`.
+16. **Licence.** Choose one before the repository is made public.

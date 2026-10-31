@@ -147,7 +147,9 @@ def assess(
         "extra": int(np.count_nonzero(~np.isin(valid_dates, expected))),
         "coverage": float(present.mean()) if len(expected) else float("nan"),
         "longest_gap": longest_gap(valid_dates, expected),
-        "invalid_close": int(flag_counts.get("invalid_close", 0) + np.count_nonzero(~valid)),
+        "invalid_close": int(
+            np.count_nonzero(~valid)
+        ),  # flagged bars are set to NaN: count each once
         "ohlc_violation": int(flag_counts.get("ohlc_violation", 0)),
         "stale_runs": stale_runs(close, q["stale_run_min"]),
         "jump_flags": jump_flags(close, q["jump_sigma"], q["jump_window"]),

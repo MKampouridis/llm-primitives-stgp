@@ -55,6 +55,7 @@ def test_assess_counts_and_eligibility():
     result = quality.assess(frame, flags, meta, periods, settings)
     assert result["bars"] == len(dates) - 1
     assert result["missing"] == 1
+    assert result["invalid_close"] == 1  # a flagged bar is also NaN: counted once
     assert result["longest_gap"] == 1
     assert result["volume_share"] == 0.0
     assert result["eligible"] == [p.id for p in periods]
