@@ -73,3 +73,11 @@ def test_mcp_server_tools_budget_and_log(tmp_path):
     log = [json.loads(line) for line in (archive / "evaluations.jsonl").read_text().splitlines()]
     assert [e["tool"] for e in log] == ["check", "backtest", "backtest"]
     assert all((archive / "versions" / e["version"]).exists() for e in log)
+    resumed = Client(session, archive)  # a resumed session keeps its spent budget
+    try:
+        resumed.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}})
+        spent, is_error = resumed.call("backtest")
+        assert is_error
+        assert "used up" in spent["error"]
+    finally:
+        resumed.close()

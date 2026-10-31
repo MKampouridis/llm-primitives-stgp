@@ -525,7 +525,7 @@ So 2c at the strategy's own parameters equals 2b (tested), and arms 1–2c share
 - a paired stationary block bootstrap (Politis & Romano 1994);
 - the Holm adjustment.
 
-### D-040 Proposals awaiting the PI's M0 review — Open
+### D-040 Proposals awaiting the PI's M0 review — Resolved by D-041 (31 Oct 2026)
 These are proposed in `docs/protocol.md`, marked [PI]:
 1. **Execution lag:** 1 as primary with lag 2 as robustness, or the reverse.
 2. **Effort:** `high`.
@@ -535,3 +535,32 @@ These are proposed in `docs/protocol.md`, marked [PI]:
 6. **Minimum activity:** 4 round trips per fit period.
 7. **Calibration:** the rules in protocol §6.
 8. **Confirmatory test:** the paired portfolio bootstrap instead of Mann–Whitney U.
+
+### D-041 Resolution of the D-040 items — Decided (engineer, under the PI's delegation, D-042)
+1. **Execution lag 2 as primary** (a condition true at bar t's close trades at bar t+1's close); lag 1 is the pre-registered robustness check. `settings.toml` now has `execution_lag = 2`.
+   *Why:*
+   - The data are close-only, and several are reference prices nobody can trade at: ECB fixings, EIA spot assessments, cash index levels.
+   - Lag 2 equals LLQ's convention (compute at the close, execute on the next bar).
+   - It handicaps every arm alike, so the arm comparisons stay fair.
+   - regime-fusion-gp's next-open convention lies between lag 1 and lag 2 and needs open prices, which are missing.
+2. **Minimum activity: at least 2 entries per year of data in the scored window**, rounded to the nearest whole entry (4 in a 2-year fit, 2 in a validation year). Fewer entries score the no-trade value (`min_entries_per_year = 2.0`).
+   *Why:* a fit or a selection must not rest on one or two lucky trades. Long-only trend rules typically trade more often than this. The value is fixed a priori, not tuned. It also applies to arm 1's selection and to the generation agent's objective (stated in the brief).
+3. **Generation settings:** effort `high` and 40 backtests per session, as proposed.
+   *Why:* this makes arm 1 a serious competitor without an unlimited search. LLQ used 60 backtests on one instrument; ours are richer (21 instruments).
+4. **10 runs per configuration in the pilot**, averaged per instrument.
+5. **Go/no-go.** GO if the paired difference in pooled two-year pilot portfolio Sharpe (2c − arm 1) is at least −0.2. This is a non-inferiority rule on the point estimate, reported with bootstrap confidence intervals.
+   *Why:* the gate asks whether primitives are competitive before WP3 is built; it is not the confirmatory test. A one-year Sharpe has a standard error of about 1, so the draft's "both years" rule would mostly track noise.
+6. **Calibration rules as in protocol §6.** The 30-versus-50-runs study moves to the start of WP4, which is the only place it matters, and saves about 35 core-hours now.
+7. **Confirmatory test: the paired stationary block bootstrap of portfolio returns**, Holm-adjusted within each research question. Per-unit Mann–Whitney U with Holm becomes descriptive.
+   *Departure from the research plan.* Units that share a market year are not independent, so per-unit tests overstate the evidence (D-033).
+
+### D-042 Delegation and consultation — Decided (PI, 31 Oct 2026)
+**Delegation.** The PI delegates scientific decisions to the engineer, who acts "as an experienced professor": decides, records the reasoning here, and reports.
+
+**Consultation.** The PI is consulted on non-scientific decisions, in particular:
+- connecting to CERES or other infrastructure;
+- any use of the paid Anthropic API.
+
+**API budget.** API credit is **$60 per month**, so the API is used only with the PI's agreement and within that budget.
+
+**Subscription work.** Strategy generation runs on the PI's Claude subscription through headless Claude Code (D-035) and uses no API credit.

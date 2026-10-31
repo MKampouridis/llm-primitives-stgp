@@ -1,10 +1,10 @@
 # WP2 protocol: whole LLM strategies, STGP arms 1–2 and the pilot go/no-go
 
-**Status: DRAFT 0.1 (31 Oct 2026), for the PI's review at the end of WP2-M0.** Written before
-any strategy generation, calibration or pilot run. After the review it becomes version 1.0; from
-then on every change is logged in §11 (date, reason, who decided) and reported in the paper. The
-protocol is frozen when the pilot ends. Decisions referred to as D-xxx are in `docs/decisions.md`.
-Items marked **[PI]** are proposals that need the PI's decision at the review.
+**Status: version 1.0 (31 Oct 2026).** Written before any strategy generation, calibration or
+pilot run. The PI delegated scientific decisions to the engineer (D-042); the items that the draft
+left to the PI were decided in D-041. Every later change is logged in §11 (date, reason, who
+decided) and reported in the paper. The protocol is frozen when the pilot ends. Decisions referred
+to as D-xxx are in `docs/decisions.md`.
 
 ## 1. Purpose
 
@@ -54,8 +54,9 @@ Arms 1, 2a, 2b and 2c share the same mathematics; they differ only in granularit
 ## 4. Strategy generation (D-035)
 
 - **Author:** `claude-opus-5-5` through headless Claude Code (`claude -p`, version recorded,
-  auto-update off), on the PI's subscription, effort `high` **[PI]**. No fallback model; a
-  refusal or a different model id in the transcript invalidates the session.
+  auto-update off), on the PI's subscription (no API credits), effort `high`. No fallback model;
+  a different model id in the transcript invalidates the session, and a session cut short (usage
+  limit, crash) is resumed, never accepted half-way.
 - **Number:** 28 strategies, 4 for each of the 7 domains of the research plan. The 4 sessions
   of a domain run in order; each later brief lists the names and hypotheses of the earlier
   accepted strategies of that domain, which the new one must differ from.
@@ -73,7 +74,7 @@ Arms 1, 2a, 2b and 2c share the same mathematics; they differ only in granularit
   prompt), rendered per slot, with its sha256 archived. It states:
   - the domain scope and the contract;
   - the objective, which uses the same fitness F as the GP (median across instruments);
-  - the budget: 40 backtests **[PI]** and up to 100 free checks;
+  - the budget: 40 backtests and up to 100 free checks (a resumed session keeps its count);
   - exploration: at least 3 distinct hypotheses within the first 10 backtests;
   - stopping: at the budget, or after 10 backtests without improvement once 20 are used.
 - **Contract and gates** (D-038):
@@ -107,22 +108,26 @@ Arms 1, 2a, 2b and 2c share the same mathematics; they differ only in granularit
 
 - **Costs:** per-instrument one-way bps from the universe configuration, multiplier 1. The cost
   sweep (0.5/1/2/3×) re-evaluates frozen rules (WP4).
-- **Execution:** **[PI]** proposed primary: lag 1, i.e. a decision at the close of bar *t* is
-  held from bar *t+1*. Pre-registered robustness check: lag 2. The reverse is the alternative
-  (regime-fusion-gp trades at the next open; ECB fixings and EIA spot prices are not tradable
-  closes).
+- **Execution (D-041):** primary lag 2. A condition true at the close of bar *t* changes the
+  position at the close of bar *t+1*. The pre-registered robustness check is lag 1, trading at
+  the signal bar's own close.
+  - *Why:* the data are close-only and include prices that cannot be traded at (ECB fixings, EIA
+    assessments, cash index levels).
+  - It matches the convention of LLQ's prompt (compute at the close, execute on the next bar).
+  - It is conservative for every arm alike.
 - **Fitness F:**
   - per instrument and half-year segment: median net Sharpe − λ_dd · median(MDD/σ) − λ_to ·
     median turnover;
   - a segment with fewer than 10 bars in the market scores Sharpe 0;
-  - a rule that never trades scores −1;
+  - a rule that enters fewer than 2 times per year of data (rounded: 4 in a 2-year fit, 2 in a
+    validation year), or never trades, scores −1 (D-041; fixed a priori, not tuned);
   - pooled over instruments by the mean, minus λ_size · weighted size.
   - The current λ values (0.5, 0.005, 0.01) are placeholders until §6.3.
 - **Final selection:** the hall-of-fame member (10, deduplicated by signals) with the best
   validation F; arm 1 uses the same score.
 - **Seeds:** sha256 of (instruments, period, run index), never of the arm, so arms are paired.
-- **Runs:** 10 per configuration, instrument and pilot period **[PI]**. WP4 uses 30 or 50 by the
-  rule in §6.4.
+- **Runs:** 10 per configuration, instrument and pilot period. WP4 uses 30 or 50 by the rule in
+  §6.4.
 - **Records:** one JSON record per run, holding:
   - settings, data and library digests, and the sandbox access log;
   - per-generation aggregates, plus validation checkpoints every 10 generations that are never
@@ -143,14 +148,13 @@ Arms 1, 2a, 2b and 2c share the same mathematics; they differ only in granularit
    - **Choice:** the cheapest candidate whose median validation F is within 0.05 of the best.
 2. **Budget unit.** Budget in unique evaluations if the median unique share of evaluations differs
    by more than 2× between arms in step 1; otherwise in requested evaluations.
-3. **Fitness weights and minimum activity.**
-   - **[PI]** proposed: require at least 4 round trips per fit period; fewer scores as no trade.
-   - Keep λ unless, on PL1/PL2 validation, more than 25% of final rules never trade, or the
-     median turnover exceeds 50 position changes a year. In that case, raise λ_to stepwise
-     (×2, ×4) until both conditions hold.
-4. **Runs per configuration for WP4.** Run 100 runs of arm 2c on the 6 instruments. Keep 30
-   runs if the 95th percentile of |median of 30 runs − median of 100| of validation Sharpe is at
-   most 0.05; otherwise use 50.
+3. **Fitness weights.** The minimum activity is fixed in §5. Keep λ unless, on PL1/PL2
+   validation, more than 25% of final rules never trade, or the median turnover exceeds 50
+   position changes a year. In that case, raise λ_to stepwise (×2, ×4) until both conditions
+   hold.
+4. **Runs per configuration for WP4**, run at the start of WP4 on PL1/PL2 training data, not in
+   WP2. Run 100 runs of arm 2c on the 6 instruments. Keep 30 runs if the 95th percentile of
+   |median of 30 runs − median of 100| of validation Sharpe is at most 0.05; otherwise use 50.
 
 Every candidate is a registered configuration. The chosen values are recorded as decisions and
 written to `config/settings.toml` before the freeze.
@@ -169,9 +173,14 @@ each evaluated rule must be listed in it.
   - per instrument, average the daily net returns of all 10 runs (arm 1: the selected strategy);
   - weight the 22 instruments equally on the union calendar, with a day without a session flat;
   - net of costs, at the execution lag of §5.
-- **Measure:** the portfolio Sharpe of each arm in each pilot test year.
-- **Rule [PI]:** **GO unless arm 2c's portfolio Sharpe is below arm 1's by more than 0.2 in both
-  pilot years.**
+- **Measure:** the portfolio Sharpe of each arm over the two pilot test years pooled (504
+  business days), and per year.
+- **Rule (D-041): GO if the paired difference in pooled portfolio Sharpe, arm 2c − arm 1, is
+  at least −0.2.** This is a non-inferiority rule on the point estimate.
+  - The gate asks whether primitives are competitive before the LLM maintenance arms are built.
+    It is not the confirmatory test.
+  - A one-year Sharpe has a standard error of about 1, so a per-year rule would mostly track
+    noise; pooling halves the variance.
 - **Also reported:**
   - 2a, 2b, 6, GP-TA and B&H;
   - paired stationary-bootstrap confidence intervals for 2c − 1 and the other differences;
@@ -184,9 +193,9 @@ each evaluated rule must be listed in it.
 
 - **Outcome:** out-of-sample net Sharpe of the equal-weight portfolio over the P01–P18 test
   years, with the same aggregation as §8. The post-cutoff window is reported separately.
-- **Confirmatory test [PI]:** for each hypothesis's pairwise comparisons, a paired stationary
-  block bootstrap of daily portfolio returns (mean block 10 days, 10,000 resamples), with Holm
-  across the family.
+- **Confirmatory test (D-041):** for each hypothesis's pairwise comparisons, a paired
+  stationary block bootstrap of daily portfolio returns (mean block 10 days, 10,000 resamples),
+  with Holm across the family.
   - This departs from the plan, which names Mann–Whitney U with Holm. The reason: units sharing a
     market year are not independent (D-033), so per-unit Mann–Whitney tests, Cohen's d and
     bootstrap CIs are reported descriptively.
@@ -208,6 +217,12 @@ Configurations tried and dropped stay in the register.
 
 - **31 Oct 2026, draft 0.1:** written (engineer), from the WP2 plan approved by the PI and
   D-033–D-040.
+- **31 Oct 2026, version 1.0:** the PI delegated scientific decisions (D-042). The draft's
+  open items were decided (D-041): lag 2 primary; at least 2 entries per year; effort high;
+  40 backtests; 10 pilot runs; go/no-go as pooled non-inferiority (δ = 0.2); the paired
+  portfolio bootstrap as the confirmatory test; the runs-per-configuration study moved to WP4.
+  Sessions cut short are resumed with their budget kept, and a model mismatch invalidates a
+  session.
 - **31 Oct 2026, isolation pre-flight:** results archived in
   `results/wp2/preflight/20261031T092025Z/`.
   - The session's tools were exactly Read, Write, Edit, Glob, Grep and the two MCP tools.

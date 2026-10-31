@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -140,6 +141,8 @@ def render_brief(
         lambda_dd=fitness["lambda_drawdown"],
         lambda_to=fitness["lambda_turnover"],
         no_trade=fitness["no_trade_value"],
+        lag_bars=fitness["execution_lag"] - 1,
+        min_entries=f"{fitness['min_entries_per_year']:g}",
     )
 
 
@@ -183,6 +186,13 @@ ALLOWED_TOOLS = (
 )
 SESSION_SETTINGS = {"autoMemoryEnabled": False}
 PROMPT = "Read BRIEF.md in this folder and carry out the task it describes."
+RESUME_PROMPT = "You were interrupted. Continue the task in BRIEF.md where you left off."
+RESUME_WAIT_S = 30 * 60
+MAX_RESUMES = 10
+
+
+def completed(run: Mapping[str, Any]) -> bool:
+    return run.get("exit") == 0 and run.get("subtype") == "success" and not run.get("is_error")
 
 
 def claude_command(
@@ -351,6 +361,16 @@ def run_session(
     cmd = claude_command(folder, archive, session_id)
     record["command"] = cmd
     record["runs"] = [run_claude(cmd, folder, archive, "stream", timeout)]
+    # A session cut short (usage limit, crash, timeout) is resumed, never accepted half-way.
+    while not completed(record["runs"][-1]) and len(record["runs"]) <= MAX_RESUMES:
+        time.sleep(RESUME_WAIT_S)
+        cmd = claude_command(folder, archive, session_id, resume=RESUME_PROMPT)
+        name = f"resume{len(record['runs'])}"
+        record["runs"].append(run_claude(cmd, folder, archive, name, timeout))
+    if not completed(record["runs"][-1]):
+        record.update({"accepted": False, "reason": "session did not complete"})
+        (archive / "summary.json").write_text(json.dumps(record, indent=1, default=float))
+        return record
     result = finalize(folder, archive, paths, settings)
     if not result["accepted"] and (folder / "strategy.py").exists():
         failures = json.dumps(result.get("check", {}).get("failures", []), default=float)[:4000]
@@ -363,6 +383,9 @@ def run_session(
         result = finalize(folder, archive, paths, settings)
         result["repaired"] = True
     copy_transcript(folder, session_id, archive)
+    models = sorted({m for run in record["runs"] for m in run.get("models", [])})
+    if models != [MODEL]:  # the protocol fixes one model; a fallback invalidates the session
+        result.update({"accepted": False, "reason": f"models used: {models}"})
     record.update(result)
     record["finished_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
     (archive / "summary.json").write_text(

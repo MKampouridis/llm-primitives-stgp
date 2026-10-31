@@ -105,3 +105,29 @@ def test_frozen_registry_round_trip_and_tamper_detection(tmp_path):
 def test_period_is_the_gp_fixture_period():
     assert PERIOD.id == "P01"
     assert TINY.population == 16
+
+
+def test_minimum_activity_scores_too_few_entries_as_no_trade():
+    from datetime import date
+
+    import pandas as pd
+
+    from lpstgp.backtest.costs import CostModel
+    from lpstgp.gp.fitness import market_part, prepare
+
+    dates = pd.bdate_range("2004-01-01", "2006-12-31").to_numpy().astype("datetime64[D]")
+    rng = np.random.default_rng(0)
+    lr = rng.normal(3e-4, 0.01, len(dates))
+    data = prepare(dates, lr, "business", (date(2005, 1, 1), date(2007, 1, 1)), CostModel(1, 1), 6)
+    one_trade_entry, one_trade_exit = np.zeros(len(dates)), np.zeros(len(dates))
+    one_trade_entry[data.active_from + 10] = 1.0
+    one_trade_exit[data.active_from + 300] = 1.0
+    strict = FitnessConfig(min_entries_per_year=2.0)
+    value, parts = market_part(one_trade_entry, one_trade_exit, data, strict)
+    assert value == strict.no_trade_value
+    assert parts["required_trades"] == 4
+    lenient_value, _ = market_part(one_trade_entry, one_trade_exit, data, FitnessConfig())
+    assert lenient_value != FitnessConfig().no_trade_value
+    busy_entry = (np.arange(len(dates)) % 40 == 0).astype(float)
+    busy_exit = (np.arange(len(dates)) % 40 == 20).astype(float)
+    assert market_part(busy_entry, busy_exit, data, strict)[0] != strict.no_trade_value

@@ -70,6 +70,10 @@ class DevToolServer:
         _, self.fitness = configs_from_settings(settings)
         self.dev = devtool.build(paths, settings, Stage.FIT, archive / "inputs")
         (archive / "versions").mkdir(parents=True, exist_ok=True)
+        log = archive / "evaluations.jsonl"
+        if log.exists():  # a resumed session keeps its budget
+            for line in log.read_text(encoding="utf-8").splitlines():
+                self.used[json.loads(line)["tool"]] += 1
 
     def _file(self, name: str | None) -> Path:
         path = (self.session / (name or "strategy.py")).resolve()

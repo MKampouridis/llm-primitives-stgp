@@ -17,6 +17,7 @@ The weights are placeholders, to be set on a named pilot period in WP2 and then 
 from __future__ import annotations
 
 import hashlib
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -38,6 +39,9 @@ class FitnessConfig:
     segment_months: int = 6
     execution_lag: int = 1
     cost_multiplier: float = 1.0
+    # Minimum activity (D-041): fewer entries than ceil(rate x years of the scored window) scores
+    # as no trade, so a fit cannot rest on one or two lucky trades. 0 disables the rule.
+    min_entries_per_year: float = 0.0
 
 
 def add_months(day: date, months: int) -> date:
@@ -116,6 +120,14 @@ def market_part(
     entries = int((np.diff(held, prepend=0.0)[window] > 0).sum())
     if entries == 0 and held[window].sum() == 0:
         return cfg.no_trade_value, {"trades": 0, "no_trade": True}
+    years = (data.stop - data.active_from) / data.periods_per_year  # of bars with data
+    required = math.floor(cfg.min_entries_per_year * years + 0.5)  # nearest: 2 years -> 4 at 2/year
+    if entries < required:
+        return cfg.no_trade_value, {
+            "trades": entries,
+            "no_trade": True,
+            "required_trades": required,
+        }
     sharpes, drawdowns, turnovers = [], [], []
     for lo, hi in data.segments:
         if hi - lo < 2:

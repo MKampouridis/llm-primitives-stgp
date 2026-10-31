@@ -17,7 +17,7 @@ Research code for a journal paper: can an LLM author and maintain the typed prim
 4. **Storage:** store per-run summaries and best individuals only, never whole populations per generation. Caches are disposable, size-capped and git-ignored.
 5. **Frozen strategies** (`src/lpstgp/strategies/generated/`) are LLM output kept verbatim: never edit, format or lint them.
 6. **Locked operator contracts are immutable** (`src/lpstgp/operators/registry.lock.toml`). A change means a new version file, then `scripts/update_lock.py` and `scripts/generate_operator_docs.py`.
-7. **Ask before outward-facing or costly actions:** GitHub settings, paid LLM API calls beyond an agreed budget, deleting data or results, unsealing test periods.
+7. **Decide scientific questions independently** (the PI's delegation, D-042): record the reasoning in `docs/decisions.md`. **Ask the PI before non-scientific, outward-facing or costly actions:** connecting to CERES or other infrastructure, any paid Anthropic API use (budget: $60 per month in total), GitHub settings, deleting data or results.
 8. Paths come from `config/paths.toml` (relative to this folder); never hard-code them. Working paths stay out of cloud-synced folders; Box is only a backup mirror written by `scripts/backup.py`.
 
 ## Working practice

@@ -59,5 +59,6 @@ lambda_size = 0.01            # per weighted node (parameters, data terminals, c
 min_exposure_bars = 10        # segment Sharpe counts only with at least this many bars in the market
 no_trade_value = -1.0
 segment_months = 6
-execution_lag = 1
+execution_lag = 2              # decide at bar t's close, trade at bar t+1's close (D-041)
 cost_multiplier = 1.0
+min_entries_per_year = 2.0     # fewer entries in the scored window score as no trade (D-041)

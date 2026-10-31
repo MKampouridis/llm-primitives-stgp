@@ -94,3 +94,12 @@ def test_usage_reads_models_and_result(tmp_path):
     assert out["models"] == ["claude-opus-5-5"]
     assert out["num_turns"] == 3
     assert out["usage"] == {"output_tokens": 9}
+
+
+def test_only_successful_runs_count_as_completed():
+    assert generation.completed({"exit": 0, "subtype": "success", "is_error": False})
+    assert not generation.completed({"exit": 1, "subtype": "success", "is_error": False})
+    assert not generation.completed(
+        {"exit": 0, "subtype": "error_during_execution", "is_error": True}
+    )
+    assert not generation.completed({"exit": "timeout"})

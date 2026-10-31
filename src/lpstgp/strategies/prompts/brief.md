@@ -21,8 +21,10 @@ few optional helpers. In short:
   `abs_return` that returns one float per bar (NaN while it cannot be computed yet). Tunable
   parameters must use the grid types in `strategy_api.py`; the defaults are your choice.
 - A rule that turns the signals into `entry` and `exit` arrays with values 1, 0 or NaN. The
-  harness holds a long position from an entry until an exit, applies its own execution delay and
-  costs, and goes flat otherwise. Do not shift the arrays and do not track positions yourself.
+  harness holds a long position from an entry until an exit and is flat otherwise. A condition
+  true at the close of bar t changes the position at the close of bar t+$lag_bars; the harness
+  applies this delay and the trading costs. Do not shift the arrays and do not track positions
+  yourself.
 - Values at bar t may use only bars up to t, must not change when later data arrive, and may not
   depend on more than the declared lookback (at most $max_lookback bars in total). Use numpy,
   scipy and math only; no randomness, files or network.
@@ -49,7 +51,8 @@ shown. You cannot see the prices themselves.
 - maximum drawdown per segment divided by the instrument's annualised volatility;
 - annualised turnover per segment;
 - F = median Sharpe − $lambda_dd × median(drawdown / volatility) − $lambda_to × median turnover;
-  a strategy that never trades on an instrument scores $no_trade there.
+  an instrument on which the strategy enters fewer than $min_entries times per year of data
+  (including never) scores $no_trade there.
 
 The objective is the median of F across instruments. The backtest also reports, per instrument,
 Sharpe, drawdown, total return, trades and time in the market.
