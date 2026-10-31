@@ -564,3 +564,30 @@ These are proposed in `docs/protocol.md`, marked [PI]:
 **API budget.** API credit is **$60 per month**, so the API is used only with the PI's agreement and within that budget.
 
 **Subscription work.** Strategy generation runs on the PI's Claude subscription through headless Claude Code (D-035) and uses no API credit.
+
+### D-043 CERES access to the code: deploy key, repository stays private — Decided (PI, 31 Oct 2026)
+**Code.** CERES gets the code by `git clone`/`git pull` with a read-only deploy key for this repository only:
+- the key pair is generated on CERES and never stored in the repository;
+- registering the public half on GitHub needs the PI's approval.
+
+**Data and results.** These never go through git (D-005); they move by rsync from and to the laptop.
+
+**Visibility.** The repository stays private until the preprint, as the research plan agreed. It will then be released with a licence and a curated history (D-007, D-032).
+
+*Why:* a public repository now would irreversibly expose:
+- the design before publication;
+- the internal survey notes and decision log;
+- the personal e-mail in commit metadata;
+
+and it has no licence yet. A deploy key gives CERES the same convenience. Fallback if CERES cannot reach GitHub: rsync the repository with its history.
+
+### D-044 Generation pacing and usage limits — Decided (PI, 31 Oct 2026)
+**Pacing.** Strategy generation runs one session at a time on the PI's subscription, leaving headroom for interactive work.
+
+**Usage limits.**
+- At 10:40 the sessions hit the subscription's 5-hour limit; the notice also mentioned the organisation's monthly spend limit, which the PI is checking.
+- Sessions s03 and s07 were interrupted and later resumed in the same conversations.
+- Usage-limit notices (model `<synthetic>`) are not counted as a model change.
+- A limit stop waits until the reset time stated in the notice, and is not a failure.
+- Session state is saved after every run, so the driver can be restarted.
+- Costs are reported as each session's cumulative estimate.
