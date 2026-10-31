@@ -1,0 +1,71 @@
+"""Campaign plans, paired seeds, resumable execution, collection and the configuration register."""
+
+import csv
+from pathlib import Path
+
+import pytest
+from tests.gp.conftest import write_synthetic_tier
+
+from lpstgp.campaign.collect import collect
+from lpstgp.campaign.execute import PlanMismatchError, execute_plan, load_plan, verify
+from lpstgp.campaign.plan import Config, register_configs, run_seed, write_plan
+from lpstgp.config import load_paths, load_settings
+
+TINY = {"population": 8, "generations": 1, "elitism": 1, "hof_size": 2, "cache_mb": 32}
+
+
+def test_seeds_pair_arms_and_differ_across_runs():
+    assert run_seed(("SPX",), "PL1", 1) == run_seed(("SPX",), "PL1", 1)
+    assert run_seed(("SPX",), "PL1", 1) != run_seed(("SPX",), "PL1", 2)
+    assert run_seed(("SPX",), "PL1", 1) != run_seed(("NDX",), "PL1", 1)
+    assert 0 <= run_seed(("SPX",), "PL2", 30) < 2**32
+
+
+@pytest.fixture
+def campaign_paths(tmp_path, monkeypatch):
+    write_synthetic_tier(tmp_path / "data" / "tierA")
+    paths_file = tmp_path / "paths.toml"
+    paths_file.write_text(
+        f'data_dir = "{tmp_path / "data"}"\nresults_dir = "{tmp_path / "results"}"\n'
+        f'reports_dir = "{tmp_path / "reports"}"\ncache_dir = "{tmp_path / "cache"}"\n'
+    )
+    monkeypatch.setenv("LPSTGP_PATHS", str(paths_file))  # inherited by spawned workers
+    return load_paths()
+
+
+@pytest.mark.slow
+def test_plan_execute_resume_collect(campaign_paths, tmp_path):
+    settings = load_settings()
+    gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
+    configs = [Config("arm_a", "seed", gp=gp), Config("arm_b", "technical", gp=gp)]
+    register = tmp_path / "register.csv"
+    plan_path = write_plan(
+        "unit", configs, [(("AAA",), "P01")], 2, campaign_paths, settings, register=register
+    )
+    plan = load_plan(plan_path)
+    assert len(plan["tasks"]) == 4
+    seeds = {(t["config"], t["run"]): t["seed"] for t in plan["tasks"]}
+    assert seeds["arm_a", 1] == seeds["arm_b", 1]  # paired across arms
+    counts = execute_plan(plan_path, campaign_paths, settings, workers=2)
+    assert counts == {"skipped": 0, "selected": 0, "evolved": 4}
+    assert execute_plan(plan_path, campaign_paths, settings, workers=2)["skipped"] == 4
+    table = collect(plan_path)
+    assert len(table) == 4
+    assert set(table["config"]) == {"arm_a", "arm_b"}
+    assert (plan_path.parent / "runs.parquet").exists()
+    changed = {**settings, "fitness": {**settings["fitness"], "lambda_size": 0.02}}
+    assert verify(plan, campaign_paths, changed)
+    with pytest.raises(PlanMismatchError):
+        execute_plan(plan_path, campaign_paths, changed)
+    with register.open() as handle:
+        assert [row["config"] for row in csv.DictReader(handle)] == ["arm_a", "arm_b"]
+
+
+def test_register_appends_each_configuration_once(tmp_path):
+    register = tmp_path / "r.csv"
+    register_configs(register, "c1", {"x": {"library": "s2c", "kind": "gp", "digest": "d1"}})
+    register_configs(register, "c2", {"x": {"library": "s2c", "kind": "gp", "digest": "d1"}})
+    register_configs(register, "c2", {"x": {"library": "s2c", "kind": "gp", "digest": "d2"}})
+    with Path(register).open() as handle:
+        rows = list(csv.DictReader(handle))
+    assert [(r["campaign"], r["digest"]) for r in rows] == [("c1", "d1"), ("c2", "d2")]

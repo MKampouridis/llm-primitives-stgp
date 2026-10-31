@@ -42,6 +42,13 @@ class GPConfig:
     final_selection: str = "validation"
     cache_bytes: int = 512 * 2**20
     elite_fraction: float = 0.1
+    # Budget unit (D-033): "requested" runs `generations` generations; "unique" stops after the
+    # generation in which `max_unique_evaluations` distinct rules have been scored.
+    budget_unit: str = "requested"
+    max_unique_evaluations: int = 0
+    # Every `checkpoint_every` generations, record the fit-best rule's validation score. Recorded
+    # only: checkpoints never influence selection (validation stays out of the search).
+    checkpoint_every: int = 10
 
 
 class Problem:
@@ -242,8 +249,33 @@ def run_gp(
         if progress:
             progress(generations[-1])
 
+    checkpoints: list[dict] = []
+
+    def checkpoint(g: int) -> None:
+        if val_problem is None or not cfg.checkpoint_every:
+            return
+        value, _, _, rule = sorted(hof.values(), key=rank_key)[0]
+        v = val_problem.score(rule)
+        per = v.components["instruments"].values()
+        checkpoints.append(
+            {
+                "gen": g,
+                "fit": value,
+                "validation": v.fitness,
+                "validation_sharpe": fit.mean_sharpe(v),
+                "validation_trades": sum(c.get("trades", 0) for c in per),
+                "unique_evaluations": len(scores),
+            }
+        )
+
+    if cfg.budget_unit not in ("requested", "unique"):
+        raise ValueError(f"budget_unit must be 'requested' or 'unique', not {cfg.budget_unit!r}")
+    unique_cap = cfg.max_unique_evaluations if cfg.budget_unit == "unique" else 0
     update(population, 0, spent, 0)
+    checkpoint(0)
     for g in range(1, cfg.generations + 1):
+        if unique_cap and len(scores) >= unique_cap:
+            break
         ranked = _ranked(population, lib)
         offspring = [r.copy() for r in ranked[: cfg.elitism]]
         while len(offspring) < cfg.population:
@@ -262,6 +294,12 @@ def run_gp(
         before = len(scores)
         spent = evaluate(population)
         update(population, g, spent, before)
+        if g % max(cfg.checkpoint_every, 1) == 0:
+            checkpoint(g)
+    if cfg.checkpoint_every and (
+        not checkpoints or checkpoints[-1]["gen"] != generations[-1]["gen"]
+    ):
+        checkpoint(generations[-1]["gen"])
 
     members = sorted(hof.values(), key=rank_key)
     hall = []
@@ -290,7 +328,12 @@ def run_gp(
         "seed": seed,
         "config": asdict(cfg),
         "fitness_config": asdict(fit_problem.cfg),
-        "budget": {"requested_evaluations": requested, "unique_evaluations": unique},
+        "budget": {
+            "unit": cfg.budget_unit,
+            "requested_evaluations": requested,
+            "unique_evaluations": unique,
+            "generations_run": generations[-1]["gen"],
+        },
         "timings": {
             "total_s": total,
             "evaluation_s": eval_seconds,
@@ -301,6 +344,7 @@ def run_gp(
         "cache": fit_problem.cache_stats(),
         "operator_seconds": fit_problem.operator_seconds(),
         "generations": generations,
+        "validation_checkpoints": checkpoints,
         "hall_of_fame": hall,
         "selected": selected,
     }

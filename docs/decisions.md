@@ -404,3 +404,134 @@ Reviewed on 31 Oct 2026, at the PI's suggestion:
 - **Final rule:** it re-evolves on all four training years and keeps the final generation's best; we select on validation, which H3 needs.
 - **Stock data:** it accepts free Yahoo stock data with the survivorship bias stated.
 - **Tier C:** ActTrade's original datasets no longer exist.
+
+---
+
+## WP2 (from 31 Oct 2026)
+
+Plan approved by the PI on 31 Oct 2026. The protocol (`docs/protocol.md`, draft 0.1) restates these entries operationally. D-031 items 1 (pilot periods), 8 (the model and the post-cutoff year; the arm-3 protocol stays open) and 9 (arm 2c's source) are resolved below.
+
+### D-034 Pre-sample pilot periods and the WP2 data cap — Decided (PI, 31 Oct 2026)
+**Pilot periods.**
+- PL1: fit 2003-07→2005-06, validation →2006-06, test 2006-07→2007-06.
+- PL2: one year later, test 2007-07→2008-06.
+- Both have the primary structure, shifted before P01 (`[pilot]` in settings, `splits.pilot_periods`).
+- 22 instruments are eligible in both. WTI and Brent fail coverage; bonds and crypto have too little history.
+
+**Data cap.** Nothing on or after 2008-07-01 is read by modelling code in WP2:
+- every modelling entry point gets its store from `data.store.modelling_store`, which caps reads at `[leakage] max_horizon`;
+- `Sandbox.open` refuses horizons past the cap;
+- a test checks that no other code constructs a `DataStore`.
+
+**Pilot test years.** These are readable only through `Sandbox.open_pilot_test`, which requires:
+- a pilot period, identified by all its dates, not just its id;
+- a test year within the cap;
+- a freeze manifest committed to git (`lpstgp.freeze`).
+
+*Why:* all 18 primary test years stay untouched until WP4; the alternative (opening P01–P02 and dropping them from the primary analysis) would lose the 2008–09 test year. The real-data sandbox test now covers P01, PL1, PL2 and DEV only.
+
+### D-035 Strategy generation by isolated headless Claude Code sessions — Decided (PI); details Provisional
+LLQ-style generation:
+- one `claude -p` session per strategy, on the PI's subscription;
+- 28 strategies, 4 per domain;
+- sessions within a domain run in order and must differ from the earlier accepted strategies.
+
+**Isolation, refined during M0.** The approved plan gave the agent a sandboxed shell with wrapper commands. Instead, the agent has no shell at all. Its only tools are:
+- the file tools, confined to its session folder by `--restricted`;
+- two MCP tools served by our own stdio server (`strategies/mcp_devtool.py`): `check` and `backtest`.
+
+The session also runs with `--strict-mcp-config`, `--disable-slash-commands`, `--permission-mode dontAsk`, a scrubbed environment with no API key and auto-update disabled, and a neutrally named folder under `~/Library/Caches/strategy-sessions/`, outside the repository so that no CLAUDE.md is above it. This removes any shell path to the network or the file system, and does not depend on how Claude Code's Bash sandbox treats reads.
+
+**Pre-flight (31 Oct 2026).** Archived in `results/wp2/preflight/`, at an estimated cost of $0.12:
+- the session's tools were exactly Read, Write, Edit, Glob, Grep and the two MCP tools;
+- reads of `~/code/…`, `~`, and the parent folder were refused;
+- there was no shell or web tool;
+- no CLAUDE.md, memory or skills were loaded;
+- every message came from `claude-opus-5-5`.
+- **Disclosure:** Claude Code attaches the account e-mail address to the context.
+
+**Agent's code.** It is never imported on the host. It runs only in a subprocess with a timeout under `sandbox-exec`, with no network and writes only to its job folder; tests show both blocks hold.
+
+**Defaults, provisional until the M0 review:**
+- effort `high`;
+- 40 backtests and 100 checks per session;
+- 1 repair turn plus 1 fresh re-run per failed slot.
+
+### D-036 Model, post-cutoff window and development window — Decided (PI, 31 Oct 2026)
+**Model.** `claude-opus-5-5` for all LLM arms (strategies now, operators in WP3).
+- Anthropic documents its training-data and reliable-knowledge cutoffs as June 2026.
+- Retirement is not before 22 Sep 2027.
+- Every current model has the same cutoff. Opus 4.6 has reliable knowledge to May 2025 and training data to Aug 2025, but may retire from 5 Feb 2027.
+
+**Post-cutoff window.** Consequently, P18 (2025-07→2026-06) is an ordinary period. The post-cutoff test is a separate window from 2026-07-01 to the latest data at the WP4 freeze, reported separately; the data download will be extended in WP4.
+
+**Development window.** The generation agent's backtests see dev-fit only: 1995-07-01→2003-06-30, 21 instruments with ≥ 750 bars (10 indices, 8 FX, WTI, Brent, natural gas). Dev-holdout (2003-07-01→2005-06-30, 24 instruments) is scored once per final strategy and never shown to the agent. Both windows end before every pilot validation year.
+- Instruments are anonymised (I01…, with asset class) and dates are not shown.
+- *Limitation:* no metals, bonds or crypto in dev-fit.
+
+### D-037 Arms run in WP2 — Decided (PI, 31 Oct 2026)
+**Arm 1.** Per instrument, the strategy with the best validation F (`strategies.selection`), the score STGP's final selection uses.
+
+**Arms 2a, 2b and 2c** are built by `strategies.adapters` from the frozen strategies:
+- **2a:** entry and exit as Bool terminals, plus Kleene And/Or/Not.
+- **2b:** signals at the strategy's own parameters as Real terminals, plus core glue (adaptive thresholds, comparators, logic, regimes; no histogram or path constructors, no data terminals).
+- **2c:** the same signal functions as typed operators whose grid parameters the GP chooses, on the data terminals (log price, return, |return|), plus the same glue.
+
+So 2c at the strategy's own parameters equals 2b (tested), and arms 1–2c share their mathematics (D-031 Q9).
+
+**References.** Arm 6 (`seed`) and GP-TA (new library `technical`: data, core and the 23 TA terminals) run as references, plus buy-and-hold.
+
+**Lookbacks.** Terminals and operators count lookback in price bars, adding 1 for return inputs.
+
+### D-038 Whole-strategy contract and admission gates — Decided (plan approval)
+**Contract.** `strategies/api.py` is copied into each session as `strategy_api.py`:
+- 1–4 signals, `fn(inputs…, *, params…)`, with parameters on the GP's grids (a test asserts the grids are identical);
+- a stateless rule giving entry/exit in {0, 1, NaN}, with no execution shift;
+- metadata (hypothesis, definition, references, novelty, limitations);
+- total lookback ≤ 504.
+
+**Source policy** (`strategies/policy.py`). Stricter than WP1's operator policy, whose gaps it closes:
+- numpy is importable only whole;
+- no `numpy.random` or file functions under any name;
+- no `rvs`, `random_state`, reflection, dunder access or global state.
+
+**Behavioural gates** (`strategies/gates.py`):
+- type and domain checks;
+- runtime cap;
+- determinism, also across processes with 1 and 4 threads;
+- prefix invariance with joint price/return adversarial appends and a NaN at the cut;
+- the declared lookback is an upper bound;
+- shift invariance for price inputs.
+
+**On development data:** the finite share is ≥ 0.99, and entries and exits fire on ≥ 50% of instruments.
+
+**Freezing.** Frozen files are kept verbatim (excluded from ruff) and locked by sha256 with provenance (`strategies/registry.py`).
+
+### D-039 Campaign machinery and analysis — Decided (plan approval); parameters Provisional
+**Campaigns.** `lpstgp.campaign`:
+- Plans freeze settings, data and library digests.
+- Seeds come from sha256(instruments, period, run): equal across arms, hence paired.
+- Runs whose record is complete and current are skipped.
+- Records are written atomically; `run_many` stops below 5 GB free disk and terminates its workers on exit.
+- `collect` builds `runs.parquet` and refuses mixed digests.
+- Every configuration planned is appended once to `reports/configuration_register.csv`, which counts trials for the Deflated Sharpe Ratio.
+
+**`run_gp` additions:**
+- a unique-evaluation budget mode (`budget_unit`, `max_unique_evaluations`);
+- validation checkpoints every 10 generations, recorded only and never used for selection.
+
+**Analysis** (`lpstgp.analysis`):
+- equal-weight portfolios that average all runs per instrument, on the union calendar with flat days;
+- a paired stationary block bootstrap (Politis & Romano 1994);
+- the Holm adjustment.
+
+### D-040 Proposals awaiting the PI's M0 review — Open
+These are proposed in `docs/protocol.md`, marked [PI]:
+1. **Execution lag:** 1 as primary with lag 2 as robustness, or the reverse.
+2. **Effort:** `high`.
+3. **Budget:** 40 backtests per session.
+4. **Pilot runs:** 10 per configuration.
+5. **Go/no-go rule:** GO unless 2c trails arm 1 by more than 0.2 Sharpe in both pilot years.
+6. **Minimum activity:** 4 round trips per fit period.
+7. **Calibration:** the rules in protocol §6.
+8. **Confirmatory test:** the paired portfolio bootstrap instead of Mann–Whitney U.

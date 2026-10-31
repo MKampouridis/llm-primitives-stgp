@@ -35,6 +35,7 @@ UNHASHED = ("lpstgp.types", "lpstgp.operators.contract")
 LIBRARIES: dict[str, dict[str, tuple[str, ...]]] = {
     "seed": {"domains": ("data", "core", *CROSS_DOMAINS)},
     "conventional": {"domains": ("data", "core", "technical", "directional_change")},
+    "technical": {"domains": ("data", "core", "technical")},  # GP-TA baseline (H2b), WP2
     "seed+conventional": {
         "domains": ("data", "core", *CROSS_DOMAINS, "technical", "directional_change")
     },

@@ -11,6 +11,7 @@ import json
 import os
 import platform
 import resource
+import shutil
 import sys
 import time
 from collections.abc import Callable, Iterable
@@ -22,15 +23,17 @@ from pathlib import Path
 
 from lpstgp.backtest.costs import from_meta
 from lpstgp.config import load_paths, load_settings
-from lpstgp.data.store import DataStore
+from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
 from lpstgp.gp.fitness import FitnessConfig
 from lpstgp.gp.pset import build
 from lpstgp.gp.run import GPConfig, Problem, run_gp
 from lpstgp.gp.variation import Limits
-from lpstgp.operators.registry import discover, read_lock
+from lpstgp.libraries import STRATEGY_LIBRARIES, resolve
+from lpstgp.operators.registry import read_lock
 from lpstgp.sandbox import Sandbox
-from lpstgp.splits import Stage, periods_from_settings
+from lpstgp.splits import Stage, all_periods
+from lpstgp.strategies.registry import lock_digest as strategy_lock_digest
 
 THREAD_VARS = (
     "OMP_NUM_THREADS",
@@ -44,16 +47,20 @@ THREAD_VARS = (
 @dataclass(frozen=True)
 class RunTask:
     experiment: str
-    library: str  # "seed", "conventional" or "seed+conventional"
+    library: str  # a name in lpstgp.libraries.NAMES, e.g. "seed", "technical", "s2c"
     instruments: tuple[str, ...]  # one instrument: per-asset rule; several: pooled fitness
     period: str
     seed: int
     gp: GPConfig = field(default_factory=GPConfig)
     fitness: FitnessConfig = field(default_factory=FitnessConfig)
     tier: str = "A"
+    campaign: tuple[tuple[str, str], ...] = ()  # task id, run index and digests (campaign plans)
 
     @property
     def name(self) -> str:
+        task_id = dict(self.campaign).get("task_id")
+        if task_id:  # campaign tasks are named by their (unique) task id
+            return task_id.replace("/", "__")
         return f"{self.period}_{'+'.join(self.instruments)}_{self.library}_s{self.seed}"
 
 
@@ -95,14 +102,13 @@ def execute(
     """Run one STGP run; write its record under results_dir/tier<T>/<experiment>/ if a dir is given."""
     started = time.perf_counter()
     paths, settings = load_paths(), load_settings()
-    period = {p.id: p for p in periods_from_settings(settings)}[task.period]
+    period = all_periods(settings)[task.period]
     lmax = settings["splits"]["lookback_max_bars"]
-    store = DataStore(paths.tier_dir(task.tier))
+    store = modelling_store(paths.tier_dir(task.tier), settings)
     fit_box = Sandbox.open(store, period, Stage.FIT, task.instruments, lmax)
     val_box = Sandbox.open(store, period, Stage.VALIDATE, task.instruments, lmax)
     del store  # modelling code below only ever sees the sandboxes
-    registry = discover()
-    specs = registry.library(task.library)
+    specs = resolve(task.library)
     lib = build(specs)
     costs = {name: from_meta(fit_box[name].meta) for name in task.instruments}
     fit_problem = Problem(
@@ -125,8 +131,13 @@ def execute(
         "created_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "code_version": git_revision(),
         "experiment": task.experiment,
+        "campaign": dict(task.campaign),
         "tier": task.tier,
-        "library": {"name": task.library, "contracts": {s.key: lock.get(s.key, "") for s in specs}},
+        "library": {
+            "name": task.library,
+            "contracts": {s.key: lock.get(s.key, "") for s in specs},
+            "strategies_lock": strategy_lock_digest() if task.library in STRATEGY_LIBRARIES else "",
+        },
         "instruments": list(task.instruments),
         "period": {k: str(v) for k, v in asdict(period).items()},
         "sandbox_access": [
@@ -140,27 +151,63 @@ def execute(
         "environment": environment(),
     }
     if results_dir is not None:
-        out = Path(results_dir) / f"tier{task.tier}" / task.experiment / f"{task.name}.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(record, separators=(",", ":"), default=str), encoding="utf-8")
+        out = record_path(results_dir, task)
+        write_atomic(out, json.dumps(record, separators=(",", ":"), default=str))
         record["record_path"] = str(out)
         record["record_bytes"] = out.stat().st_size
     return record
+
+
+def record_path(results_dir: Path | str, task: RunTask) -> Path:
+    return Path(results_dir) / f"tier{task.tier}" / task.experiment / f"{task.name}.json"
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """Write whole or not at all: a crash never leaves a truncated record behind."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+class DiskSpaceError(RuntimeError):
+    """Free disk space fell below the guard; remaining runs were cancelled."""
+
+
+MIN_FREE_BYTES = 5 * 2**30
 
 
 def _worker(task: RunTask, results_dir: str | None) -> dict:
     return execute(task, Path(results_dir) if results_dir else None)
 
 
-def run_many(tasks: Iterable[RunTask], workers: int, results_dir: Path | None) -> list[dict]:
-    """Run tasks in parallel spawned processes (one BLAS/numba thread each); returns the records."""
+def run_many(
+    tasks: Iterable[RunTask],
+    workers: int,
+    results_dir: Path | None,
+    min_free_bytes: int = MIN_FREE_BYTES,
+) -> list[dict]:
+    """Run tasks in parallel spawned processes (one BLAS/numba thread each); returns the records.
+
+    Stops (``DiskSpaceError``) when free space under ``results_dir`` falls below
+    ``min_free_bytes``; on any exit, pending runs are cancelled and worker processes terminated.
+    """
     for var in THREAD_VARS:
         os.environ[var] = "1"  # inherited by the spawned workers before they import numpy/numba
     records = []
-    with ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) as pool:
+    pool = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn"))
+    try:
         futures = [
             pool.submit(_worker, t, str(results_dir) if results_dir else None) for t in tasks
         ]
         for future in as_completed(futures):
             records.append(future.result())
+            if results_dir is not None and shutil.disk_usage(results_dir).free < min_free_bytes:
+                raise DiskSpaceError(f"less than {min_free_bytes / 2**30:.0f} GB free; stopping")
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+        processes = getattr(pool, "_processes", None) or {}
+        for process in list(processes.values()):
+            if process.is_alive():
+                process.terminate()
     return records

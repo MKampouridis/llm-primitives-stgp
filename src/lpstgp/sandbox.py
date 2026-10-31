@@ -5,16 +5,18 @@ before the fit start followed by every bar up to (excluding) the stage horizon:
 
 * ``Stage.FIT``      horizon = validation start: nothing from the validation or test years;
 * ``Stage.VALIDATE`` horizon = test start: nothing from the test year;
-* ``Stage.TEST``     sealed in WP1 (``SealedPeriodError``); WP4 adds a sealed evaluator that
-  requires a frozen, hashed rule before any test bar is read.
+* ``Stage.TEST``     sealed (``SealedPeriodError``). The only way in is ``open_pilot_test``: a
+  pilot period (D-034) whose test year ends within the store's data cap, after a committed
+  freeze manifest exists (``lpstgp.freeze``). WP4 adds the same path for primary periods.
 
-The sandbox keeps no reference to the store, so code holding a sandbox cannot reach later rows.
-Every sandbox records what it read (``access_log``) for the run record.
+A horizon past the store's ``max_horizon`` is refused before anything is read. The sandbox keeps
+no reference to the store, so code holding a sandbox cannot reach later rows. Every sandbox
+records what it read (``access_log``) for the run record.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from types import MappingProxyType
@@ -22,6 +24,7 @@ from types import MappingProxyType
 import numpy as np
 
 from lpstgp.data.store import Bars, DataStore
+from lpstgp.freeze import FreezeManifest
 from lpstgp.splits import Period, Stage, shift_years
 
 # Calendar years read before the fit start; ample for 504 bars on any calendar.
@@ -99,7 +102,42 @@ class Sandbox:
             raise SealedPeriodError(
                 f"{period.id}: test-period data are sealed; modelling code may only use FIT or VALIDATE"
             )
+        return cls._open(store, period, stage, instruments, lookback_max)
+
+    @classmethod
+    def open_pilot_test(
+        cls,
+        store: DataStore,
+        period: Period,
+        instruments: Iterable[str],
+        lookback_max: int,
+        *,
+        pilot_periods: Collection[Period],
+        manifest: FreezeManifest,
+    ) -> Sandbox:
+        """TEST stage of a pilot period, for evaluating rules frozen in a committed manifest."""
+        if period not in pilot_periods:
+            raise SealedPeriodError(f"{period.id}: only pilot periods have an open test stage")
+        if store.max_horizon is None or period.test_end > store.max_horizon:
+            raise SealedPeriodError(f"{period.id}: test year lies beyond the store's data cap")
+        if not isinstance(manifest, FreezeManifest) or not manifest.commit:
+            raise SealedPeriodError(f"{period.id}: a committed freeze manifest is required")
+        return cls._open(store, period, Stage.TEST, instruments, lookback_max)
+
+    @classmethod
+    def _open(
+        cls,
+        store: DataStore,
+        period: Period,
+        stage: Stage,
+        instruments: Iterable[str],
+        lookback_max: int,
+    ) -> Sandbox:
         horizon = period.horizon(stage)
+        if store.max_horizon is not None and horizon > store.max_horizon:
+            raise SealedPeriodError(
+                f"{period.id} {stage.value}: horizon {horizon} is past the data cap {store.max_horizon}"
+            )
         read_start = shift_years(period.fit_start, -WARMUP_READ_YEARS)
         loaded: dict[str, Bars] = {}
         log = []

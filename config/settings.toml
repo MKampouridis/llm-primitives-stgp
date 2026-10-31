@@ -6,7 +6,7 @@ download_start = 1990-01-01   # earliest history requested; sources may start la
 design_end = 2026-06-30       # last date of the last test year; the build drops anything later
 
 [splits]
-first_fit_start = 2005-07-01  # July anchor, matching the provisional post-cutoff test year 2025-07..2026-06
+first_fit_start = 2005-07-01  # July anchor; post-cutoff window from 2026-07-01 is separate (D-036)
 n_periods = 18
 fit_years = 2
 validation_years = 1
@@ -14,6 +14,18 @@ test_years = 1
 step_years = 1
 lookback_max_bars = 504       # L_max: global cap on any rule's lookback, in bars
 min_session_coverage = 0.95   # share of expected sessions present in [fit_start, test_end)
+
+[pilot]                       # pre-sample pilot periods, same 2+1+1 structure as P01..P18 (D-034)
+ids = ["PL1", "PL2"]
+first_fit_start = 2003-07-01  # PL1 test 2006-07..2007-06, PL2 test 2007-07..2008-06
+
+[development]                 # strategy-generation window, before every pilot validation year (D-036)
+fit_start = 1995-07-01        # dev-fit [fit_start, holdout_start): all the generation agent's backtests see
+holdout_start = 2003-07-01    # dev-holdout [holdout_start, end): scored once per final strategy, never shown
+end = 2005-07-01
+
+[leakage]
+max_horizon = 2008-07-01      # WP2: no modelling read at or after this date (D-034); lifted in WP4 by decision
 
 [quality]
 stale_run_min = 5             # this many identical consecutive closes count as one stale run
@@ -36,6 +48,9 @@ max_nodes = 60                # per tree
 hof_size = 10
 final_selection = "validation"
 cache_mb = 512
+budget_unit = "requested"     # or "unique" (D-033; decided by the pilot calibration rule)
+max_unique_evaluations = 0    # cap for budget_unit = "unique"
+checkpoint_every = 10         # validation checkpoints, recorded only (never used for selection)
 
 [fitness]                     # robustness composite; weights are placeholders until the WP2 pilot
 lambda_drawdown = 0.5         # per unit of segment max drawdown / annualised volatility

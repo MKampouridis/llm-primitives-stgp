@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from lpstgp.config import load_paths, load_settings
-from lpstgp.data.store import DataStore
+from lpstgp.data.store import modelling_store
 from lpstgp.gates.checks import sample_params
 from lpstgp.operators.registry import discover
 from lpstgp.runner import RunTask, configs_from_settings, execute, run_many
@@ -48,7 +48,7 @@ def load_smoke_summarise():
 def micro_benchmarks(paths, settings, repeats: int = 3) -> list[dict]:
     period = periods_from_settings(settings)[0]
     box = Sandbox.open(
-        DataStore(paths.tier_dir("A")),
+        modelling_store(paths.tier_dir("A"), settings),
         period,
         Stage.FIT,
         ["SPX"],

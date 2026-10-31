@@ -6,7 +6,8 @@ Research code for a journal paper: can an LLM author and maintain the typed prim
 
 - `docs/research_plan.md` is authoritative (exported from the live plan document). If anything conflicts with it, ask the PI.
 - `docs/decisions.md` records every assumption and choice: number, status (**Decided** = agreed with the PI, **Provisional** = engineer's default, **Open**), the reason, and any departure from the plan. Add an entry for every new choice.
-- Work packages: WP1 (library and harness) is done. Read the latest `reports/<wp>/` summary and the open-questions entry in `docs/decisions.md` before starting work.
+- Work packages: WP1 (library and harness) is done; WP2 is in progress under `docs/protocol.md` (decisions D-034 onwards). Read the latest `reports/<wp>/` summary and the open entries in `docs/decisions.md` before starting work.
+- WP2 data cap: no modelling read on or after `[leakage] max_horizon` (2008-07-01). Pilot test years are read only through `Sandbox.open_pilot_test` after a committed freeze manifest.
 
 ## Hard rules
 
@@ -14,9 +15,10 @@ Research code for a journal paper: can an LLM author and maintain the typed prim
 2. **No secrets in code, config or commits.** Read API keys and credentials from the environment only.
 3. **Never commit data, results or caches.** `.gitignore`, the pre-commit hook and CI (`scripts/check_hygiene.py`) enforce this.
 4. **Storage:** store per-run summaries and best individuals only, never whole populations per generation. Caches are disposable, size-capped and git-ignored.
-5. **Locked operator contracts are immutable** (`src/lpstgp/operators/registry.lock.toml`). A change means a new version file, then `scripts/update_lock.py` and `scripts/generate_operator_docs.py`.
-6. **Ask before outward-facing or costly actions:** GitHub settings, paid LLM API calls beyond an agreed budget, deleting data or results, unsealing test periods.
-7. Paths come from `config/paths.toml` (relative to this folder); never hard-code them. Working paths stay out of cloud-synced folders; Box is only a backup mirror written by `scripts/backup.py`.
+5. **Frozen strategies** (`src/lpstgp/strategies/generated/`) are LLM output kept verbatim: never edit, format or lint them.
+6. **Locked operator contracts are immutable** (`src/lpstgp/operators/registry.lock.toml`). A change means a new version file, then `scripts/update_lock.py` and `scripts/generate_operator_docs.py`.
+7. **Ask before outward-facing or costly actions:** GitHub settings, paid LLM API calls beyond an agreed budget, deleting data or results, unsealing test periods.
+8. Paths come from `config/paths.toml` (relative to this folder); never hard-code them. Working paths stay out of cloud-synced folders; Box is only a backup mirror written by `scripts/backup.py`.
 
 ## Working practice
 

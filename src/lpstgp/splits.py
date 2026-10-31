@@ -8,7 +8,7 @@ start on. Test access is sealed in ``sandbox.py``.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from enum import Enum
 from typing import Any
@@ -90,6 +90,36 @@ def periods_from_settings(settings: Mapping[str, Any]) -> tuple[Period, ...]:
         cfg["test_years"],
         cfg["step_years"],
     )
+
+
+def pilot_periods(settings: Mapping[str, Any]) -> tuple[Period, ...]:
+    """Pre-sample pilot periods (PL1, PL2): the primary structure, shifted before P01 (D-034)."""
+    splits, pilot = settings["splits"], settings["pilot"]
+    generic = walk_forward(
+        pilot["first_fit_start"],
+        len(pilot["ids"]),
+        splits["fit_years"],
+        splits["validation_years"],
+        splits["test_years"],
+        splits["step_years"],
+    )
+    return tuple(replace(p, id=pid) for p, pid in zip(generic, pilot["ids"], strict=True))
+
+
+def development_period(settings: Mapping[str, Any]) -> Period:
+    """The strategy-generation window as a period: FIT = dev-fit, VALIDATE = dev-holdout, no test."""
+    dev = settings["development"]
+    return Period("DEV", dev["fit_start"], dev["holdout_start"], dev["end"], dev["end"])
+
+
+def all_periods(settings: Mapping[str, Any]) -> dict[str, Period]:
+    """Every named period: primary P01..P18, the pilots and DEV."""
+    periods = (
+        *periods_from_settings(settings),
+        *pilot_periods(settings),
+        development_period(settings),
+    )
+    return {p.id: p for p in periods}
 
 
 def is_eligible(

@@ -6,7 +6,9 @@ This folder is the project's single location: code, the research plan (`docs/res
 
 ## Status
 
-**Work package 1 (library, data layer and harness) is complete.** No LLM calls are made in WP1. The seed library is the hand-specified "expert" control (arm 6; see `docs/decisions.md`, D-002).
+**Work package 1 (library, data layer and harness) is complete.** The seed library is the hand-specified "expert" control (arm 6; see `docs/decisions.md`, D-002).
+
+**Work package 2 (whole LLM strategies, STGP arms 1–2, pilot go/no-go) is in progress.** The protocol is `docs/protocol.md`; decisions D-034–D-040. WP2 reads no data on or after 2008-07-01 (enforced in code); the pilot periods PL1/PL2 precede the 18 primary periods.
 
 | Component | What it is |
 |---|---|
@@ -41,6 +43,13 @@ src/lpstgp/
   gates/           admission checks (shared with the WP3 maintenance loop), synthetic inputs, source policy
   backtest/        engine, costs, metrics
   gp/              primitive set, generation, variation, evaluation, fitness, run loop
+  strategies/      WP2 whole strategies: contract (api.py), source policy, gates, sandboxed worker,
+                   development tool + MCP server, generation harness, arms 1/2a/2b/2c (adapters,
+                   selection), frozen set (generated/, strategies.lock.toml)
+  campaign/        planned, resumable campaigns: paired seeds, digests, collect, configuration register
+  analysis/        equal-weight portfolios, paired stationary bootstrap, Holm
+  libraries.py     named primitive sets (WP1 libraries, technical, s2a/s2b/s2c)
+  freeze.py        committed freeze manifests (required before any test-year read)
   runner.py        sandboxes -> STGP run -> JSON run record (parallel runs in spawned workers)
 tests/             data, leakage, operators (reference implementations), gates, backtest, gp
 ```
@@ -66,6 +75,8 @@ uv run python scripts/smoke_test.py              # STGP on 2 assets x P01, small
 uv run python scripts/calibrate.py               # timings for the projections (training data only)
 uv run python scripts/project_compute.py         # compute and disk projections -> reports/wp1
 uv run python scripts/backup.py                  # one-way backup mirror to backup_dir (Box); --dry-run first
+uv run python scripts/generate_strategies.py --preflight   # WP2: isolation test of a generation session
+uv run python scripts/generate_strategies.py --dry-run     # WP2: render the briefs and the session command
 uv run python scripts/generate_operator_docs.py  # regenerate docs/operators.md after adding an operator
 uv run python scripts/update_lock.py             # lock new operator versions (locked ones are immutable)
 ```

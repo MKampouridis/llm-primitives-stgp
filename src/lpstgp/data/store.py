@@ -94,11 +94,20 @@ def causal_returns(
     return log_return, log_price
 
 
-class DataStore:
-    """Read-only access to one tier's processed files."""
+class HorizonCapError(PermissionError):
+    """A read reaching past the store's maximum horizon (the work package's data cap)."""
 
-    def __init__(self, tier_dir: Path) -> None:
+
+class DataStore:
+    """Read-only access to one tier's processed files.
+
+    ``max_horizon`` caps every read: no row on or after it can be requested. Modelling entry points
+    obtain their store from :func:`modelling_store`, which sets the cap from the settings.
+    """
+
+    def __init__(self, tier_dir: Path, max_horizon: date | None = None) -> None:
         self._processed = Path(tier_dir) / "processed"
+        self.max_horizon = max_horizon
 
     def instruments(self) -> list[str]:
         return sorted(
@@ -119,6 +128,10 @@ class DataStore:
     def read(self, instrument_id: str, start: date, horizon: date) -> Bars:
         if not start < horizon:
             raise ValueError(f"start {start} must precede horizon {horizon}")
+        if self.max_horizon is not None and horizon > self.max_horizon:
+            raise HorizonCapError(
+                f"{instrument_id}: horizon {horizon} is past the data cap {self.max_horizon}"
+            )
         path = self.path(instrument_id)
         table = pq.read_table(path, filters=[("date", ">=", start), ("date", "<", horizon)])
         dates = _readonly(table["date"].to_numpy(), "datetime64[D]")
@@ -146,3 +159,8 @@ class DataStore:
             meta=MappingProxyType(meta),
             **columns,
         )
+
+
+def modelling_store(tier_dir: Path, settings: Mapping[str, Any]) -> DataStore:
+    """The store for every modelling entry point, capped at ``settings['leakage']['max_horizon']``."""
+    return DataStore(tier_dir, max_horizon=settings["leakage"]["max_horizon"])

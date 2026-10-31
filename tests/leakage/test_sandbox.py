@@ -8,9 +8,9 @@ import pytest
 
 from lpstgp.config import load_settings
 from lpstgp.data import schema
-from lpstgp.data.store import DataStore
+from lpstgp.data.store import DataStore, modelling_store
 from lpstgp.sandbox import Sandbox, SealedPeriodError
-from lpstgp.splits import Stage, periods_from_settings, walk_forward
+from lpstgp.splits import Stage, all_periods, walk_forward
 
 META = {
     "schema_version": 1,
@@ -107,10 +107,12 @@ def test_scored_masks(tmp_path):
 
 @pytest.mark.realdata
 def test_real_sandboxes_never_reach_their_horizon(tier_a_dir):
+    """Every period readable in WP2 (P01, the pilots, DEV) through the capped modelling store."""
     settings = load_settings()
-    store = DataStore(tier_a_dir)
+    store = modelling_store(tier_a_dir, settings)
     lmax = settings["splits"]["lookback_max_bars"]
-    for period in periods_from_settings(settings)[:3]:
+    periods = all_periods(settings)
+    for period in (periods["P01"], periods["PL1"], periods["PL2"], periods["DEV"]):
         for stage in (Stage.FIT, Stage.VALIDATE):
             sandbox = Sandbox.open(store, period, stage, store.instruments(), lmax)
             for instrument in sandbox.instruments:
