@@ -31,6 +31,7 @@ htmlcov/
 *.npy
 *.npz
 *.csv
+!reports/configuration_register.csv
 *.zip
 *.gz
 

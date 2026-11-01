@@ -27,6 +27,9 @@ FORBIDDEN_NAME_PATTERNS = [
     re.compile(r"^paths\.toml$"),
 ]
 NAME_ALLOWLIST = {".env.example"}
+# The trial register is a scientific record (the trial count for the Deflated Sharpe Ratio, WP4):
+# a small text table that must be versioned with the reports, unlike data or results (D-053).
+PATH_ALLOWLIST = {"reports/configuration_register.csv"}
 
 # Patterns are assembled from fragments so this file does not match itself.
 SECRET_PATTERNS = [
@@ -56,7 +59,7 @@ def check(paths: list[str], root: Path) -> list[str]:
     for rel in paths:
         path = root / rel
         name = path.name
-        if name not in NAME_ALLOWLIST:
+        if name not in NAME_ALLOWLIST and rel not in PATH_ALLOWLIST:
             if path.suffix.lower() in FORBIDDEN_SUFFIXES:
                 problems.append(
                     f"{rel}: data or key file type '{path.suffix}' must not be committed"

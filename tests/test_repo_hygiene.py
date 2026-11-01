@@ -56,3 +56,14 @@ def test_checker_allows_env_example(tmp_path):
     checker = _load_checker()
     (tmp_path / ".env.example").write_text("ANTHROPIC_API_KEY=\n")
     assert checker.check([".env.example"], tmp_path) == []
+
+
+def test_only_the_trial_register_may_be_a_tracked_csv(tmp_path):
+    checker = _load_checker()
+    (tmp_path / "reports").mkdir()
+    (tmp_path / "reports" / "configuration_register.csv").write_text("config,digest\n")
+    (tmp_path / "reports" / "other.csv").write_text("x\n")
+    (tmp_path / "configuration_register.csv").write_text("x\n")
+    assert checker.check(["reports/configuration_register.csv"], tmp_path) == []
+    assert checker.check(["reports/other.csv"], tmp_path)
+    assert checker.check(["configuration_register.csv"], tmp_path)  # only at its own path

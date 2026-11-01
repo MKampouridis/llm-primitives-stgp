@@ -779,3 +779,8 @@ The driver's scale (instruments, candidate grid, runs) and its repository paths 
 - Under a unique budget, a run that reaches the generation ceiling first is kept. It had ten times its calibrated generations to search, and failing to find new rules is a property of its arm; excluding it would bias the arm.
 - `freeze` lists such runs per arm in `reports/wp2/unique_budget_shortfall.json` (commit it with the manifest), and the go/no-go result reports the counts.
 - This replaces D-049's refusal at the freeze.
+
+### D-053 The trial register is tracked in git — Decided (engineer, under D-042; 1 Nov 2026)
+`reports/configuration_register.csv` lists every registered configuration with its digest. It provides the trial count for the Deflated Sharpe Ratio in WP4, so it is a scientific record, versioned with the reports.
+
+It was git-ignored by the general `*.csv` rule, and only mirrored to Box. It is now the one exception: in `.gitignore`, and by exact path in `scripts/check_hygiene.py`, with a test. Every other CSV is still refused, as data or results.
