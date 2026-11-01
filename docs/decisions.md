@@ -591,3 +591,28 @@ and it has no licence yet. A deploy key gives CERES the same convenience. Fallba
 - A limit stop waits until the reset time stated in the notice, and is not a failure.
 - Session state is saved after every run, so the driver can be restarted.
 - Costs are reported as each session's cumulative estimate.
+
+### D-045 Repository made public — Decided (PI, 1 Nov 2026)
+The PI made the GitHub repository public for convenience. This supersedes D-043's visibility and deploy-key parts: CERES clones over HTTPS without a key (`docs/CERES.md` §2).
+
+Unchanged:
+- data, results and caches still never go through git (D-005), and move by rsync;
+- frozen strategies, decisions and reports are now visible, which D-043 had wanted to avoid before the preprint.
+
+*Consequence:* commit metadata and the decision log are public from now on. Secrets were never committed (hard rule 2; `scripts/check_hygiene.py`).
+
+### D-046 Where the pilot runs, and cluster slices — Provisional (engineer, 1 Nov 2026)
+**Measured on the Mac (`scripts/time_wp2.py`, PL1 FIT/VALIDATE only, timing runs not entered in the trial register):**
+- **Signals:** the 28 frozen strategies take at most 0.63 s each, summed over the six calibration instruments (median of 3, after a warm-up). Arm 2c's cost therefore comes from the GP, not from the strategies.
+- **One calibration-size run** (population 500, tournament 3, 50,000 requested evaluations, SPX): 64 s for arm 2c, 36 s for arm 6, alone; peak memory 0.65 GB.
+- **Under load:** six concurrent arm-2c runs took 135 s in all (113–122 s each).
+
+**Estimate.** At these speeds the pilot is about 3–4 h of laptop time for calibration (720 runs), under 1 h for the budget check, and about 12 h for the go/no-go under a requested-evaluation budget. A unique-evaluation budget could make the go/no-go several times longer.
+
+**Choice:**
+- Calibration and the budget check may run on either machine.
+- The go/no-go, and every WP4 campaign, run on CERES once its portability check passes (`docs/CERES.md` §5). Runs must be identical on both machines.
+- Plans are written, and reports produced, on the Mac. CERES runs slices of a plan (`scripts/campaign_tasks.py`, `scripts/ceres/tasks.sge`) with the same digest checks and skipping as `execute_plan`.
+- A test checks that slices give the same hall of fame as the process pool.
+
+*Why:* CERES gives up to 60 concurrent runs, and the laptop stays free. The checks keep results independent of where a task ran.

@@ -1,0 +1,6 @@
+# Paths on CERES (Essex HPC): the job scripts point LPSTGP_PATHS here. See docs/CERES.md.
+# Data and results live outside the repository clone, in ~/lpstgp-data (shared by every node).
+data_dir = "~/lpstgp-data/data"
+results_dir = "~/lpstgp-data/results"
+reports_dir = "reports"
+cache_dir = "~/lpstgp-data/cache"

@@ -1,12 +1,16 @@
 """WP2 milestones M3-M4 on the pilot periods (protocol §6-§8), step by step.
 
-Usage: uv run python scripts/wp2_pilot.py STEP [--workers 6]
+Usage: uv run python scripts/wp2_pilot.py STEP [--workers 6] [--mode all|plan|report]
 
   calibrate     §6.1 equal-budget GP-parameter candidates (arms 2c and 6), PL1 training data
   budget-check  §6.2-6.3 every GP arm at the chosen parameters: budget unit and lambda rules
   gonogo        plan and run the go/no-go campaign (arms 1, 2a, 2b, 2c, 6, GP-TA; PL1 and PL2)
   freeze        write reports/wp2/freeze_manifest.json (commit it before `pilot-test`)
   pilot-test    §8 the one-time test-year evaluation, portfolios and the go/no-go decision
+
+--mode (calibrate, budget-check, gonogo): `all` (default) plans, runs on this machine and reports;
+`plan` only writes the campaign plan, for a cluster (scripts/campaign_tasks.py, docs/CERES.md);
+`report` reports on a plan whose tasks are all complete (records copied back from the cluster).
 
 Results go to results/campaigns/<name>/ and reports/wp2/. No step reads any bar on or after
 2008-07-01 (the settings' data cap); only `pilot-test` opens the pilot test years.
@@ -22,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 from lpstgp import calibration, pilot
-from lpstgp.campaign.execute import execute_plan, load_plan
+from lpstgp.campaign.execute import execute_plan, load_plan, progress
 from lpstgp.campaign.plan import Config, settings_digest, write_plan
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
 from lpstgp.data.store import modelling_store
@@ -45,6 +49,22 @@ CAL_BUDGET = 50_000
 REPORTS = REPO_ROOT / "reports" / "wp2"
 
 
+def prepare(name, configs, cells, runs, paths, settings, workers: int, mode: str) -> Path | None:
+    """Plan (unless reporting), run here (mode all) and return the plan once every task is done."""
+    plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
+    if mode != "report":
+        plan_path = write_plan(name, configs, cells, runs, paths, settings)
+    if mode == "all":
+        print(execute_plan(plan_path, paths, settings, workers))
+    status = progress(plan_path, settings)
+    if mode == "plan":
+        print(f"{name}: {status['tasks']} tasks; run them with scripts/ceres/tasks.sge")
+        return None
+    if status["complete"] != status["tasks"]:
+        raise SystemExit(f"{name}: {status['complete']} of {status['tasks']} tasks complete")
+    return plan_path
+
+
 def records(plan_path: Path) -> list[dict]:
     return [
         json.loads(p.read_text()) for p in sorted(plan_path.parent.glob("tier*/records/*.json"))
@@ -55,7 +75,7 @@ def chosen_parameters() -> dict:
     return json.loads((REPORTS / "calibration.json").read_text())
 
 
-def step_calibrate(paths, settings, workers: int) -> None:
+def step_calibrate(paths, settings, workers: int, mode: str = "all") -> None:
     configs = [
         Config(
             f"cal-{arm}-p{pop}-t{tour}",
@@ -67,8 +87,9 @@ def step_calibrate(paths, settings, workers: int) -> None:
         for tour in (3, 5)
     ]
     cells = [((name,), "PL1") for name in CALIBRATION_INSTRUMENTS]
-    plan = write_plan("wp2-calibration", configs, cells, 10, paths, settings)
-    print(execute_plan(plan, paths, settings, workers))
+    plan = prepare("wp2-calibration", configs, cells, 10, paths, settings, workers, mode)
+    if plan is None:
+        return
     choice = calibration.choose_candidate(records(plan))
     REPORTS.mkdir(parents=True, exist_ok=True)
     (REPORTS / "calibration.json").write_text(json.dumps(choice, indent=1))
@@ -98,7 +119,7 @@ def step_calibrate(paths, settings, workers: int) -> None:
     print(json.dumps({k: v for k, v in choice.items() if k != "table"}, indent=1))
 
 
-def step_budget_check(paths, settings, workers: int) -> None:
+def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
     c = chosen_parameters()
     gp = {
         "population": c["population"],
@@ -107,8 +128,9 @@ def step_budget_check(paths, settings, workers: int) -> None:
     }
     configs = [Config(f"bud-{arm}", lib, gp=gp) for arm, lib in GP_ARMS.items()]
     cells = [((name,), "PL1") for name in CALIBRATION_INSTRUMENTS]
-    plan = write_plan("wp2-budget-check", configs, cells, 3, paths, settings)
-    print(execute_plan(plan, paths, settings, workers))
+    plan = prepare("wp2-budget-check", configs, cells, 3, paths, settings, workers, mode)
+    if plan is None:
+        return
     recs = records(plan)
     out = {"budget_unit": calibration.budget_unit(recs), "lambda": calibration.lambda_check(recs)}
     (REPORTS / "budget_check.json").write_text(json.dumps(out, indent=1))
@@ -163,12 +185,14 @@ def gonogo_plans(paths) -> list[Path]:
     ]
 
 
-def step_gonogo(paths, settings, workers: int) -> None:
+def step_gonogo(paths, settings, workers: int, mode: str = "all") -> None:
     for period, plan_path in zip(("PL1", "PL2"), gonogo_plans(paths), strict=True):
-        if not plan_path.exists():
+        if not plan_path.exists() and mode != "report":
             cells = [((name,), period) for name in PILOT_INSTRUMENTS]
             write_plan(f"wp2-gonogo-{period}", gonogo_configs(), cells, 10, paths, settings)
-        print(period, execute_plan(plan_path, paths, settings, workers))
+        if mode == "all":
+            print(period, execute_plan(plan_path, paths, settings, workers))
+        print(period, progress(plan_path, settings))
 
 
 def step_freeze(paths, settings) -> None:
@@ -276,14 +300,15 @@ def main() -> None:
         "step", choices=("calibrate", "budget-check", "gonogo", "freeze", "pilot-test")
     )
     parser.add_argument("--workers", type=int, default=6)
+    parser.add_argument("--mode", choices=("all", "plan", "report"), default="all")
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
     if args.step == "calibrate":
-        step_calibrate(paths, settings, args.workers)
+        step_calibrate(paths, settings, args.workers, args.mode)
     elif args.step == "budget-check":
-        step_budget_check(paths, settings, args.workers)
+        step_budget_check(paths, settings, args.workers, args.mode)
     elif args.step == "gonogo":
-        step_gonogo(paths, settings, args.workers)
+        step_gonogo(paths, settings, args.workers, args.mode)
     elif args.step == "freeze":
         step_freeze(paths, settings)
     else:

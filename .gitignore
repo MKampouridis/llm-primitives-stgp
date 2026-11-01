@@ -55,3 +55,4 @@ config/paths.toml
 .DS_Store
 .idea/
 .vscode/
+logs/

@@ -7,7 +7,14 @@ import pytest
 from tests.gp.conftest import write_synthetic_tier
 
 from lpstgp.campaign.collect import collect
-from lpstgp.campaign.execute import PlanMismatchError, execute_plan, load_plan, verify
+from lpstgp.campaign.execute import (
+    PlanMismatchError,
+    execute_plan,
+    execute_slice,
+    load_plan,
+    progress,
+    verify,
+)
 from lpstgp.campaign.plan import Config, register_configs, run_seed, write_plan
 from lpstgp.config import load_paths, load_settings
 
@@ -69,3 +76,35 @@ def test_register_appends_each_configuration_once(tmp_path):
     with Path(register).open() as handle:
         rows = list(csv.DictReader(handle))
     assert [(r["campaign"], r["digest"]) for r in rows] == [("c1", "d1"), ("c2", "d2")]
+
+
+@pytest.mark.slow
+def test_slices_match_pooled_execution(campaign_paths, tmp_path):
+    """Cluster slices (in-process) give the same records as the process pool, and resume."""
+    import json
+    import shutil
+
+    settings = load_settings()
+    gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
+    configs = [Config("arm_a", "seed", gp=gp), Config("arm_b", "technical", gp=gp)]
+    plan_path = write_plan(
+        "slices", configs, [(("AAA",), "P01")], 2, campaign_paths, settings, register=None
+    )
+    assert progress(plan_path, settings) == {"tasks": 4, "complete": 0}
+    assert execute_slice(plan_path, campaign_paths, settings, 0, 3)["evolved"] == 3
+    assert execute_slice(plan_path, campaign_paths, settings, 2, 2) == {
+        "skipped": 1, "selected": 0, "evolved": 1,
+    }  # fmt: skip
+    assert progress(plan_path, settings)["complete"] == 4
+    with pytest.raises(IndexError):
+        execute_slice(plan_path, campaign_paths, settings, 4)
+    sliced = {p.name: json.loads(p.read_text()) for p in plan_path.parent.glob("tier*/*/*.json")}
+    pooled_dir = tmp_path / "pooled"
+    pooled_dir.mkdir()
+    shutil.copy(plan_path, pooled_dir / "tasks.json")
+    execute_plan(pooled_dir / "tasks.json", campaign_paths, settings, workers=2)
+    pooled = {p.name: json.loads(p.read_text()) for p in pooled_dir.glob("tier*/*/*.json")}
+    assert sliced.keys() == pooled.keys()
+    assert len(sliced) == 4
+    for name, record in sliced.items():
+        assert record["hall_of_fame"] == pooled[name]["hall_of_fame"]

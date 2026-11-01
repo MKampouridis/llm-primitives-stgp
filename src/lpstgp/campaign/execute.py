@@ -15,7 +15,7 @@ from lpstgp.campaign.plan import PLAN_SCHEMA, Config, data_digest, settings_dige
 from lpstgp.config import Paths
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
-from lpstgp.runner import RunTask, record_path, run_many, write_atomic
+from lpstgp.runner import RunTask, execute, record_path, run_many, write_atomic
 from lpstgp.sandbox import Sandbox
 from lpstgp.splits import Stage, all_periods
 from lpstgp.strategies import selection
@@ -138,3 +138,43 @@ def execute_plan(
             pending_gp.append(run)
     run_many(pending_gp, workers, out_root)
     return {"skipped": done, "selected": selected, "evolved": len(pending_gp)}
+
+
+def execute_slice(
+    plan_path: Path, paths: Paths, settings: Mapping[str, Any], index: int, count: int = 1
+) -> dict[str, int]:
+    """Run tasks ``index .. index + count - 1`` of a plan in this process (one cluster job).
+
+    Same checks and skipping as ``execute_plan``, so a slice is safe to repeat; the caller sets
+    one BLAS/numba thread (the SGE job script does).
+    """
+    plan = load_plan(plan_path)
+    problems = verify(plan, paths, settings)
+    if problems:
+        raise PlanMismatchError("; ".join(problems))
+    if not 0 <= index < len(plan["tasks"]):
+        raise IndexError(f"task {index} is outside the plan's {len(plan['tasks'])} tasks")
+    out_root = Path(plan_path).parent
+    counts = {"skipped": 0, "selected": 0, "evolved": 0}
+    for task in plan["tasks"][index : index + count]:
+        run = run_task(plan, task, settings)
+        if is_complete(record_path(out_root, run), run):
+            counts["skipped"] += 1
+        elif plan["configs"][task["config"]]["kind"] == "select":
+            execute_select(run, paths, settings, out_root)
+            counts["selected"] += 1
+        else:
+            execute(run, out_root)
+            counts["evolved"] += 1
+    return counts
+
+
+def progress(plan_path: Path, settings: Mapping[str, Any]) -> dict[str, int]:
+    """How many of a plan's tasks have a complete record (no digest checks: a quick status)."""
+    plan = load_plan(plan_path)
+    out_root = Path(plan_path).parent
+    done = sum(
+        is_complete(record_path(out_root, run), run)
+        for run in (run_task(plan, t, settings) for t in plan["tasks"])
+    )
+    return {"tasks": len(plan["tasks"]), "complete": done}
