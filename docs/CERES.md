@@ -43,7 +43,9 @@ What the script does:
 - Creates the conda environment `lpstgp` from conda-forge.
 - Installs the package and runs the tests (`-m "not realdata"`).
 
-**Versions.** conda-forge still builds for glibc 2.17, but its versions may differ from `uv.lock` by patch releases. `exchange-calendars` is older (4.8), but only the data steps use it, and they run on the Mac.
+**Versions.** conda-forge still builds for glibc 2.17, but its versions may differ from `uv.lock` by patch releases. Two packages are fixed up by the script:
+- **git:** CentOS 7's git (1.8.3) lacks `git -C`, which the freeze-manifest code uses, so a recent git from conda-forge is installed into the environment.
+- **exchange-calendars:** conda-forge has only 4.8, so 4.13 is installed with pip. Only the data steps use it, and they run on the Mac.
 
 **roughpy.** It is only a test reference. If it does not install, `tests/operators/test_rough_paths.py` is skipped on CERES; those tests pass on the Mac and in CI.
 

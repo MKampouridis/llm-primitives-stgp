@@ -34,6 +34,12 @@ if ! conda run -n "$ENV" python -c "import numpy, scipy, numba, pandas, pyarrow,
         pytest pytest-xdist hypothesis pot antropy pywavelets scikit-learn statsmodels ta
 fi
 conda activate "$ENV"
+# CentOS 7's git (1.8.3) predates `git -C`, which the freeze-manifest code uses: a recent git
+# inside the environment comes first on PATH whenever the environment is active.
+git -C "$REPO" status >/dev/null 2>&1 || conda install -y -n "$ENV" -c conda-forge git
+# conda-forge's exchange-calendars is 4.8; the data-quality code needs 4.13 (pure Python).
+python -c "import exchange_calendars as x, sys; sys.exit(tuple(map(int, x.__version__.split('.')[:2])) < (4, 13))" \
+    || pip install "exchange-calendars>=4.13"
 # Test-only references that conda-forge lacks: pure Python, so pip without dependencies.
 pip install --no-deps "ordpy>=1.2.3" "nolds>=0.6.3" "kramersmoyal>=0.4.1"
 # roughpy (reference for the rough-path operators' tests) has compiled wheels that may not work
