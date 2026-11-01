@@ -2,6 +2,7 @@
 
 Usage: uv run python scripts/wp2_pilot.py STEP [--workers 6] [--mode all|plan|report]
 
+  portability   two runs to check that CERES and this machine give identical records
   calibrate     §6.1 equal-budget GP-parameter candidates (arms 2c and 6), PL1 training data
   budget-check  §6.2-6.3 every GP arm at the chosen parameters: budget unit and lambda rules
   gonogo        plan and run the go/no-go campaign (arms 1, 2a, 2b, 2c, 6, GP-TA; PL1 and PL2)
@@ -120,6 +121,21 @@ def step_calibrate(paths, settings, workers: int, mode: str = "all") -> None:
     ]
     (REPORTS / "calibration.md").write_text("\n".join(lines) + "\n")
     print(json.dumps({k: v for k, v in choice.items() if k != "table"}, indent=1))
+
+
+def step_portability(paths, settings, workers: int, mode: str = "all") -> None:
+    """Two calibration-size runs (arms 2c and 6, SPX, PL1) to compare machines (docs/CERES.md §5).
+
+    Not a study campaign: its configurations are not entered in the trial register.
+    """
+    gp = {"population": 500, "generations": CAL_BUDGET // 500 - 1, "tournament": 3}
+    configs = [Config(f"port-{arm}", arm, gp=gp) for arm in ("s2c", "seed")]
+    plan = write_plan(
+        "wp2-portability", configs, [(("SPX",), "PL1")], 1, paths, settings, register=None
+    )
+    if mode == "all":
+        print(execute_plan(plan, paths, settings, workers))
+    print(progress(plan, settings))
 
 
 def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
@@ -350,13 +366,16 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "step", choices=("calibrate", "budget-check", "gonogo", "freeze", "pilot-test")
+        "step",
+        choices=("portability", "calibrate", "budget-check", "gonogo", "freeze", "pilot-test"),
     )
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--mode", choices=("all", "plan", "report"), default="all")
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
-    if args.step == "calibrate":
+    if args.step == "portability":
+        step_portability(paths, settings, args.workers, args.mode)
+    elif args.step == "calibrate":
         step_calibrate(paths, settings, args.workers, args.mode)
     elif args.step == "budget-check":
         step_budget_check(paths, settings, args.workers, args.mode)
