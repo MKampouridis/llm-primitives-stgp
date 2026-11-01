@@ -40,7 +40,7 @@ class PairedResult:
 def paired_bootstrap(
     a: np.ndarray,
     b: np.ndarray,
-    periods_per_year: int = 252,
+    periods_per_year: float = 252,
     block: float = 10.0,
     resamples: int = 10_000,
     seed: int = 0,

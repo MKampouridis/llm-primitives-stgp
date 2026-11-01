@@ -16,6 +16,7 @@ import sys
 import time
 from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from multiprocessing import get_context
@@ -165,9 +166,13 @@ def record_path(results_dir: Path | str, task: RunTask) -> Path:
 def write_atomic(path: Path, text: str) -> None:
     """Write whole or not at all: a crash never leaves a truncated record behind."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")  # one per writer
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)
+
+
+class RunFailuresError(RuntimeError):
+    """Some runs raised; every other run finished and was written."""
 
 
 class DiskSpaceError(RuntimeError):
@@ -194,14 +199,20 @@ def run_many(
     """
     for var in THREAD_VARS:
         os.environ[var] = "1"  # inherited by the spawned workers before they import numpy/numba
-    records = []
+    records, failures = [], []
     pool = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn"))
     try:
-        futures = [
-            pool.submit(_worker, t, str(results_dir) if results_dir else None) for t in tasks
-        ]
+        futures = {
+            pool.submit(_worker, t, str(results_dir) if results_dir else None): t for t in tasks
+        }
         for future in as_completed(futures):
-            records.append(future.result())
+            try:
+                records.append(future.result())
+            except BrokenProcessPool:
+                raise
+            except Exception as exc:  # one failing run must not stop the others
+                failures.append(f"{futures[future].name}: {type(exc).__name__}: {exc}")
+                continue
             if results_dir is not None and shutil.disk_usage(results_dir).free < min_free_bytes:
                 raise DiskSpaceError(f"less than {min_free_bytes / 2**30:.0f} GB free; stopping")
     finally:
@@ -210,4 +221,6 @@ def run_many(
         for process in list(processes.values()):
             if process.is_alive():
                 process.terminate()
+    if failures:
+        raise RunFailuresError(f"{len(failures)} run(s) failed:\n" + "\n".join(failures))
     return records

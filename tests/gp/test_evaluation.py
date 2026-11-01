@@ -1,6 +1,7 @@
 """Tree evaluation, the tree -> signal pipeline across stages, and fitness."""
 
 import random
+from dataclasses import replace
 from datetime import date
 
 import numpy as np
@@ -16,6 +17,8 @@ from lpstgp.gp.variation import Rule
 from lpstgp.operators.registry import discover
 from lpstgp.splits import Stage
 from lpstgp.types import Bool
+
+LENIENT = fit.FitnessConfig(execution_lag=1, min_entries_per_year=0.0)  # as written for WP1
 
 OPS = {s.name: s for s in discover().operators.values()}
 COSTS = {name: CostModel(2.0, 2.0) for name in INSTRUMENTS}
@@ -71,9 +74,7 @@ def test_segments_of_p01():
 
 @pytest.fixture
 def problem(seed_lib, fit_box):
-    return Problem(
-        seed_lib, fit_box.bars, PERIOD.scored_window(Stage.FIT), COSTS, fit.FitnessConfig(), 2**26
-    )
+    return Problem(seed_lib, fit_box.bars, PERIOD.scored_window(Stage.FIT), COSTS, LENIENT, 2**26)
 
 
 def constant_rule(lib, entry: bool, exit_: bool) -> Rule:
@@ -86,9 +87,7 @@ def constant_rule(lib, entry: bool, exit_: bool) -> Rule:
 
 def test_no_trade_rule_gets_the_floor(problem, seed_lib):
     score = problem.score(constant_rule(seed_lib, entry=False, exit_=False))
-    assert score.fitness == pytest.approx(
-        fit.FitnessConfig().no_trade_value - 0.01 * score.components["size"]
-    )
+    assert score.fitness == pytest.approx(LENIENT.no_trade_value - 0.01 * score.components["size"])
 
 
 def test_buy_and_hold_rule_scores_the_asset(problem, seed_lib, fit_box):
@@ -110,7 +109,7 @@ def test_buy_and_hold_rule_scores_the_asset(problem, seed_lib, fit_box):
 
 def test_size_penalty_and_signal_hash(problem, seed_lib):
     a = problem.score(constant_rule(seed_lib, entry=True, exit_=False))
-    cfg = fit.FitnessConfig(lambda_size=0.0)
+    cfg = replace(LENIENT, lambda_size=0.0)
     unpenalised = fit.score(
         problem.signals(constant_rule(seed_lib, True, False)),
         problem.data,

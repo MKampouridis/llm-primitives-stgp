@@ -33,9 +33,24 @@ def equal_weight(instruments: Mapping[str, Series]) -> Series:
     total = np.zeros(len(dates))
     for d, r in instruments.values():
         idx = np.searchsorted(dates, np.asarray(d, dtype="datetime64[D]"))
-        total[idx] += np.nan_to_num(r)
+        r = np.asarray(r, dtype=np.float64)
+        if not np.isfinite(r).all():  # an upstream bug, not a flat day: never hide it
+            raise ValueError("non-finite daily return in a portfolio input")
+        total[idx] += r
     return dates, total / len(instruments)
 
 
-def portfolio_sharpe(portfolio: Series, periods_per_year: int = 252) -> float:
-    return float(sharpe(portfolio[1], periods_per_year))
+def periods_per_year(dates: np.ndarray) -> float:
+    """Rows per year of a portfolio's own (union) calendar, to annualise its Sharpe (D-047).
+
+    Equal-weight portfolios live on the union of their instruments' calendars: about 260 rows a
+    year for weekday markets, about 365 once a 7-day market is included, so a fixed 252 would
+    misstate every Sharpe ratio by a calendar-dependent factor.
+    """
+    dates = np.asarray(dates, dtype="datetime64[D]")
+    span_days = int((dates[-1] - dates[0]).astype(int)) + 1
+    return len(dates) / (span_days / 365.25)
+
+
+def portfolio_sharpe(portfolio: Series, periods: float | None = None) -> float:
+    return float(sharpe(portfolio[1], periods or periods_per_year(portfolio[0])))

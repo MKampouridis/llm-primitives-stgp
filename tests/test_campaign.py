@@ -47,7 +47,7 @@ def test_plan_execute_resume_collect(campaign_paths, tmp_path):
     configs = [Config("arm_a", "seed", gp=gp), Config("arm_b", "technical", gp=gp)]
     register = tmp_path / "register.csv"
     plan_path = write_plan(
-        "unit", configs, [(("AAA",), "P01")], 2, campaign_paths, settings, register=register
+        "unit", configs, [(("AAA",), "PL1")], 2, campaign_paths, settings, register=register
     )
     plan = load_plan(plan_path)
     assert len(plan["tasks"]) == 4
@@ -88,7 +88,7 @@ def test_slices_match_pooled_execution(campaign_paths, tmp_path):
     gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
     configs = [Config("arm_a", "seed", gp=gp), Config("arm_b", "technical", gp=gp)]
     plan_path = write_plan(
-        "slices", configs, [(("AAA",), "P01")], 2, campaign_paths, settings, register=None
+        "slices", configs, [(("AAA",), "PL1")], 2, campaign_paths, settings, register=None
     )
     assert progress(plan_path, settings) == {"tasks": 4, "complete": 0}
     assert execute_slice(plan_path, campaign_paths, settings, 0, 3)["evolved"] == 3
@@ -108,3 +108,18 @@ def test_slices_match_pooled_execution(campaign_paths, tmp_path):
     assert len(sliced) == 4
     for name, record in sliced.items():
         assert record["hall_of_fame"] == pooled[name]["hall_of_fame"]
+
+
+@pytest.mark.slow
+def test_one_failing_run_does_not_stop_the_others(campaign_paths, tmp_path):
+    from lpstgp.runner import RunFailuresError, RunTask, configs_from_settings, run_many
+
+    settings = load_settings()
+    gp, fitness = configs_from_settings(
+        settings, **{k: v for k, v in TINY.items() if k != "cache_mb"}
+    )
+    good = RunTask("unit", "seed", ("AAA",), "PL1", 1, gp, fitness)
+    bad = RunTask("unit", "no-such-library", ("AAA",), "PL1", 1, gp, fitness)
+    with pytest.raises(RunFailuresError, match="no-such-library"):
+        run_many([bad, good], 2, tmp_path / "out")
+    assert (tmp_path / "out" / "tierA" / "unit" / f"{good.name}.json").exists()

@@ -19,10 +19,15 @@ from typing import Any
 import numpy as np
 
 from lpstgp.analysis.inference import paired_bootstrap
-from lpstgp.analysis.portfolio import Series, average_runs, equal_weight
+from lpstgp.analysis.portfolio import (
+    Series,
+    average_runs,
+    equal_weight,
+    periods_per_year,
+    portfolio_sharpe,
+)
 from lpstgp.backtest import engine
 from lpstgp.backtest.costs import from_meta
-from lpstgp.backtest.metrics import sharpe
 from lpstgp.gp.evaluate import TreeEvaluator
 from lpstgp.gp.fitness import FitnessConfig
 from lpstgp.gp.pset import build
@@ -119,16 +124,17 @@ def go_no_go(
     resamples: int = 10_000,
 ) -> dict[str, Any]:
     """``pooled[arm]`` spans both pilot test years; ``yearly[period][arm]`` one year each."""
-    sharpes = {arm: float(sharpe(s[1], 252)) for arm, s in pooled.items()}
+    sharpes = {arm: portfolio_sharpe(s) for arm, s in pooled.items()}
     per_year = {
-        p: {arm: float(sharpe(s[1], 252)) for arm, s in arms.items()} for p, arms in yearly.items()
+        p: {arm: portfolio_sharpe(s) for arm, s in arms.items()} for p, arms in yearly.items()
     }
     comparisons = {}
     for arm in sorted(pooled):
         if arm == reference:
             continue
         a, b = _aligned(pooled[arm], pooled[reference])
-        result = paired_bootstrap(a, b, resamples=resamples, seed=0)
+        ppy = periods_per_year(np.intersect1d(pooled[arm][0], pooled[reference][0]))
+        result = paired_bootstrap(a, b, periods_per_year=ppy, resamples=resamples, seed=0)
         comparisons[f"{arm} - {reference}"] = vars(result)
     difference = sharpes[candidate] - sharpes[reference]
     return {

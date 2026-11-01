@@ -8,11 +8,14 @@ def _gens(best):
 
 
 def _record(
-    pop, tour, val, best, unique=100, requested=1000, library="seed", trade=True, turnover=10.0
-):
-    comps = {"no_trade": not trade, "median_turnover": turnover}
+    pop, tour, val, best, unique=100, requested=1000, library="seed", trades=5, turnover=10.0,
+    ran=None,
+):  # fmt: skip
+    comps = {"trades": trades, "no_trade": trades < 2}
+    if trades >= 2:
+        comps["median_turnover"] = turnover
     return {
-        "config": {"population": pop, "tournament": tour},
+        "config": {"population": pop, "tournament": tour, "generations": ran or len(best) - 1},
         "generations": _gens(best),
         "hall_of_fame": [{"validation": {"fitness": val, "instruments": {"X": comps}}}],
         "selected": 0,
@@ -48,7 +51,20 @@ def test_budget_unit_and_lambda_rules():
         _record(500, 5, 0, [0, 1], unique=300, library="s2c"),
     ]
     assert budget_unit(apart)["unit"] == "unique"
-    quiet = [_record(500, 5, 0, [0, 1], trade=k > 0) for k in range(4)]  # 25% never trade
-    assert not lambda_check(quiet)["raise_lambda_turnover"]
+    quiet = [_record(500, 5, 0, [0, 1], trades=k) for k in range(4)]  # 25% never trade
+    out = lambda_check(quiet)
+    assert out["no_trade_share"] == 0.25  # the 1-trade rule is below minimum activity, not idle
+    assert not out["no_trade_exceeded"]
+    assert not out["raise_lambda_turnover"]
+    idle = [_record(500, 5, 0, [0, 1], trades=0) for _ in range(2)] + quiet
+    assert lambda_check(idle)["no_trade_exceeded"]
+    assert not lambda_check(idle)["raise_lambda_turnover"]  # lambda_turnover cannot fix idleness
     busy = [_record(500, 5, 0, [0, 1], turnover=80.0) for _ in range(3)]
     assert lambda_check(busy)["raise_lambda_turnover"]
+
+
+def test_rounded_generations_never_exceed_the_calibrated_run():
+    late = [0.0] * 45 + [1.0] * 5  # converges at generation 45 of 49
+    out = choose_candidate([_record(1000, 3, 0.3, late, ran=49) for _ in range(3)])
+    assert out["generations"] == 49
+    assert out["requested_evaluations"] == 50_000

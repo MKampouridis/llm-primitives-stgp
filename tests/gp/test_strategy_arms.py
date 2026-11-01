@@ -126,8 +126,9 @@ def test_minimum_activity_scores_too_few_entries_as_no_trade():
     value, parts = market_part(one_trade_entry, one_trade_exit, data, strict)
     assert value == strict.no_trade_value
     assert parts["required_trades"] == 4
-    lenient_value, _ = market_part(one_trade_entry, one_trade_exit, data, FitnessConfig())
-    assert lenient_value != FitnessConfig().no_trade_value
+    lenient = FitnessConfig(min_entries_per_year=0.0)  # the rule switched off
+    lenient_value, _ = market_part(one_trade_entry, one_trade_exit, data, lenient)
+    assert lenient_value != lenient.no_trade_value
     busy_entry = (np.arange(len(dates)) % 40 == 0).astype(float)
     busy_exit = (np.arange(len(dates)) % 40 == 20).astype(float)
     assert market_part(busy_entry, busy_exit, data, strict)[0] != strict.no_trade_value

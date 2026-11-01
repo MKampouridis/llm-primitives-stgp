@@ -120,8 +120,11 @@ class Sandbox:
             raise SealedPeriodError(f"{period.id}: only pilot periods have an open test stage")
         if store.max_horizon is None or period.test_end > store.max_horizon:
             raise SealedPeriodError(f"{period.id}: test year lies beyond the store's data cap")
-        if not isinstance(manifest, FreezeManifest) or not manifest.commit:
-            raise SealedPeriodError(f"{period.id}: a committed freeze manifest is required")
+        if not isinstance(manifest, FreezeManifest) or not manifest.verified:
+            raise SealedPeriodError(
+                f"{period.id}: a committed freeze manifest (FreezeManifest.load_committed) "
+                "listing the frozen rules is required"
+            )
         return cls._open(store, period, Stage.TEST, instruments, lookback_max)
 
     @classmethod
@@ -133,6 +136,12 @@ class Sandbox:
         instruments: Iterable[str],
         lookback_max: int,
     ) -> Sandbox:
+        allowed = getattr(store, "allowed_periods", None)
+        if allowed is not None and period.id not in allowed:
+            raise SealedPeriodError(
+                f"{period.id}: not among the periods this stage of the study may open "
+                f"({', '.join(sorted(allowed))}; settings [leakage] allowed_periods)"
+            )
         horizon = period.horizon(stage)
         if store.max_horizon is not None and horizon > store.max_horizon:
             raise SealedPeriodError(

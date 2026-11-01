@@ -20,14 +20,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from collections import defaultdict
+from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
 
 from lpstgp import calibration, pilot
-from lpstgp.campaign.execute import execute_plan, load_plan, progress
-from lpstgp.campaign.plan import Config, settings_digest, write_plan
+from lpstgp.campaign.execute import execute_plan, load_plan, plan_records, progress
+from lpstgp.campaign.plan import Config, data_digest, settings_digest, write_plan
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
@@ -46,6 +49,7 @@ PILOT_INSTRUMENTS = (
 )  # fmt: skip
 GP_ARMS = {"2a": "s2a", "2b": "s2b", "2c": "s2c", "6": "seed", "TA": "technical"}
 CAL_BUDGET = 50_000
+UNIQUE_CEILING = 10  # unique budget: at most this many times the calibrated generations
 REPORTS = REPO_ROOT / "reports" / "wp2"
 
 
@@ -66,9 +70,8 @@ def prepare(name, configs, cells, runs, paths, settings, workers: int, mode: str
 
 
 def records(plan_path: Path) -> list[dict]:
-    return [
-        json.loads(p.read_text()) for p in sorted(plan_path.parent.glob("tier*/records/*.json"))
-    ]
+    """Every task's complete, current record, in plan order (refuses if any is missing)."""
+    return plan_records(plan_path, load_paths(), load_settings())
 
 
 def chosen_parameters() -> dict:
@@ -132,7 +135,11 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
     if plan is None:
         return
     recs = records(plan)
-    out = {"budget_unit": calibration.budget_unit(recs), "lambda": calibration.lambda_check(recs)}
+    step1 = records(paths.results_dir / "campaigns" / "wp2-calibration" / "tasks.json")
+    out = {
+        "budget_unit": calibration.budget_unit(recs),
+        "lambda": calibration.lambda_check(step1 + recs),  # §6.3: the runs of steps 1-2
+    }
     (REPORTS / "budget_check.json").write_text(json.dumps(out, indent=1))
     timing = defaultdict(list)
     for r in recs:
@@ -152,9 +159,11 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
         "",
         f"Spread of unique shares: {out['budget_unit']['spread']:.2f}x -> budget unit "
         f"**{out['budget_unit']['unit']}** (rule: unique if > 2x).",
-        f"Final rules never trading on validation: {lam['no_trade_share']:.1%}; median validation "
-        f"turnover {lam['median_turnover']:.1f} per year -> raise lambda_turnover: "
-        f"**{lam['raise_lambda_turnover']}** (rule: > 25% or > 50).",
+        f"Final rules of steps 1-2 ({lam['rules']} rule-instrument pairs) with no trade on "
+        f"validation: {lam['no_trade_share']:.1%} (limit 25%; exceeded: "
+        f"**{lam['no_trade_exceeded']}**, which calls for a recorded decision, D-047).",
+        f"Median validation turnover {lam['median_turnover']:.1f} changes a year -> raise "
+        f"lambda_turnover: **{lam['raise_lambda_turnover']}** (rule: > 50).",
     ]
     (REPORTS / "budget_check.md").write_text("\n".join(lines) + "\n")
     print(json.dumps(out, indent=1))
@@ -172,7 +181,9 @@ def gonogo_configs() -> list[Config]:
         gp |= {
             "budget_unit": "unique",
             "max_unique_evaluations": c["requested_evaluations"],
-            "generations": 100_000,
+            # Ceiling so that no run, and no arm, can run away (D-047); budget.cap_reached in
+            # each record says which limit ended the run.
+            "generations": UNIQUE_CEILING * c["generations"],
         }
     return [Config("arm1", "strategies", kind="select")] + [
         Config(f"arm{arm}", lib, gp=gp) for arm, lib in GP_ARMS.items()
@@ -195,33 +206,62 @@ def step_gonogo(paths, settings, workers: int, mode: str = "all") -> None:
         print(period, progress(plan_path, settings))
 
 
-def step_freeze(paths, settings) -> None:
-    rules = {}
-    context = {"settings_digest": settings_digest(settings), "code_version": git_revision()}
-    context |= {
+def frozen_context(paths, settings) -> dict:
+    """Everything the frozen rules' test evaluation depends on besides the rules themselves."""
+    context = {
+        "settings_digest": settings_digest(settings),
         "strategies_lock": registry.lock_digest(),
         "operator_lock": registry.file_hash(OPERATOR_LOCK),
+        "data_digest": data_digest(paths, PILOT_INSTRUMENTS),
     }
     for plan_path in gonogo_plans(paths):
         plan = load_plan(plan_path)
-        recs = records(plan_path)
-        if len(recs) != len(plan["tasks"]):
-            raise SystemExit(f"{plan['campaign']}: {len(recs)} of {len(plan['tasks'])} tasks done")
-        rules |= pilot.manifest_rules(recs)
-        context[f"plan:{plan['campaign']}"] = plan["settings_digest"]
+        context[f"plan:{plan['campaign']}"] = {
+            "settings_digest": plan["settings_digest"],
+            "configs": {k: c["digest"] for k, c in sorted(plan["configs"].items())},
+            "tasks": len(plan["tasks"]),
+        }
+    return context
+
+
+def source_changed_since(revision: str) -> list[str]:
+    """Files under src/, scripts/ or config/ changed between ``revision`` and the working tree."""
+    out = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "diff", "--name-only", revision, "--", "src", "scripts",
+         "config"],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    return out.stdout.split()
+
+
+def step_freeze(paths, settings) -> None:
+    if source_changed_since("HEAD"):
+        raise SystemExit("commit the code first: the manifest records the code revision")
+    rules = {}
+    for plan_path in gonogo_plans(paths):
+        rules |= pilot.manifest_rules(records(plan_path))  # every task, complete and current
+    context = frozen_context(paths, settings) | {"code_version": git_revision()}
     path = REPORTS / "freeze_manifest.json"
     write_manifest(path, rules, context)
     print(f"{len(rules)} rules frozen in {path}; commit it before `pilot-test`")
 
 
 def step_pilot_test(paths, settings) -> None:
+    out_json = REPORTS / "pilot_go_no_go.json"
+    if out_json.exists():  # protocol §8: the test years are read once
+        raise SystemExit(f"{out_json} exists: the pilot test years have already been read")
     manifest = FreezeManifest.load_committed(REPORTS / "freeze_manifest.json")
+    frozen_code = manifest.context["code_version"]
+    manifest.check_context(frozen_context(paths, settings) | {"code_version": frozen_code})
+    if changed := source_changed_since(frozen_code):
+        raise SystemExit(f"code changed since the freeze: {', '.join(changed)}")
     _, cfg = configs_from_settings(settings)
     frozen = registry.load_frozen()
     store = modelling_store(paths.tier_dir("A"), settings)
     lmax = settings["splits"]["lookback_max_bars"]
     yearly: dict[str, dict] = {}
     raw: dict[str, np.ndarray] = {}
+    access: dict[str, list] = {}
     for period, plan_path in zip(pilot_periods(settings), gonogo_plans(paths), strict=True):
         box = Sandbox.open_pilot_test(
             store,
@@ -232,9 +272,19 @@ def step_pilot_test(paths, settings) -> None:
             manifest=manifest,
         )
         runs: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        for record in records(plan_path):
+        recs = records(plan_path)
+        expected = {t for t in manifest.rules if t.split("/")[1] == period.id}
+        if {r["campaign"]["task_id"] for r in recs} != expected:
+            raise SystemExit(f"{period.id}: the records do not match the manifest's tasks")
+        for record in recs:
             task = record["campaign"]["task_id"]
             manifest.require(task, pilot.rule_hash(record))
+            assert record["period"]["id"] == period.id, task
+            fit = record["fitness_config"]
+            assert (fit["execution_lag"], fit["cost_multiplier"]) == (
+                cfg.execution_lag,
+                cfg.cost_multiplier,
+            ), task
             arm = task.split("/")[0].removeprefix("arm")
             for name, series in pilot.evaluate_on_test(
                 record, _subset(box, record["instruments"]), cfg, frozen
@@ -243,6 +293,7 @@ def step_pilot_test(paths, settings) -> None:
         for name, series in pilot.buy_and_hold(box, cfg).items():
             runs["BH"][name].append(series)
         yearly[period.id] = {arm: pilot.portfolio(by_inst) for arm, by_inst in runs.items()}
+        access[period.id] = [{k: str(v) for k, v in asdict(r).items()} for r in box.access_log]
         for arm, (dates, values) in yearly[period.id].items():
             raw[f"{period.id}:{arm}:dates"], raw[f"{period.id}:{arm}:returns"] = (
                 dates.astype("datetime64[D]").astype(str),
@@ -257,7 +308,9 @@ def step_pilot_test(paths, settings) -> None:
     }
     result = pilot.go_no_go(pooled, yearly)
     result["manifest_commit"] = manifest.commit
-    (REPORTS / "pilot_go_no_go.json").write_text(json.dumps(result, indent=1, default=float))
+    result["read_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+    result["test_access"] = access
+    out_json.write_text(json.dumps(result, indent=1, default=float))
     lines = [
         "# WP2 pilot go/no-go (protocol §8)",
         "",

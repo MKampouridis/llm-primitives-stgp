@@ -173,3 +173,36 @@ def test_modelling_entry_points_use_the_capped_store():
             ):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
     assert not offenders, offenders
+
+
+def test_pilot_test_stage_refuses_hand_built_or_empty_manifests(tmp_path):
+    store = _capped(tmp_path, "clean", _frame())
+    pilots = pilot_periods(SETTINGS)
+    forged = FreezeManifest(Path("nowhere.json"), "not-a-commit", {"PL1/TST/run1": "abc"}, {})
+    with pytest.raises(SealedPeriodError, match="manifest"):
+        Sandbox.open_pilot_test(store, PL1, ["TST"], LMAX, pilot_periods=pilots, manifest=forged)
+    loaded = _committed_manifest(tmp_path)
+    empty = replace(loaded, rules={})
+    with pytest.raises(SealedPeriodError, match="manifest"):
+        Sandbox.open_pilot_test(store, PL1, ["TST"], LMAX, pilot_periods=pilots, manifest=empty)
+
+
+def test_freeze_context_must_be_unchanged_at_the_test_read(tmp_path):
+    manifest = _committed_manifest(tmp_path)
+    manifest.check_context({"settings": "x"})
+    with pytest.raises(FreezeError, match="settings"):
+        manifest.check_context({"settings": "y"})
+    with pytest.raises(FreezeError, match="operator_lock"):
+        manifest.check_context({"settings": "x", "operator_lock": "new"})
+
+
+@pytest.mark.parametrize("period_id", ["P01", "P02"])
+def test_wp2_settings_refuse_primary_periods_that_overlap_the_pilot_test_years(tmp_path, period_id):
+    from lpstgp.data.store import modelling_store
+
+    _capped(tmp_path, "clean", _frame())
+    store = modelling_store(tmp_path / "clean", SETTINGS)
+    assert store.allowed_periods == frozenset({"DEV", "PL1", "PL2"})
+    with pytest.raises(SealedPeriodError, match="allowed_periods"):
+        Sandbox.open(store, PERIODS[period_id], Stage.FIT, ["TST"], LMAX)
+    assert len(Sandbox.open(store, PL1, Stage.VALIDATE, ["TST"], LMAX)["TST"].dates)

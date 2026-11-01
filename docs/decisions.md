@@ -616,3 +616,47 @@ Unchanged:
 - A test checks that slices give the same hall of fame as the process pool.
 
 *Why:* CERES gives up to 60 concurrent runs, and the laptop stays free. The checks keep results independent of where a task ran.
+
+### D-047 Fixes and conventions from the pre-calibration code review — Decided (engineer, under D-042; 1 Nov 2026)
+Four independent Claude reviewers (leakage, backtest and fitness, GP engine, campaigns and statistics) read the code at `aabe6fa`. None found a critical defect or look-ahead in the modelling computation. Their findings were checked against the code, and the following changes were made before any calibration run.
+
+**Pilot test read (protocol §7–§8):**
+- `Sandbox.open_pilot_test` accepts only a manifest loaded by `FreezeManifest.load_committed` that freezes at least one rule. Before, a hand-built manifest opened the test stage.
+- The manifest's context now holds the settings digest, both lock digests, the data digest of the 22 pilot instruments, each go/no-go plan's configuration digests, and the code revision. `pilot-test` refuses to run if any of these, or any file under `src/`, `scripts/` or `config/`, has changed since the freeze.
+- `pilot-test` evaluates exactly the manifest's tasks, checks each record's period, lag and cost multiplier, and runs once: it refuses if `reports/wp2/pilot_go_no_go.json` exists. The test sandbox's access log is saved with the result.
+
+**Periods in WP2.** P01 and P02 windows overlap the pilot test years, so `[leakage] allowed_periods = ["DEV", "PL1", "PL2"]` makes the modelling store refuse every other period until WP4.
+
+**PL1's test year is PL2's validation year.** This follows from the rolling design (D-034) and is not a leak into PL1's frozen rules, which never see it. But the go/no-go campaign's PL2 records contain validation scores on 2006-07..2007-06. Rule: nothing from the go/no-go records is inspected between `gonogo` and `freeze`, and `freeze` runs straight after `gonogo` completes. The PL1 test-year result is reported with this caveat. D-034's statement that the pilot test years are readable only through `open_pilot_test` holds for PL2's test year only.
+
+**Records and plans:**
+- A record is complete only for its plan's data digest, as well as its settings and configuration digests.
+- The configuration digest of arms 2a–2c includes the operator lock, since they use core operators.
+- Every step reads records from the plan's own task list and refuses missing tasks, never a folder listing.
+- Records from more than one code revision raise a warning.
+- An identical plan is reused untouched. A different plan cannot replace one that has records.
+- Record writes use a temporary file per writer.
+- `run_many` finishes the other runs when one fails, then reports the failures.
+
+**Calibration rules (§6):**
+- A candidate's rounded-up generations are capped at the generations it actually ran: population 1000 never gets 51,000 evaluations.
+- §6.3's "never trade" counts rules with no entry at all; a rule below the minimum activity does trade. It is measured on the runs of steps 1 and 2, as the protocol says.
+- Raising λ_turnover can only lower turnover, so only the turnover condition (median above 50) raises it. A never-trade share above 25% is reported and needs a recorded decision before the go/no-go.
+
+**Fitness and evaluation:**
+- **Hall of fame:** members are deduplicated by their held-position vector on the fit window, as D-029 intended. Raw signals differ where they have no effect: exit values while flat, entry values while long.
+- **Defaults:** `FitnessConfig` defaults now equal the protocol (execution lag 2, minimum 2 entries a year), so an ad-hoc script can no longer silently use WP1's values. Campaigns always took them from `config/settings.toml`.
+- **Missing values:** a missing `cost_bps` raises instead of meaning zero cost. A non-finite daily return in a portfolio raises instead of becoming a flat day. A score with no usable segment counts as no trade.
+- **Annualisation:** portfolio Sharpe ratios and the paired bootstrap use the portfolio's own rows per year, not 252. An equal-weight portfolio lives on the union calendar: about 260 rows a year for weekday markets, about 365 once a 7-day market is in. The go/no-go margin (−0.2 in Sharpe) is unchanged.
+- **Unique budget:** if the budget check picks a unique-evaluation budget, the go/no-go runs stop at the cap or at 10× the calibrated generations, whichever comes first. Each record says whether the cap was reached and by how much it was overshot.
+
+**Accepted conventions (no change):**
+- **No exit cost at the end of a window.** No forced exit is charged when a window ends, for every arm and buy-and-hold alike. A held position therefore pays one one-way cost (a few basis points) less than a round trip.
+- **Lag 2 across an invalid bar.** It can earn from the signal bar's own close. Tier A has one invalid bar (WTI, 20 Apr 2020), outside the pilot.
+- **Unique-budget overshoot.** It is at most population − 1 evaluations (≤ 1% at 500 × 50k), and is now recorded per run.
+- **Non-finite strategy outputs.** Some LLM strategies return ±inf or all-NaN for some 2c parameter values (s11, s16, s17, s19). The glue treats them as "unknown", so the fitness stays finite; this only costs those arms wasted evaluations.
+- **Trial counting for the Deflated Sharpe Ratio (WP4).** It counts distinct configuration digests: `bud-2c` and `arm2c` are one trial when their digests match. Arm 1 counts as one trial; its selection among 28 strategies is disclosed.
+- **Digests.** They cover the whole settings file and the cache size, so settings must not change during a campaign.
+- **Extra leakage tests.** Prefix invariance FIT→VALIDATE→TEST for all five GP libraries, and a poisoned-future canary through a whole GP run and arm-1 selection (`tests/leakage/test_library_prefix.py`).
+
+**Departures from the plan:** none. The protocol text is unchanged except where noted (§6.3's remedy, the annualisation and the unique-budget ceiling), all of which make it operational.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+import warnings
 from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -15,6 +16,7 @@ from lpstgp.campaign.plan import PLAN_SCHEMA, Config, data_digest, settings_dige
 from lpstgp.config import Paths
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
+from lpstgp.freeze import digest
 from lpstgp.runner import RunTask, execute, record_path, run_many, write_atomic
 from lpstgp.sandbox import Sandbox
 from lpstgp.splits import Stage, all_periods
@@ -58,6 +60,7 @@ def _meta(plan: Mapping, task: Mapping) -> tuple[tuple[str, str], ...]:
         ("run", str(task["run"])),
         ("config_digest", plan["configs"][task["config"]]["digest"]),
         ("settings_digest", plan["settings_digest"]),
+        ("data_digest", digest(plan["data_digest"])),  # records from other data never count
     )
 
 
@@ -178,3 +181,41 @@ def progress(plan_path: Path, settings: Mapping[str, Any]) -> dict[str, int]:
         for run in (run_task(plan, t, settings) for t in plan["tasks"])
     )
     return {"tasks": len(plan["tasks"]), "complete": done}
+
+
+class IncompleteCampaignError(RuntimeError):
+    """Some of a plan's tasks have no complete, current record."""
+
+
+def plan_records(plan_path: Path, paths: Paths, settings: Mapping[str, Any]) -> list[dict]:
+    """The record of every task of a plan, in plan order, after checking the plan's digests.
+
+    Only the plan's own tasks are read (a stray file in the folder is ignored), and each must be
+    complete for this plan's settings, configuration and data digests.
+    """
+    plan = load_plan(plan_path)
+    problems = verify(plan, paths, settings)
+    if problems:
+        raise PlanMismatchError("; ".join(problems))
+    out_root = Path(plan_path).parent
+    records, missing = [], []
+    for task in plan["tasks"]:
+        run = run_task(plan, task, settings)
+        path = record_path(out_root, run)
+        if is_complete(path, run):
+            records.append(json.loads(path.read_text(encoding="utf-8")))
+        else:
+            missing.append(task["id"])
+    versions = sorted({r.get("code_version", "") for r in records})
+    if len(versions) > 1:  # allowed (e.g. a docs-only commit mid-campaign) but never silent
+        warnings.warn(
+            f"{plan['campaign']}: records come from {len(versions)} code revisions "
+            f"({', '.join(v[:12] for v in versions)}); check that no result-relevant code changed",
+            stacklevel=2,
+        )
+    if missing:
+        raise IncompleteCampaignError(
+            f"{plan['campaign']}: {len(missing)} of {len(plan['tasks'])} tasks have no complete "
+            f"record (first: {missing[0]})"
+        )
+    return records

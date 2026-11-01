@@ -12,7 +12,7 @@ import hashlib
 import json
 import subprocess
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -50,12 +50,21 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
 
 
+_LOADED = object()  # marks a manifest that came from ``load_committed``
+
+
 @dataclass(frozen=True)
 class FreezeManifest:
     path: Path
     commit: str
     rules: Mapping[str, str]
     context: Mapping[str, Any]
+    _origin: object = field(default=None, repr=False, compare=False)
+
+    @property
+    def verified(self) -> bool:
+        """Loaded from a committed, intact file (not built by hand) and freezing some rules."""
+        return self._origin is _LOADED and bool(self.commit) and bool(self.rules)
 
     @classmethod
     def load_committed(cls, path: Path, repo: Path = REPO_ROOT) -> FreezeManifest:
@@ -71,7 +80,17 @@ class FreezeManifest:
             "rules_digest"
         ):
             raise FreezeError(f"{rel} is not a valid freeze manifest")
-        return cls(path, commit, manifest["rules"], manifest["context"])
+        return cls(path, commit, manifest["rules"], manifest["context"], _LOADED)
+
+    def check_context(self, current: Mapping[str, Any]) -> None:
+        """Refuse a test read if anything frozen with the rules has changed since the freeze."""
+        changed = sorted(
+            k for k in set(self.context) | set(current) if self.context.get(k) != current.get(k)
+        )
+        if changed:
+            raise FreezeError(
+                f"changed since the freeze manifest was committed: {', '.join(changed)}"
+            )
 
     def require(self, task_id: str, rule_hash: str) -> None:
         """Refuse to evaluate a rule that the manifest did not freeze."""

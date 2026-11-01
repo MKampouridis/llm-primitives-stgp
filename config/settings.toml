@@ -26,6 +26,7 @@ end = 2005-07-01
 
 [leakage]
 max_horizon = 2008-07-01      # WP2: no modelling read at or after this date (D-034); lifted in WP4 by decision
+allowed_periods = ["DEV", "PL1", "PL2"]  # WP2: primary periods overlap the pilot test years (D-047)
 
 [quality]
 stale_run_min = 5             # this many identical consecutive closes count as one stale run

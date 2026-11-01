@@ -17,10 +17,18 @@ from lpstgp.freeze import digest
 from lpstgp.gp.fitness import FitnessConfig
 from lpstgp.gp.run import GPConfig
 from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
-from lpstgp.runner import configs_from_settings
+from lpstgp.runner import configs_from_settings, write_atomic
 from lpstgp.strategies.registry import LOCK_FILE as STRATEGY_LOCK
 
 PLAN_SCHEMA = "lpstgp.campaign/1"
+# What makes two plans the same campaign (creation time and code revision do not).
+PLAN_IDENTITY = ("schema", "campaign", "settings_digest", "data_digest", "configs", "tasks")
+
+
+class PlanExistsError(RuntimeError):
+    """A different plan already exists, with run records, under the same campaign name."""
+
+
 REGISTER = REPO_ROOT / "reports" / "configuration_register.csv"
 
 
@@ -48,15 +56,16 @@ class Config:
         gp_cfg, fit_cfg = self.resolved(settings)
         uses_strategies = self.kind == "select" or self.library.startswith("s2")
         lock = STRATEGY_LOCK if uses_strategies else OPERATOR_LOCK
-        return digest(
-            {
-                "library": self.library,
-                "kind": self.kind,
-                "gp": asdict(gp_cfg) if self.kind == "gp" else {},
-                "fitness": asdict(fit_cfg),
-                "lock": _file_digest(lock),
-            }
-        )
+        payload = {
+            "library": self.library,
+            "kind": self.kind,
+            "gp": asdict(gp_cfg) if self.kind == "gp" else {},
+            "fitness": asdict(fit_cfg),
+            "lock": _file_digest(lock),
+        }
+        if uses_strategies:  # arms 2a-2c also use core operators (logic, glue, data)
+            payload["operator_lock"] = _file_digest(OPERATOR_LOCK)
+        return digest(payload)
 
 
 def _file_digest(path: Path) -> str:
@@ -108,9 +117,19 @@ def write_plan(
         "configs": {c.name: {**asdict(c), "digest": c.digest(settings)} for c in configs},
         "tasks": tasks,
     }
+    plan = json.loads(json.dumps(plan, default=str))  # as stored, so plans compare exactly
     out = paths.results_dir / "campaigns" / name / "tasks.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(plan, indent=1, default=str) + "\n", encoding="utf-8")
+    old = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
+    changed = [k for k in PLAN_IDENTITY if old is not None and old.get(k) != plan[k]]
+    if old is not None and not changed:
+        plan = old  # the same plan: left untouched (cluster jobs may be reading it)
+    else:
+        if changed and any(out.parent.glob("tier*/*/*.json")):
+            raise PlanExistsError(
+                f"{out} has run records and differs from the plan now requested in "
+                f"{', '.join(changed)}; move the campaign folder aside or use a new name"
+            )
+        write_atomic(out, json.dumps(plan, indent=1) + "\n")
     if register is not None:
         register_configs(register, name, plan["configs"])
     return out

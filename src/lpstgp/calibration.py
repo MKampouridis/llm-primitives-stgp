@@ -34,14 +34,16 @@ def selected_validation(record: Mapping[str, Any]) -> float:
 def choose_candidate(
     records: Iterable[Mapping[str, Any]], tolerance: float = 0.05
 ) -> dict[str, Any]:
-    groups: dict[tuple[int, int], dict[str, list]] = defaultdict(lambda: {"val": [], "conv": []})
+    groups: dict[tuple[int, int], dict[str, Any]] = defaultdict(lambda: {"val": [], "conv": []})
     for record in records:
         key = (record["config"]["population"], record["config"]["tournament"])
         groups[key]["val"].append(selected_validation(record))
         groups[key]["conv"].append(convergence_generation(record["generations"]))
+        groups[key]["ran"] = record["config"]["generations"]
     table = []
     for (population, tournament), g in sorted(groups.items()):
-        generations = max(10, math.ceil(statistics.median(g["conv"]) / 10) * 10)
+        # Rounded up to 10, but never beyond the generations the candidate actually ran.
+        generations = min(max(10, math.ceil(statistics.median(g["conv"]) / 10) * 10), g["ran"])
         table.append(
             {
                 "population": population,
@@ -78,17 +80,25 @@ def budget_unit(records: Iterable[Mapping[str, Any]], ratio: float = 2.0) -> dic
 def lambda_check(
     records: Iterable[Mapping[str, Any]], max_no_trade: float = 0.25, max_turnover: float = 50.0
 ) -> dict[str, Any]:
-    no_trade, turnovers = [], []
+    """Protocol §6.3 on the final rules' validation scores (D-047).
+
+    "Never trade" means no entry at all (a rule below the minimum activity does trade). Raising
+    lambda_turnover can only lower turnover, so only the turnover condition triggers it; a
+    never-trade share above the limit is reported for a recorded decision instead.
+    """
+    never, turnovers = [], []
     for record in records:
         val = record["hall_of_fame"][record["selected"]]["validation"]
         for comps in val["instruments"].values():
-            no_trade.append(bool(comps.get("no_trade")))
-            if not comps.get("no_trade"):
+            never.append(comps.get("trades", 1) == 0)
+            if "median_turnover" in comps:
                 turnovers.append(comps["median_turnover"])
-    share = sum(no_trade) / max(len(no_trade), 1)
+    share = sum(never) / max(len(never), 1)
     median_turnover = statistics.median(turnovers) if turnovers else 0.0
     return {
+        "rules": len(never),
         "no_trade_share": share,
+        "no_trade_exceeded": share > max_no_trade,
         "median_turnover": median_turnover,
-        "raise_lambda_turnover": share > max_no_trade or median_turnover > max_turnover,
+        "raise_lambda_turnover": median_turnover > max_turnover,
     }

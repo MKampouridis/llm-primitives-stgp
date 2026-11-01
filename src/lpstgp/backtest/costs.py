@@ -42,7 +42,9 @@ class CostModel:
 
 def from_meta(meta: Mapping[str, Any], multiplier: float = 1.0) -> CostModel:
     """Symmetric cost from an instrument's metadata (``cost_bps``; Tier B may add buy/sell)."""
-    base = float(meta.get("cost_bps", 0.0))
+    if "cost_bps" not in meta:  # never backtest an instrument cost-free by omission
+        raise KeyError("instrument metadata has no cost_bps")
+    base = float(meta["cost_bps"])
     return CostModel(
         float(meta.get("buy_bps", base)), float(meta.get("sell_bps", base)), multiplier
     )

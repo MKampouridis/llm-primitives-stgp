@@ -21,6 +21,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 import numpy as np
 
@@ -37,11 +38,11 @@ class FitnessConfig:
     min_exposure_bars: int = 10
     no_trade_value: float = -1.0
     segment_months: int = 6
-    execution_lag: int = 1
+    execution_lag: int = 2  # protocol §5 (lag 1 is the robustness check)
     cost_multiplier: float = 1.0
     # Minimum activity (D-041): fewer entries than ceil(rate x years of the scored window) scores
     # as no trade, so a fit cannot rest on one or two lucky trades. 0 disables the rule.
-    min_entries_per_year: float = 0.0
+    min_entries_per_year: float = 2.0  # protocol §5 (D-041)
 
 
 def add_months(day: date, months: int) -> date:
@@ -108,8 +109,14 @@ def signal_hash(entry: np.ndarray, exit_: np.ndarray, lo: int, hi: int) -> str:
 
 
 def market_part(
-    entry: np.ndarray, exit_: np.ndarray, data: ScoredInstrument, cfg: FitnessConfig
+    entry: np.ndarray,
+    exit_: np.ndarray,
+    data: ScoredInstrument,
+    cfg: FitnessConfig,
+    positions: Any = None,
 ) -> tuple[float, dict]:
+    """Market part of the fitness; ``positions``, if given, is fed the held-position vector of the
+    scored window, so that rules which trade identically hash alike (hall of fame, D-029)."""
     costs = data.costs.scaled(cfg.cost_multiplier * data.costs.multiplier)
     res = engine.run(
         entry, exit_, data.log_return, costs, active_from=data.active_from, lag=cfg.execution_lag
@@ -117,6 +124,8 @@ def market_part(
     held = res.held
     changes = np.abs(np.diff(held, prepend=0.0))
     window = slice(data.active_from, data.stop)
+    if positions is not None:
+        positions.update(np.ascontiguousarray(held[window], dtype=np.float64).tobytes())
     entries = int((np.diff(held, prepend=0.0)[window] > 0).sum())
     if entries == 0 and held[window].sum() == 0:
         return cfg.no_trade_value, {"trades": 0, "no_trade": True}
@@ -125,7 +134,8 @@ def market_part(
     if entries < required:
         return cfg.no_trade_value, {
             "trades": entries,
-            "no_trade": True,
+            "no_trade": True,  # scored as a rule that does not trade
+            "below_min_activity": True,  # but it does trade (calibration counts it apart)
             "required_trades": required,
         }
     sharpes, drawdowns, turnovers = [], [], []
@@ -139,6 +149,8 @@ def market_part(
         )
         drawdowns.append(float(max_drawdown(net)) / data.sigma if data.sigma > 0 else 0.0)
         turnovers.append(float(changes[lo:hi].sum() * data.periods_per_year / (hi - lo)))
+    if not sharpes:  # every segment shorter than 2 bars: nothing to score
+        return cfg.no_trade_value, {"trades": entries, "no_trade": True, "no_segments": True}
     median_sharpe = float(np.median(sharpes))
     median_dd = float(np.median(drawdowns))
     median_to = float(np.median(turnovers))
@@ -170,10 +182,9 @@ def score(
     for name in sorted(signals):
         entry, exit_ = signals[name]
         d = data[name]
-        value, c = market_part(entry, exit_, d, cfg)
+        value, c = market_part(entry, exit_, d, cfg, positions=digest)
         parts.append(value)
         comps[name] = c
-        digest.update(signal_hash(entry, exit_, d.active_from, d.stop).encode())
     fitness = float(np.mean(parts)) - cfg.lambda_size * size_w
     return Score(fitness, {"size": size_w, "instruments": comps}, digest.hexdigest())
 

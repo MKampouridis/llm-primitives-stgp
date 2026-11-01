@@ -217,7 +217,9 @@ def run_gp(
             s = scores[rule.key()]
             size_w = lib.weighted_size(rule.entry) + lib.weighted_size(rule.exit)
             entry = (rule.fitness, size_w, rule.key(), rule)
-            current = hof.get(s.signal_hash)  # rules with identical fit signals are one entry
+            current = hof.get(
+                s.signal_hash
+            )  # rules that trade identically on the fit are one entry
             if current is None or rank_key(entry) < rank_key(current):
                 hof[s.signal_hash] = entry
         ranked = sorted(hof.values(), key=rank_key)[: cfg.hof_size]
@@ -333,6 +335,9 @@ def run_gp(
             "requested_evaluations": requested,
             "unique_evaluations": unique,
             "generations_run": generations[-1]["gen"],
+            # Under a unique budget: did the cap end the run, or the generation ceiling?
+            "cap_reached": bool(unique_cap) and unique >= unique_cap,
+            "overshoot": max(unique - unique_cap, 0) if unique_cap else 0,
         },
         "timings": {
             "total_s": total,
