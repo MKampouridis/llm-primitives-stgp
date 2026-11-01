@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from lpstgp.campaign.execute import load_plan
-
-
-class MixedDigestsError(RuntimeError):
-    """Records were produced under different settings or configurations than the plan."""
+from lpstgp.campaign.execute import load_plan, plan_records
+from lpstgp.config import Paths, load_paths, load_settings
 
 
 def _gp_row(record: dict) -> dict:
@@ -34,20 +30,21 @@ def _gp_row(record: dict) -> dict:
     }
 
 
-def collect(plan_path: Path) -> pd.DataFrame:
+def collect(plan_path: Path, paths: Paths | None = None, settings=None) -> pd.DataFrame:
+    """One row per task (arm 1: per instrument), from the plan's own task list only.
+
+    Records go through ``plan_records``: the plan's settings, configuration and data digests must
+    match the current ones, and every task must have one complete record; stray, stale or
+    duplicate files are never read.
+    """
     plan = load_plan(plan_path)
     root = Path(plan_path).parent
+    paths = paths or load_paths()
+    settings = settings or load_settings()
     rows = []
-    for path in sorted(root.glob("tier*/records/*.json")):
-        record = json.loads(path.read_text(encoding="utf-8"))
-        meta = record.get("campaign", {})
-        if meta.get("campaign") != plan["campaign"]:
-            continue
-        config = plan["configs"].get(meta.get("config"), {})
-        if meta.get("settings_digest") != plan["settings_digest"] or meta.get(
-            "config_digest"
-        ) != config.get("digest"):
-            raise MixedDigestsError(f"{path.name} was produced under other settings/configuration")
+    for record in plan_records(plan_path, paths, settings):
+        meta = record["campaign"]
+        config = plan["configs"][meta["config"]]
         base = {
             "task_id": meta["task_id"],
             "config": meta["config"],

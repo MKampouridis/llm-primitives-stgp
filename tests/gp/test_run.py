@@ -110,3 +110,23 @@ def test_configs_from_settings():
     assert gp_cfg.population == 32
     assert gp_cfg.limits.lookback_max == 504
     assert fit_cfg.segment_months == 6
+
+
+@pytest.mark.parametrize("cap", [10, 17, 40])
+def test_unique_budget_is_matched_exactly_across_arms(
+    seed_lib, conventional_lib, fit_box, val_box, cap
+):
+    """Under a unique budget every arm scores exactly the cap: no arm gets extra evaluations."""
+    from dataclasses import replace
+
+    cfg = replace(TINY, generations=50, budget_unit="unique", max_unique_evaluations=cap)
+    for lib in (seed_lib, conventional_lib):
+        fp = Problem(
+            lib, {"AAA": fit_box["AAA"]}, PERIOD.scored_window(Stage.FIT), COSTS,
+            FitnessConfig(), cfg.cache_bytes,
+        )  # fmt: skip
+        out = run_gp(lib, fp, None, cfg, 3)
+        assert out["budget"]["unique_evaluations"] == cap
+        assert out["budget"]["cap_reached"]
+        assert out["budget"]["overshoot"] == 0
+        assert all(m["fit"]["fitness"] > -1e9 for m in out["hall_of_fame"])  # only scored rules

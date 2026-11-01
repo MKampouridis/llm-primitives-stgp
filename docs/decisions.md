@@ -676,3 +676,39 @@ Four independent Claude reviewers (leakage, backtest and fitness, GP engine, cam
 - Each record states its platform (`environment`).
 - Reproducing a run exactly means using the same platform; across platforms, results agree up to such rounding.
 - This check is repeated whenever the CERES environment is rebuilt.
+
+### D-049 Fixes from the external code reviews (ChatGPT, Antigravity) — Decided (engineer, under D-042; 1 Nov 2026)
+The PI had the code reviewed by two other LLMs with `docs/code_review_prompt.md`. ChatGPT reviewed `91c2925` plus the half-applied D-047 fixes; Antigravity reviewed `7b943a4`. Each finding was checked against the code. Findings that D-047 had already fixed are not repeated.
+
+**Fixed:**
+1. **Read once, even after a crash** (ChatGPT 1):
+   - `pilot-test` now validates every record, rule hash, period, lag and cost before opening any test data.
+   - It then claims the read with a file created atomically (`reports/wp2/pilot_test_claim.json`, `freeze.claim_test_read`). The code never removes the claim.
+   - After a crash, or with two processes, a second read is refused until a decision is recorded and the file is removed by hand.
+2. **Results from obsolete code** (ChatGPT 2):
+   - A plan records a digest of the package source (`src/lpstgp/**/*.py`). `verify` refuses to run a plan, and no record counts as complete, if the source has changed since the plan was written.
+   - An empty hall of fame, or an out-of-range selected index, is not complete.
+   - Any source change, however small, therefore means a new campaign. That is the price of never mixing code versions within one.
+3. **§6.3 enforced** (ChatGPT 3, Antigravity 2):
+   - If the λ check calls for it, `budget-check` reruns step 2 at λ_turnover ×2, then ×4, and keeps the first multiplier at which both conditions hold.
+   - The go/no-go refuses to plan unless a multiplier was chosen, and it applies the multiplier to every arm, including arm 1's selection. A never-trade share above 25%, or ×4 not being enough, leaves it unresolved until a decision is recorded.
+4. **Turnover over every final rule** (Antigravity 1, ChatGPT 4):
+   - The §6.3 median turnover now includes rules that never trade (turnover 0) and rules below the minimum activity (their real turnover).
+   - Below-minimum rules still score −1, but their record keeps their real Sharpe, turnover, drawdown and exposure (Antigravity 4), so `validation_sharpe` and §6.4 no longer see a fictitious 0.
+5. **The unique budget is matched exactly** (ChatGPT 5):
+   - The cap is enforced at every new evaluation. Once it is reached, unseen rules are not scored and can never be selected (fitness −∞).
+   - Every arm scores exactly the cap; a test confirms this for two libraries.
+   - `freeze` refuses if any unique-budget run stopped at the generation ceiling before its budget.
+6. **`collect` reads the plan's own tasks** through `plan_records` (ChatGPT 6, Antigravity 5). Stray, stale or duplicate files are never read, and the old `MixedDigestsError` path is gone.
+7. **Infinite strategy outputs** (Antigravity 3):
+   - The core glue operators treat only NaN as missing, so ±inf from a strategy signal compared as a real value. This corrects D-047, which wrongly said the glue already treated ±inf as unknown.
+   - Arm 2b and 2c signals now map ±inf to NaN in the adapter. The locked core operators are unchanged; none of them emits ±inf.
+8. **Subtree mutation fits the depth and lookback left at its node** (Antigravity 8). Before, it ignored the ancestors' lookback, and a few percent of deep mutations were wasted.
+9. **Leakage tests** (Antigravity 9):
+   - Prefix invariance FIT→VALIDATE→TEST now covers every operator and data terminal that can appear in a rule, in all five libraries.
+   - The poisoned-future canary now runs a GP run for every library, plus arm-1 selection.
+   - In the technical (GP-TA) library, 7 data terminals and operators can never appear in a rule, because no technical operator consumes their types. They are inert, and are listed as such for the library-size description.
+
+**Not changed:**
+- **Strategy admission gates test five parameter points, not the full grid** (Antigravity 6). Generation is finished, and the 28 strategies are frozen. A full-grid sweep by both the GP reviewer and Antigravity found no look-ahead and no lookback violations, only the ±inf and all-NaN outputs handled in item 7. The gates stay as they were when the strategies were admitted.
+- **A twice-failed slot is not re-run in a fresh session** (Antigravity 7, protocol §4). This is moot: all 28 slots were accepted (none needed a repair). It will be fixed before any new generation campaign.

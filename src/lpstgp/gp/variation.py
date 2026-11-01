@@ -125,9 +125,11 @@ def _subtree(tree, lib, gen, rng, limits) -> bool:
     i = candidates[rng.randrange(len(candidates))]
     sl = tree.searchSubtree(i)
     depth_here = _depth_of(tree, i)
-    room = max(1, min(4, limits.max_depth - depth_here))  # new subtrees are at most 4 deep
+    # New subtrees are at most 4 deep, and fit the depth and lookback left at node i.
+    room = max(0, min(4, limits.max_depth - depth_here))
+    budget = limits.lookback_max - lib.ancestor_lookback(tree, i)
     try:
-        new = gen.tree(tree[i].ret, room, "grow")
+        new = gen.tree(tree[i].ret, room, "grow", budget)
     except GenerationError:
         return False
     tree[sl] = new[:]

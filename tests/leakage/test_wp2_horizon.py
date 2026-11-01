@@ -206,3 +206,14 @@ def test_wp2_settings_refuse_primary_periods_that_overlap_the_pilot_test_years(t
     with pytest.raises(SealedPeriodError, match="allowed_periods"):
         Sandbox.open(store, PERIODS[period_id], Stage.FIT, ["TST"], LMAX)
     assert len(Sandbox.open(store, PL1, Stage.VALIDATE, ["TST"], LMAX)["TST"].dates)
+
+
+def test_the_test_read_can_be_claimed_only_once(tmp_path):
+    from lpstgp.freeze import claim_test_read
+
+    manifest = _committed_manifest(tmp_path)
+    claim = tmp_path / "claim.json"
+    claim_test_read(claim, manifest)
+    assert json.loads(claim.read_text())["manifest_commit"] == manifest.commit
+    with pytest.raises(FreezeError, match="already been claimed"):
+        claim_test_read(claim, manifest)  # e.g. a rerun after a crash, or a second process

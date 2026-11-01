@@ -78,6 +78,40 @@ class PrimitiveLibrary:
         params = dict(zip((p.name for p in spec.params), values, strict=True))
         return spec.lookback_for(params) - 1 + child, j
 
+    def ancestor_lookback(self, tree: Sequence, target: int) -> int:
+        """Bars of history the ancestors of node ``target`` add on its path to the root.
+
+        A subtree placed at ``target`` may use at most ``lookback_max`` minus this many bars.
+        """
+
+        def walk(i: int, used: int) -> tuple[int, int | None]:
+            node = tree[i]
+            if i == target:
+                return self._lookback(tree, i)[1], used
+            if node.arity == 0:
+                return i + 1, None
+            spec = self.operators[node.name]
+            j, starts, values = i + 1, [], []
+            for k in range(node.arity):
+                if k < len(spec.inputs):
+                    starts.append(j)
+                    _, j = self._lookback(tree, j)
+                else:
+                    values.append(self.params[tree[j].name][1])
+                    j += 1
+            params = dict(zip((p.name for p in spec.params), values, strict=True))
+            own = spec.lookback_for(params) - 1
+            for start in starts:
+                _, found = walk(start, used + own)
+                if found is not None:
+                    return j, found
+            return j, None
+
+        found = walk(0, 0)[1]
+        if found is None:
+            raise IndexError(f"node {target} is a parameter or outside the tree")
+        return found
+
     def to_names(self, tree: Sequence) -> list[str]:
         return [n.name for n in tree]
 

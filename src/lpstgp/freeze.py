@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -96,3 +97,28 @@ class FreezeManifest:
         """Refuse to evaluate a rule that the manifest did not freeze."""
         if self.rules.get(task_id) != rule_hash:
             raise FreezeError(f"{task_id}: rule {rule_hash[:12]} is not in the freeze manifest")
+
+
+def claim_test_read(path: Path, manifest: FreezeManifest) -> None:
+    """Claim the one test read before any test bar is opened (protocol §8; D-049).
+
+    The claim file is created atomically, so two invocations cannot both pass, and it is never
+    removed by code: after a crash, a second read needs a recorded decision, and the file must
+    then be removed by hand.
+    """
+    try:
+        with Path(path).open("x", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "manifest_commit": manifest.commit,
+                    "claimed_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "host": platform.node(),
+                },
+                handle,
+                indent=1,
+            )
+    except FileExistsError:
+        raise FreezeError(
+            f"{path} exists: the test read has already been claimed; a second read needs a "
+            "recorded decision in docs/decisions.md"
+        ) from None

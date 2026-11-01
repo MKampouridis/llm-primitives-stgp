@@ -48,11 +48,39 @@ def boxes(tier_dir):
     }
 
 
+def _reachable(lib, gen) -> set[str]:
+    """Operators and data terminals that can appear in a rule (a Bool-rooted tree)."""
+    types, frontier = {Bool}, [Bool]
+    while frontier:
+        for choice in gen.choices.get(frontier.pop(), []):
+            for t in choice.spec.inputs:
+                if t not in types:
+                    types.add(t)
+                    frontier.append(t)
+    ops = {c.node.name for t in types for c in gen.choices.get(t, [])}
+    return ops | {n.name for t in types for n in gen.terminals.get(t, [])}
+
+
+def _covering_trees(lib, seed: int = 7, max_draws: int = 2000) -> list:
+    """Random trees, kept while they add a primitive, until every reachable one is covered."""
+    gen = Generator(lib, LMAX, random.Random(seed))
+    wanted, seen, trees = _reachable(lib, gen), set(), []
+    for _ in range(max_draws):
+        tree = gen.ramped(Bool, 2, 6)
+        new = {n.name for n in tree} & wanted - seen
+        if new:
+            trees.append(tree)
+            seen |= new
+        if seen == wanted:
+            return trees
+    raise AssertionError(f"not covered: {sorted(wanted - seen)}")
+
+
 @pytest.mark.parametrize("library", LIBRARIES)
 def test_every_library_is_prefix_invariant_from_fit_to_validate_to_test(boxes, library):
+    """Every reachable operator and terminal of the library appears in at least one tree."""
     lib = build(resolve(library))
-    gen = Generator(lib, LMAX, random.Random(7))
-    trees = [gen.ramped(Bool, 2, 5) for _ in range(12)]
+    trees = _covering_trees(lib)
     for name in INSTRUMENTS:
         signals = {}
         for stage, box in boxes.items():
@@ -82,10 +110,10 @@ def _poisoned_copy(tier_dir, tmp_path):
     return out
 
 
-def _gp_record(store):
+def _gp_record(store, library="seed"):
     fit_box = Sandbox.open(store, PERIOD, Stage.FIT, INSTRUMENTS, LMAX)
     val_box = Sandbox.open(store, PERIOD, Stage.VALIDATE, INSTRUMENTS, LMAX)
-    lib = build(resolve("seed"))
+    lib = build(resolve(library))
     costs = {n: from_meta(fit_box[n].meta) for n in INSTRUMENTS}
     cfg = FitnessConfig()
     gp = GPConfig(population=12, generations=2, elitism=1, hof_size=3, cache_bytes=2**24)
@@ -98,13 +126,14 @@ def _gp_record(store):
     return summary["hall_of_fame"], summary["selected"], chosen
 
 
-def test_poisoned_future_changes_neither_a_gp_run_nor_arm_1(tier_dir, tmp_path):
+@pytest.mark.parametrize("library", LIBRARIES)
+def test_poisoned_future_changes_neither_a_gp_run_nor_arm_1(tier_dir, tmp_path, library):
     poisoned = _poisoned_copy(tier_dir, tmp_path)
     after = [
         Sandbox._open(DataStore(d), PERIOD, Stage.TEST, INSTRUMENTS, LMAX)["AAA"].close
         for d in (tier_dir, poisoned)
     ]
     assert not np.array_equal(*after)  # the poison is real: the future does differ
-    clean = _gp_record(DataStore(tier_dir))
-    dirty = _gp_record(DataStore(poisoned))
+    clean = _gp_record(DataStore(tier_dir), library)
+    dirty = _gp_record(DataStore(poisoned), library)
     assert clean == dirty

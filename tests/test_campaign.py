@@ -56,8 +56,10 @@ def test_plan_execute_resume_collect(campaign_paths, tmp_path):
     counts = execute_plan(plan_path, campaign_paths, settings, workers=2)
     assert counts == {"skipped": 0, "selected": 0, "evolved": 4}
     assert execute_plan(plan_path, campaign_paths, settings, workers=2)["skipped"] == 4
+    first = sorted(plan_path.parent.glob("tier*/*/*.json"))[0]
+    (first.parent / "stray_copy.json").write_text(first.read_text())  # a duplicate on disk
     table = collect(plan_path)
-    assert len(table) == 4
+    assert len(table) == 4  # only the plan's tasks, each once
     assert set(table["config"]) == {"arm_a", "arm_b"}
     assert (plan_path.parent / "runs.parquet").exists()
     changed = {**settings, "fitness": {**settings["fitness"], "lambda_size": 0.02}}
@@ -123,3 +125,28 @@ def test_one_failing_run_does_not_stop_the_others(campaign_paths, tmp_path):
     with pytest.raises(RunFailuresError, match="no-such-library"):
         run_many([bad, good], 2, tmp_path / "out")
     assert (tmp_path / "out" / "tierA" / "unit" / f"{good.name}.json").exists()
+
+
+def test_code_change_or_empty_result_never_counts_as_complete(campaign_paths, monkeypatch):
+    import json
+
+    from lpstgp.campaign import execute
+    from lpstgp.runner import record_path
+
+    settings = load_settings()
+    gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
+    plan_path = write_plan(
+        "code", [Config("arm_a", "seed", gp=gp)], [(("AAA",), "PL1")], 1, campaign_paths,
+        settings, register=None,
+    )  # fmt: skip
+    plan = load_plan(plan_path)
+    assert plan["source_digest"]
+    assert not verify(plan, campaign_paths, settings)
+    monkeypatch.setattr(execute, "source_digest", lambda: "edited")
+    assert any("source code" in p for p in verify(plan, campaign_paths, settings))
+    monkeypatch.undo()
+    run = execute.run_task(plan, plan["tasks"][0], settings)
+    path = record_path(plan_path.parent, run)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"campaign": dict(run.campaign), "hall_of_fame": [], "selected": 0}))
+    assert not execute.is_complete(path, run)  # an empty result is not a finished run

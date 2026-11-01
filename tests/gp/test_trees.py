@@ -125,3 +125,28 @@ def test_crossover_is_homologous(seed_lib):
 
 def test_types_used_by_the_seed_library(seed_lib):
     assert {Series, Path, Hist, Real, Bool} <= set(seed_lib.data_types)
+
+
+def test_subtree_mutation_respects_the_lookback_left_by_ancestors(seed_lib):
+    """A replacement subtree fits the depth and lookback left at its node, so depth and lookback
+    never make a subtree mutation invalid (only the node count can)."""
+    from deap import gp
+
+    from lpstgp.gp.variation import _subtree
+
+    limits = Limits()
+    rng = random.Random(3)
+    gen = Generator(seed_lib, limits.lookback_max, rng)
+    mutated = 0
+    for _ in range(400):
+        tree = gen.ramped(Bool, 9, 12)
+        assert seed_lib.ancestor_lookback(tree, 0) == 0
+        for i, node in enumerate(tree):
+            if not seed_lib.is_param(node):
+                assert 0 <= seed_lib.ancestor_lookback(tree, i) <= seed_lib.lookback(tree)
+        child = Rule(tree, gp.PrimitiveTree(tree)).copy()
+        if _subtree(child.entry, seed_lib, gen, rng, limits):
+            mutated += 1
+            assert child.entry.height <= limits.max_depth
+            assert seed_lib.lookback(child.entry) <= limits.lookback_max
+    assert mutated > 300

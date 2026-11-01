@@ -13,8 +13,9 @@ declared lookback is over its inputs, and a return needs one more price bar.
 
 from __future__ import annotations
 
+import functools
 import inspect
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -100,9 +101,24 @@ def library_2a(strategies: Sequence[Frozen]) -> list[OperatorSpec | TerminalSpec
     return specs + _core(LOGIC)
 
 
+def _finite(out: np.ndarray) -> np.ndarray:
+    """A strategy signal's ±inf becomes NaN ("unknown"), as the core glue operators expect: they
+    treat only NaN as missing, so an infinite value would otherwise compare as a real one."""
+    out = np.asarray(out, dtype=np.float64)
+    return out if np.isfinite(out[~np.isnan(out)]).all() else np.where(np.isinf(out), np.nan, out)
+
+
+def _finite_fn(fn: Callable[..., np.ndarray]) -> Callable[..., np.ndarray]:
+    @functools.wraps(fn)  # keeps the signature: the GP binds parameters by name
+    def wrapped(*args, **kwargs):
+        return _finite(fn(*args, **kwargs))
+
+    return wrapped
+
+
 def _terminal(f: Frozen, signal: Signal) -> TerminalSpec:
     def impl(lp: np.ndarray, lr: np.ndarray, _sig: Signal = signal) -> np.ndarray:
-        return _sig({"log_price": lp, "log_return": lr, "abs_return": np.abs(lr)})
+        return _finite(_sig({"log_price": lp, "log_return": lr, "abs_return": np.abs(lr)}))
 
     definition, refs = _doc(f)
     return TerminalSpec(
@@ -142,7 +158,7 @@ def _operator(f: Frozen, signal: Signal) -> OperatorSpec:
         definition=definition,
         references=refs,
         reference_test="tests/strategies (admission gates)",
-        impl=signal.fn,
+        impl=_finite_fn(signal.fn),
         memory=Memory.FINITE,
         provenance=f.provenance,
     )

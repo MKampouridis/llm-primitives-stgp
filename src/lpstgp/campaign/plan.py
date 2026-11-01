@@ -22,7 +22,10 @@ from lpstgp.strategies.registry import LOCK_FILE as STRATEGY_LOCK
 
 PLAN_SCHEMA = "lpstgp.campaign/1"
 # What makes two plans the same campaign (creation time and code revision do not).
-PLAN_IDENTITY = ("schema", "campaign", "settings_digest", "data_digest", "configs", "tasks")
+PLAN_IDENTITY = (
+    "schema", "campaign", "settings_digest", "data_digest", "source_digest", "configs", "tasks",
+)  # fmt: skip
+SOURCE_ROOT = REPO_ROOT / "src" / "lpstgp"
 
 
 class PlanExistsError(RuntimeError):
@@ -77,6 +80,21 @@ def data_digest(paths: Paths, instruments: Sequence[str], tier: str = "A") -> di
     return {name: _file_digest(processed / f"{name}.parquet") for name in sorted(instruments)}
 
 
+def source_digest(root: Path = SOURCE_ROOT) -> str:
+    """Digest of the package's Python source (paths and contents): the code that makes results.
+
+    Any change to it, however small, makes a campaign's plan and records stale (D-049), so a
+    campaign never mixes results from different code. Byte-identical on the Mac and on CERES.
+    """
+    h = hashlib.sha256()
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        h.update(path.relative_to(root).as_posix().encode() + b"\0")
+        h.update(path.read_bytes() + b"\0")
+    return h.hexdigest()
+
+
 def settings_digest(settings: Mapping[str, Any]) -> str:
     return digest(json.loads(json.dumps(settings, default=str)))
 
@@ -114,6 +132,7 @@ def write_plan(
         "code_version": git_revision(),
         "settings_digest": settings_digest(settings),
         "data_digest": data_digest(paths, instruments),
+        "source_digest": source_digest(),
         "configs": {c.name: {**asdict(c), "digest": c.digest(settings)} for c in configs},
         "tasks": tasks,
     }

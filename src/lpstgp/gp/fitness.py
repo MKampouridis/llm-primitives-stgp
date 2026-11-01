@@ -127,16 +127,13 @@ def market_part(
     if positions is not None:
         positions.update(np.ascontiguousarray(held[window], dtype=np.float64).tobytes())
     entries = int((np.diff(held, prepend=0.0)[window] > 0).sum())
-    if entries == 0 and held[window].sum() == 0:
-        return cfg.no_trade_value, {"trades": 0, "no_trade": True}
-    years = (data.stop - data.active_from) / data.periods_per_year  # of bars with data
-    required = math.floor(cfg.min_entries_per_year * years + 0.5)  # nearest: 2 years -> 4 at 2/year
-    if entries < required:
+    if entries == 0 and held[window].sum() == 0:  # never in the market
         return cfg.no_trade_value, {
-            "trades": entries,
-            "no_trade": True,  # scored as a rule that does not trade
-            "below_min_activity": True,  # but it does trade (calibration counts it apart)
-            "required_trades": required,
+            "trades": 0,
+            "no_trade": True,
+            "median_turnover": 0.0,
+            "sharpe": 0.0,
+            "exposure": 0.0,
         }
     sharpes, drawdowns, turnovers = [], [], []
     for lo, hi in data.segments:
@@ -154,7 +151,6 @@ def market_part(
     median_sharpe = float(np.median(sharpes))
     median_dd = float(np.median(drawdowns))
     median_to = float(np.median(turnovers))
-    value = median_sharpe - cfg.lambda_drawdown * median_dd - cfg.lambda_turnover * median_to
     net = res.net[window]
     components = {
         "median_sharpe": median_sharpe,
@@ -168,6 +164,12 @@ def market_part(
         "exposure": float(held[window].mean()),
         "no_trade": False,
     }
+    years = (data.stop - data.active_from) / data.periods_per_year  # of bars with data
+    required = math.floor(cfg.min_entries_per_year * years + 0.5)  # nearest: 2 years -> 4 at 2/year
+    if entries < required:  # it trades, but too rarely: scored as no trade, measured as it is
+        components |= {"no_trade": True, "below_min_activity": True, "required_trades": required}
+        return cfg.no_trade_value, components
+    value = median_sharpe - cfg.lambda_drawdown * median_dd - cfg.lambda_turnover * median_to
     return value, components
 
 

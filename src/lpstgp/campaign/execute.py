@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from lpstgp.backtest.costs import from_meta
-from lpstgp.campaign.plan import PLAN_SCHEMA, Config, data_digest, settings_digest
+from lpstgp.campaign.plan import PLAN_SCHEMA, Config, data_digest, settings_digest, source_digest
 from lpstgp.config import Paths
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
@@ -46,6 +46,8 @@ def verify(plan: Mapping, paths: Paths, settings: Mapping[str, Any]) -> list[str
         problems.append("settings changed since the plan was written")
     if data_digest(paths, plan["data_digest"]) != plan["data_digest"]:
         problems.append("data files changed since the plan was written")
+    if source_digest() != plan.get("source_digest"):
+        problems.append("source code (src/lpstgp) changed since the plan was written")
     for name, config in plan["configs"].items():
         if _config(plan, name).digest(settings) != config["digest"]:
             problems.append(f"configuration {name} (or its library lock) changed")
@@ -61,6 +63,7 @@ def _meta(plan: Mapping, task: Mapping) -> tuple[tuple[str, str], ...]:
         ("config_digest", plan["configs"][task["config"]]["digest"]),
         ("settings_digest", plan["settings_digest"]),
         ("data_digest", digest(plan["data_digest"])),  # records from other data never count
+        ("source_digest", plan.get("source_digest", "")),  # nor from other code
     )
 
 
@@ -83,8 +86,13 @@ def is_complete(path: Path, run: RunTask) -> bool:
         record = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    return record.get("campaign") == dict(run.campaign) and (
-        "hall_of_fame" in record or "selection" in record
+    if record.get("campaign") != dict(run.campaign):
+        return False
+    if "selection" in record:  # arm 1: one selected strategy per instrument
+        return set(record["selection"]) == set(run.instruments)
+    hof = record.get("hall_of_fame")
+    return (
+        bool(hof) and isinstance(record.get("selected"), int) and 0 <= record["selected"] < len(hof)
     )
 
 

@@ -35,7 +35,7 @@ from lpstgp.campaign.plan import Config, data_digest, settings_digest, write_pla
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
-from lpstgp.freeze import FreezeManifest, write_manifest
+from lpstgp.freeze import FreezeManifest, claim_test_read, write_manifest
 from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
 from lpstgp.runner import configs_from_settings
 from lpstgp.sandbox import Sandbox
@@ -138,6 +138,27 @@ def step_portability(paths, settings, workers: int, mode: str = "all") -> None:
     print(progress(plan, settings))
 
 
+LAMBDA_STEPS = (1, 2, 4)  # protocol §6.3: lambda_turnover x1, then x2, then x4
+
+
+def _lambda_stage(m, gp, cells, paths, settings, workers, mode) -> Path | None:
+    """The budget-check runs at lambda_turnover x m; the plan once all its tasks are done."""
+    name = "wp2-budget-check" if m == 1 else f"wp2-budget-check-lambda{m}"
+    fitness = {} if m == 1 else {"lambda_turnover": m * settings["fitness"]["lambda_turnover"]}
+    configs = [Config(f"bud-{arm}", lib, gp=gp, fitness=fitness) for arm, lib in GP_ARMS.items()]
+    if mode == "all":
+        return prepare(name, configs, cells, 3, paths, settings, workers, "all")
+    plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
+    if mode == "plan" or not plan_path.exists():
+        prepare(name, configs, cells, 3, paths, settings, workers, "plan")
+    status = progress(plan_path, settings)
+    if status["complete"] != status["tasks"]:
+        print(f"{name}: {status['complete']} of {status['tasks']} tasks complete; run them, "
+              "then `budget-check --mode report` again")  # fmt: skip
+        return None
+    return plan_path
+
+
 def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
     c = chosen_parameters()
     gp = {
@@ -145,16 +166,31 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
         "generations": c["generations"],
         "tournament": c["tournament"],
     }
-    configs = [Config(f"bud-{arm}", lib, gp=gp) for arm, lib in GP_ARMS.items()]
     cells = [((name,), "PL1") for name in CALIBRATION_INSTRUMENTS]
-    plan = prepare("wp2-budget-check", configs, cells, 3, paths, settings, workers, mode)
-    if plan is None:
+    plan = _lambda_stage(1, gp, cells, paths, settings, workers, mode)
+    if plan is None or mode == "plan":
         return
     recs = records(plan)
     step1 = records(paths.results_dir / "campaigns" / "wp2-calibration" / "tasks.json")
+    lam = calibration.lambda_check(step1 + recs)  # §6.3: the runs of steps 1-2
+    trials = [{"multiplier": 1, **lam}]
+    chosen = 1 if not (lam["raise_lambda_turnover"] or lam["no_trade_exceeded"]) else None
+    if lam["raise_lambda_turnover"] and not lam["no_trade_exceeded"]:
+        for m in LAMBDA_STEPS[1:]:  # raise stepwise until both conditions hold
+            stage = _lambda_stage(m, gp, cells, paths, settings, workers, mode)
+            if stage is None:
+                return
+            check = calibration.lambda_check(records(stage))
+            trials.append({"multiplier": m, **check})
+            if not (check["raise_lambda_turnover"] or check["no_trade_exceeded"]):
+                chosen = m
+                break
     out = {
         "budget_unit": calibration.budget_unit(recs),
-        "lambda": calibration.lambda_check(step1 + recs),  # §6.3: the runs of steps 1-2
+        "lambda": lam,
+        "lambda_trials": trials,
+        # None: unresolved (no-trade limit exceeded, or x4 not enough): needs a recorded decision
+        "lambda_turnover_multiplier": chosen,
     }
     (REPORTS / "budget_check.json").write_text(json.dumps(out, indent=1))
     timing = defaultdict(list)
@@ -170,17 +206,26 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
     ]
     for arm, share in out["budget_unit"]["median_unique_share"].items():
         lines.append(f"| {arm} | {share:.3f} | {np.median(timing[arm]):.2f} |")
-    lam = out["lambda"]
     lines += [
         "",
         f"Spread of unique shares: {out['budget_unit']['spread']:.2f}x -> budget unit "
         f"**{out['budget_unit']['unit']}** (rule: unique if > 2x).",
-        f"Final rules of steps 1-2 ({lam['rules']} rule-instrument pairs) with no trade on "
-        f"validation: {lam['no_trade_share']:.1%} (limit 25%; exceeded: "
-        f"**{lam['no_trade_exceeded']}**, which calls for a recorded decision, D-047).",
-        f"Median validation turnover {lam['median_turnover']:.1f} changes a year -> raise "
-        f"lambda_turnover: **{lam['raise_lambda_turnover']}** (rule: > 50).",
+        "",
+        "| lambda_turnover | runs | final rules with no trade | median validation turnover |",
+        "|---:|---|---:|---:|",
     ]
+    for t in trials:
+        runs = "steps 1-2" if t["multiplier"] == 1 else "step 2 again"
+        lines.append(
+            f"| x{t['multiplier']} | {runs} | {t['no_trade_share']:.1%} | "
+            f"{t['median_turnover']:.1f} |"
+        )
+    verdict = (
+        f"**lambda_turnover x{chosen}**"
+        if chosen
+        else "**unresolved**: a recorded decision is needed before the go/no-go (D-047)"
+    )
+    lines += ["", f"Rule: no-trade share <= 25% and median turnover <= 50 a year -> {verdict}."]
     (REPORTS / "budget_check.md").write_text("\n".join(lines) + "\n")
     print(json.dumps(out, indent=1))
 
@@ -188,6 +233,12 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
 def gonogo_configs() -> list[Config]:
     c = chosen_parameters()
     check = json.loads((REPORTS / "budget_check.json").read_text())
+    m = check.get("lambda_turnover_multiplier")
+    if m is None:  # §6.3 not resolved: never plan the go/no-go on unchecked fitness weights
+        raise SystemExit("budget_check.json: lambda_turnover unresolved; record a decision first")
+    fitness = (
+        {} if m == 1 else {"lambda_turnover": m * load_settings()["fitness"]["lambda_turnover"]}
+    )
     gp = {
         "population": c["population"],
         "generations": c["generations"],
@@ -201,8 +252,8 @@ def gonogo_configs() -> list[Config]:
             # each record says which limit ended the run.
             "generations": UNIQUE_CEILING * c["generations"],
         }
-    return [Config("arm1", "strategies", kind="select")] + [
-        Config(f"arm{arm}", lib, gp=gp) for arm, lib in GP_ARMS.items()
+    return [Config("arm1", "strategies", kind="select", fitness=fitness)] + [
+        Config(f"arm{arm}", lib, gp=gp, fitness=fitness) for arm, lib in GP_ARMS.items()
     ]
 
 
@@ -255,7 +306,18 @@ def step_freeze(paths, settings) -> None:
         raise SystemExit("commit the code first: the manifest records the code revision")
     rules = {}
     for plan_path in gonogo_plans(paths):
-        rules |= pilot.manifest_rules(records(plan_path))  # every task, complete and current
+        recs = records(plan_path)  # every task, complete and current
+        short = [
+            r["campaign"]["task_id"]
+            for r in recs
+            if r.get("budget", {}).get("unit") == "unique" and not r["budget"]["cap_reached"]
+        ]
+        if short:  # the generation ceiling ended these runs before their budget (D-049)
+            raise SystemExit(
+                f"{len(short)} runs stopped before the unique budget (first: {short[0]}); "
+                "record a decision before freezing"
+            )
+        rules |= pilot.manifest_rules(recs)
     context = frozen_context(paths, settings) | {"code_version": git_revision()}
     path = REPORTS / "freeze_manifest.json"
     write_manifest(path, rules, context)
@@ -275,10 +337,34 @@ def step_pilot_test(paths, settings) -> None:
     frozen = registry.load_frozen()
     store = modelling_store(paths.tier_dir("A"), settings)
     lmax = settings["splits"]["lookback_max_bars"]
+    # 1. Validate everything before any test bar is read: records, rule hashes, settings.
+    validated: dict[str, list[dict]] = {}
+    for period, plan_path in zip(pilot_periods(settings), gonogo_plans(paths), strict=True):
+        recs = records(plan_path)
+        expected = {t for t in manifest.rules if t.split("/")[1] == period.id}
+        if {r["campaign"]["task_id"] for r in recs} != expected:
+            raise SystemExit(f"{period.id}: the records do not match the manifest's tasks")
+        for record in recs:
+            task = record["campaign"]["task_id"]
+            manifest.require(task, pilot.rule_hash(record))
+            if record["period"]["id"] != period.id:
+                raise SystemExit(f"{task}: record of period {record['period']['id']}")
+            fit = record["fitness_config"]
+            if (fit["execution_lag"], fit["cost_multiplier"]) != (
+                cfg.execution_lag,
+                cfg.cost_multiplier,
+            ):
+                raise SystemExit(f"{task}: execution lag or costs differ from the settings")
+        validated[period.id] = recs
+    # 2. Claim the one read before opening the test stage. The claim is created atomically and
+    #    is never removed by this script: after a crash, a second read needs a recorded decision
+    #    (protocol §8; D-049), and the claim file must then be removed by hand.
+    claim_test_read(REPORTS / "pilot_test_claim.json", manifest)
+    # 3. The one read.
     yearly: dict[str, dict] = {}
     raw: dict[str, np.ndarray] = {}
     access: dict[str, list] = {}
-    for period, plan_path in zip(pilot_periods(settings), gonogo_plans(paths), strict=True):
+    for period in pilot_periods(settings):
         box = Sandbox.open_pilot_test(
             store,
             period,
@@ -288,20 +374,8 @@ def step_pilot_test(paths, settings) -> None:
             manifest=manifest,
         )
         runs: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        recs = records(plan_path)
-        expected = {t for t in manifest.rules if t.split("/")[1] == period.id}
-        if {r["campaign"]["task_id"] for r in recs} != expected:
-            raise SystemExit(f"{period.id}: the records do not match the manifest's tasks")
-        for record in recs:
-            task = record["campaign"]["task_id"]
-            manifest.require(task, pilot.rule_hash(record))
-            assert record["period"]["id"] == period.id, task
-            fit = record["fitness_config"]
-            assert (fit["execution_lag"], fit["cost_multiplier"]) == (
-                cfg.execution_lag,
-                cfg.cost_multiplier,
-            ), task
-            arm = task.split("/")[0].removeprefix("arm")
+        for record in validated[period.id]:
+            arm = record["campaign"]["task_id"].split("/")[0].removeprefix("arm")
             for name, series in pilot.evaluate_on_test(
                 record, _subset(box, record["instruments"]), cfg, frozen
             ).items():

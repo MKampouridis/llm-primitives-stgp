@@ -9,6 +9,7 @@ The final rule is the hall-of-fame member with the best validation score (``fina
 
 from __future__ import annotations
 
+import math
 import random
 import statistics
 import time
@@ -188,12 +189,19 @@ def run_gp(
     requested = 0
     eval_ms: list[float] = []  # time of every unique (cache-miss) evaluation
 
+    if cfg.budget_unit not in ("requested", "unique"):
+        raise ValueError(f"budget_unit must be 'requested' or 'unique', not {cfg.budget_unit!r}")
+    unique_cap = cfg.max_unique_evaluations if cfg.budget_unit == "unique" else 0
+
     def evaluate(population: list[Rule]) -> float:
         nonlocal eval_seconds, requested
         spent = 0.0
         for rule in population:
-            requested += 1
             key = rule.key()
+            if unique_cap and key not in scores and len(scores) >= unique_cap:
+                rule.fitness = -math.inf  # budget spent: never scored, never selected (D-049)
+                continue
+            requested += 1
             if key not in scores:
                 t0 = time.perf_counter()
                 scores[key] = fit_problem.score(rule)
@@ -213,6 +221,7 @@ def run_gp(
         return (-e[0], e[1], e[2])  # higher fitness, then smaller size, then key
 
     def update(population: list[Rule], g: int, spent: float, before: int) -> None:
+        population = [r for r in population if r.key() in scores]  # unscored: past the cap
         for rule in population:
             s = scores[rule.key()]
             size_w = lib.weighted_size(rule.entry) + lib.weighted_size(rule.exit)
@@ -270,9 +279,6 @@ def run_gp(
             }
         )
 
-    if cfg.budget_unit not in ("requested", "unique"):
-        raise ValueError(f"budget_unit must be 'requested' or 'unique', not {cfg.budget_unit!r}")
-    unique_cap = cfg.max_unique_evaluations if cfg.budget_unit == "unique" else 0
     update(population, 0, spent, 0)
     checkpoint(0)
     for g in range(1, cfg.generations + 1):
@@ -337,7 +343,7 @@ def run_gp(
             "generations_run": generations[-1]["gen"],
             # Under a unique budget: did the cap end the run, or the generation ceiling?
             "cap_reached": bool(unique_cap) and unique >= unique_cap,
-            "overshoot": max(unique - unique_cap, 0) if unique_cap else 0,
+            "overshoot": max(unique - unique_cap, 0) if unique_cap else 0,  # 0 by construction
         },
         "timings": {
             "total_s": total,

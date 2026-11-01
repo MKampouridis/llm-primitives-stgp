@@ -91,8 +91,7 @@ def lambda_check(
         val = record["hall_of_fame"][record["selected"]]["validation"]
         for comps in val["instruments"].values():
             never.append(comps.get("trades", 1) == 0)
-            if "median_turnover" in comps:
-                turnovers.append(comps["median_turnover"])
+            turnovers.append(comps.get("median_turnover", 0.0))  # every final rule (0 if idle)
     share = sum(never) / max(len(never), 1)
     median_turnover = statistics.median(turnovers) if turnovers else 0.0
     return {

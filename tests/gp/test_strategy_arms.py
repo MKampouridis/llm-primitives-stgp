@@ -126,9 +126,26 @@ def test_minimum_activity_scores_too_few_entries_as_no_trade():
     value, parts = market_part(one_trade_entry, one_trade_exit, data, strict)
     assert value == strict.no_trade_value
     assert parts["required_trades"] == 4
+    assert parts["below_min_activity"]
+    assert {"sharpe", "median_turnover", "exposure"} <= parts.keys()  # measured as it is
     lenient = FitnessConfig(min_entries_per_year=0.0)  # the rule switched off
     lenient_value, _ = market_part(one_trade_entry, one_trade_exit, data, lenient)
     assert lenient_value != lenient.no_trade_value
     busy_entry = (np.arange(len(dates)) % 40 == 0).astype(float)
     busy_exit = (np.arange(len(dates)) % 40 == 20).astype(float)
     assert market_part(busy_entry, busy_exit, data, strict)[0] != strict.no_trade_value
+
+
+def test_infinite_strategy_signals_become_unknown():
+    """Glue operators treat only NaN as missing, so ±inf from a strategy signal must become NaN."""
+    import inspect
+
+    from lpstgp.strategies.adapters import _finite_fn
+
+    def drop_z(log_return, horizon=5, vol_window=20):
+        return np.array([1.0, np.inf, -np.inf, np.nan, -2.0])
+
+    wrapped = _finite_fn(drop_z)
+    assert list(inspect.signature(wrapped).parameters) == ["log_return", "horizon", "vol_window"]
+    out = wrapped(np.zeros(5), horizon=15, vol_window=10)
+    np.testing.assert_array_equal(out, [1.0, np.nan, np.nan, np.nan, -2.0])
