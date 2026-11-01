@@ -39,7 +39,7 @@ from lpstgp.freeze import FreezeManifest, claim_test_read, write_manifest
 from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
 from lpstgp.runner import configs_from_settings
 from lpstgp.sandbox import Sandbox
-from lpstgp.splits import pilot_periods
+from lpstgp.splits import Stage, pilot_periods
 from lpstgp.strategies import registry
 
 CALIBRATION_INSTRUMENTS = ("SPX", "NKY", "EURUSD", "USDJPY", "GOLD", "NATGAS")  # protocol §6.1
@@ -182,7 +182,9 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
                 return
             check = calibration.lambda_check(records(stage))
             trials.append({"multiplier": m, **check})
-            if not (check["raise_lambda_turnover"] or check["no_trade_exceeded"]):
+            if check["no_trade_exceeded"]:  # a higher lambda can only make rules quieter
+                break
+            if not check["raise_lambda_turnover"]:
                 chosen = m
                 break
     out = {
@@ -191,6 +193,9 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
         "lambda_trials": trials,
         # None: unresolved (no-trade limit exceeded, or x4 not enough): needs a recorded decision
         "lambda_turnover_multiplier": chosen,
+        # The chosen values live here and in calibration.json, never in settings.toml (D-050):
+        # the go/no-go refuses if the settings' base lambda is no longer this one.
+        "base_lambda_turnover": settings["fitness"]["lambda_turnover"],
     }
     (REPORTS / "budget_check.json").write_text(json.dumps(out, indent=1))
     timing = defaultdict(list)
@@ -234,11 +239,24 @@ def gonogo_configs() -> list[Config]:
     c = chosen_parameters()
     check = json.loads((REPORTS / "budget_check.json").read_text())
     m = check.get("lambda_turnover_multiplier")
+    override = REPORTS / "lambda_decision.json"
+    if m is None and override.exists():  # a recorded decision resolves §6.3 (D-050)
+        decision = json.loads(override.read_text())
+        m = decision["lambda_turnover_multiplier"]
+        if not str(decision.get("decision", "")).startswith("D-"):
+            raise SystemExit(f'{override}: name the decision ("decision": "D-0xx")')
     if m is None:  # §6.3 not resolved: never plan the go/no-go on unchecked fitness weights
-        raise SystemExit("budget_check.json: lambda_turnover unresolved; record a decision first")
-    fitness = (
-        {} if m == 1 else {"lambda_turnover": m * load_settings()["fitness"]["lambda_turnover"]}
-    )
+        raise SystemExit(
+            "budget_check.json: lambda_turnover unresolved; record a decision in "
+            f"docs/decisions.md and in {override}"
+        )
+    base = load_settings()["fitness"]["lambda_turnover"]
+    if base != check["base_lambda_turnover"]:  # e.g. the chosen value written into settings
+        raise SystemExit(
+            f"settings lambda_turnover is {base}, but the budget check ran from "
+            f"{check['base_lambda_turnover']}: keep the base value in settings.toml (D-050)"
+        )
+    fitness = {} if m == 1 else {"lambda_turnover": m * base}
     gp = {
         "population": c["population"],
         "generations": c["generations"],
@@ -292,13 +310,19 @@ def frozen_context(paths, settings) -> dict:
 
 
 def source_changed_since(revision: str) -> list[str]:
-    """Files under src/, scripts/ or config/ changed between ``revision`` and the working tree."""
+    """Files under src/, scripts/ or config/ changed since ``revision`` (untracked ones too)."""
     out = subprocess.run(
         ["git", "-C", str(REPO_ROOT), "diff", "--name-only", revision, "--", "src", "scripts",
          "config"],
         capture_output=True, text=True, check=True,
     )  # fmt: skip
-    return out.stdout.split()
+    status = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "status", "--porcelain", "--untracked-files=all", "--",
+         "src", "scripts", "config"],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    untracked = [line[3:] for line in status.stdout.splitlines() if line.startswith("??")]
+    return sorted(set(out.stdout.split()) | set(untracked))
 
 
 def step_freeze(paths, settings) -> None:
@@ -322,6 +346,42 @@ def step_freeze(paths, settings) -> None:
     path = REPORTS / "freeze_manifest.json"
     write_manifest(path, rules, context)
     print(f"{len(rules)} rules frozen in {path}; commit it before `pilot-test`")
+
+
+def _evaluate(box: Sandbox, recs, frozen, cfg) -> dict:
+    """Every frozen rule and buy-and-hold on ``box``, as equal-weight portfolios per arm."""
+    runs: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for record in recs:
+        arm = record["campaign"]["task_id"].split("/")[0].removeprefix("arm")
+        for name, series in pilot.evaluate_on_test(
+            record, _subset(box, record["instruments"]), cfg, frozen
+        ).items():
+            runs[arm][name].append(series)
+    for name, series in pilot.buy_and_hold(box, cfg).items():
+        runs["BH"][name].append(series)
+    return {arm: pilot.portfolio(by_inst) for arm, by_inst in runs.items()}
+
+
+def rehearse(validated, store, frozen, cfg, settings) -> None:
+    """Run the whole test evaluation on each pilot period's VALIDATE year first, and discard it.
+
+    Any error of code, library or data (missing costs, non-finite returns, ...) then surfaces
+    before the one test read is claimed, not half-way through it (D-050).
+    """
+    from dataclasses import replace
+
+    lmax = settings["splits"]["lookback_max_bars"]
+    yearly = {}
+    for period in pilot_periods(settings):
+        box = Sandbox.open(store, period, Stage.VALIDATE, PILOT_INSTRUMENTS, lmax)
+        as_test = replace(box, period=replace(period, test_start=period.val_start))
+        yearly[period.id] = _evaluate(as_test, validated[period.id], frozen, cfg)
+    pooled = {
+        arm: tuple(np.concatenate([yearly[p][arm][k] for p in yearly]) for k in (0, 1))
+        for arm in yearly[pilot_periods(settings)[0].id]
+    }
+    pilot.go_no_go(pooled, yearly, resamples=100)
+    print("rehearsal on the validation years: complete")
 
 
 def step_pilot_test(paths, settings) -> None:
@@ -359,6 +419,7 @@ def step_pilot_test(paths, settings) -> None:
     # 2. Claim the one read before opening the test stage. The claim is created atomically and
     #    is never removed by this script: after a crash, a second read needs a recorded decision
     #    (protocol §8; D-049), and the claim file must then be removed by hand.
+    rehearse(validated, store, frozen, cfg, settings)
     claim_test_read(REPORTS / "pilot_test_claim.json", manifest)
     # 3. The one read.
     yearly: dict[str, dict] = {}
@@ -373,16 +434,7 @@ def step_pilot_test(paths, settings) -> None:
             pilot_periods=pilot_periods(settings),
             manifest=manifest,
         )
-        runs: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        for record in validated[period.id]:
-            arm = record["campaign"]["task_id"].split("/")[0].removeprefix("arm")
-            for name, series in pilot.evaluate_on_test(
-                record, _subset(box, record["instruments"]), cfg, frozen
-            ).items():
-                runs[arm][name].append(series)
-        for name, series in pilot.buy_and_hold(box, cfg).items():
-            runs["BH"][name].append(series)
-        yearly[period.id] = {arm: pilot.portfolio(by_inst) for arm, by_inst in runs.items()}
+        yearly[period.id] = _evaluate(box, validated[period.id], frozen, cfg)
         access[period.id] = [{k: str(v) for k, v in asdict(r).items()} for r in box.access_log]
         for arm, (dates, values) in yearly[period.id].items():
             raw[f"{period.id}:{arm}:dates"], raw[f"{period.id}:{arm}:returns"] = (

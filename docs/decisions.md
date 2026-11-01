@@ -712,3 +712,23 @@ The PI had the code reviewed by two other LLMs with `docs/code_review_prompt.md`
 **Not changed:**
 - **Strategy admission gates test five parameter points, not the full grid** (Antigravity 6). Generation is finished, and the 28 strategies are frozen. A full-grid sweep by both the GP reviewer and Antigravity found no look-ahead and no lookback violations, only the ±inf and all-NaN outputs handled in item 7. The gates stay as they were when the strategies were admitted.
 - **A twice-failed slot is not re-run in a fresh session** (Antigravity 7, protocol §4). This is moot: all 28 slots were accepted (none needed a repair). It will be fixed before any new generation campaign.
+
+### D-050 Second-round review of the fixes — Decided (engineer, under D-042; 1 Nov 2026)
+A fresh Claude reviewer read only the diff `aabe6fa..c77d604` (D-047, D-049). It found no critical defect and no new bug in the engine-level fixes. It confirmed by mutation that the unique-cap and mutation-budget tests fail when the code they guard is broken.
+
+**Fixed** (in `scripts/wp2_pilot.py` and the tests only, so the source digest of the calibration plan is unchanged):
+1. **Where the chosen values live.** Protocol §6 said they are written to `config/settings.toml`. That conflicts with campaigns: writing them before the go/no-go would double-apply the λ multiplier, and writing them afterwards changes the settings digest under every finished run.
+   - The chosen values now live in `reports/wp2/calibration.json` and `budget_check.json`, and every go/no-go configuration carries them in its digest. Settings keep the base values (protocol §6 amended).
+   - The go/no-go refuses if the settings' base λ_turnover is no longer the one the budget check ran from.
+2. **The λ trials stop at any never-trade breach.** A breach at ×2 now stops the trials (a higher λ can only make rules quieter) and needs a decision, as at ×1.
+   - An unresolved outcome is resolved by a recorded decision in `reports/wp2/lambda_decision.json` (`{"lambda_turnover_multiplier": m, "decision": "D-0xx"}`), not by editing the generated report.
+3. **Rehearsal before the claim.** Before claiming the test read, `pilot-test` runs the whole evaluation (rules, buy-and-hold, portfolios, the go/no-go statistics) on each pilot period's validation year and discards it. A code, library or data error then stops the step before any test bar is read.
+4. **Untracked files.** The freeze and pilot-test code checks also refuse untracked files under `src/`, `scripts/` and `config/`.
+5. **New tests:**
+   - hall-of-fame deduplication by held positions;
+   - union-calendar annualisation (≈261 rows a year for weekdays, ≈365 for every day) against a hand calculation;
+   - an identical replan is left untouched, a changed plan cannot replace records, and a missing record makes `plan_records` and `collect` refuse;
+   - ±inf from arm-2b terminals becomes NaN;
+   - the driver's go/no-go guards (`tests/test_wp2_driver.py`).
+
+**Not changed.** The pilot-test step has no end-to-end test, since it needs a committed manifest and two finished campaigns. Its order — validate, rehearse, claim, read — is kept short and was traced by the reviewer.

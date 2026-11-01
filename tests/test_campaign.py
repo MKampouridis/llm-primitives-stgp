@@ -150,3 +150,28 @@ def test_code_change_or_empty_result_never_counts_as_complete(campaign_paths, mo
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"campaign": dict(run.campaign), "hall_of_fame": [], "selected": 0}))
     assert not execute.is_complete(path, run)  # an empty result is not a finished run
+
+
+def test_identical_replan_is_untouched_and_a_changed_plan_cannot_replace_records(
+    campaign_paths,
+):
+    from lpstgp.campaign.execute import IncompleteCampaignError, plan_records
+    from lpstgp.campaign.plan import PlanExistsError
+
+    settings = load_settings()
+    gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
+    configs = [Config("arm_a", "seed", gp=gp)]
+    cells = [(("AAA",), "PL1")]
+    plan_path = write_plan("same", configs, cells, 2, campaign_paths, settings, register=None)
+    before = plan_path.read_text()
+    assert write_plan("same", configs, cells, 2, campaign_paths, settings, register=None)
+    assert plan_path.read_text() == before  # created_utc included: the file is untouched
+    execute_plan(plan_path, campaign_paths, settings, workers=1)
+    assert len(plan_records(plan_path, campaign_paths, settings)) == 2
+    with pytest.raises(PlanExistsError):  # 3 runs instead of 2, with records present
+        write_plan("same", configs, cells, 3, campaign_paths, settings, register=None)
+    sorted(plan_path.parent.glob("tier*/*/*.json"))[0].unlink()
+    with pytest.raises(IncompleteCampaignError):
+        plan_records(plan_path, campaign_paths, settings)
+    with pytest.raises(IncompleteCampaignError):
+        collect(plan_path, campaign_paths, settings)

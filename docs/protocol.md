@@ -158,7 +158,8 @@ Arms 1, 2a, 2b and 2c share the same mathematics; they differ only in granularit
    |median of 30 runs − median of 100| of validation Sharpe is at most 0.05; otherwise use 50.
 
 Every candidate is a registered configuration. The chosen values are recorded as decisions and
-written to `config/settings.toml` before the freeze.
+in `reports/wp2/calibration.json` and `budget_check.json`, from which the go/no-go configurations
+take them (their digests carry them). `config/settings.toml` keeps the base values (D-050).
 
 ## 7. Freeze before the pilot test read
 
@@ -236,3 +237,9 @@ Configurations tried and dropped stay in the register.
   - The budget-unit rule is applied to a 3-run check of every GP arm.
   - Strategy generation had started (session s01); no calibration or pilot data had been
     looked at.
+- **1 Nov 2026, before any calibration run:** after the code reviews (D-047, D-049, D-050).
+  - §6.3 is run as the stepwise trial it describes: step 2 at λ_turnover ×2, then ×4; a
+    never-trade share above 25% at any step needs a recorded decision.
+  - The chosen calibration values live in the step reports, not in `config/settings.toml`:
+    writing them there would change the settings digest under the finished runs.
+  - The pilot test read is rehearsed on the validation years, then claimed once.

@@ -118,3 +118,14 @@ def test_size_penalty_and_signal_hash(problem, seed_lib):
     )
     assert unpenalised.fitness - a.fitness == pytest.approx(0.01 * a.components["size"])
     assert unpenalised.signal_hash == a.signal_hash
+
+
+def test_rules_that_trade_identically_share_one_hall_of_fame_slot(problem, seed_lib):
+    """Deduplication is by held positions (D-029, D-047), not by raw signals."""
+    flat_a = constant_rule(seed_lib, entry=False, exit_=False)
+    flat_b = constant_rule(seed_lib, entry=False, exit_=True)  # other exit values, still flat
+    a, b = problem.score(flat_a), problem.score(flat_b)
+    assert flat_a.key() != flat_b.key()
+    assert a.signal_hash == b.signal_hash
+    held = problem.score(constant_rule(seed_lib, entry=True, exit_=False))
+    assert held.signal_hash != a.signal_hash

@@ -46,3 +46,18 @@ def test_paired_bootstrap_detects_a_clear_difference_and_not_a_null():
 def test_holm():
     np.testing.assert_allclose(holm([0.01, 0.04, 0.03]), [0.03, 0.06, 0.06])
     np.testing.assert_allclose(holm([0.5, 0.9]), [1.0, 1.0])
+
+
+def test_portfolio_sharpe_uses_the_union_calendar():
+    import numpy as np
+
+    from lpstgp.analysis.portfolio import periods_per_year, portfolio_sharpe
+
+    weekdays = np.arange(np.datetime64("2006-07-03"), np.datetime64("2008-06-30"))
+    weekdays = weekdays[np.is_busday(weekdays)]
+    every_day = np.arange(np.datetime64("2006-07-01"), np.datetime64("2008-07-01"))
+    assert 259 < periods_per_year(weekdays) < 263
+    assert 364 < periods_per_year(every_day) < 367
+    r = np.random.default_rng(1).normal(3e-4, 0.01, len(weekdays))
+    expected = r.mean() / r.std(ddof=1) * np.sqrt(periods_per_year(weekdays))
+    assert abs(portfolio_sharpe((weekdays, r)) - expected) < 1e-9 * max(1.0, abs(expected))
