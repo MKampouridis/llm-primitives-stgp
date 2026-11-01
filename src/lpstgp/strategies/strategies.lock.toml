@@ -1,0 +1,225 @@
+# Frozen whole strategies (WP2). Do not edit: regenerate with the freeze step.
+
+[s01]
+sha256 = "811a4a49e5a634670e25cb4fdffa7874490da3e005103cd1c902720345d1df74"
+file = "information_theory/s01__v1.py"
+[s01.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session c7b9f95f-2528-44e8-a93c-25993ed3e3d4, effort high)"
+specified_by = "WP2 generation protocol, brief 98228cf7b0f6"
+date = "2026-10-31"
+
+[s02]
+sha256 = "dc4205c7a581cb7c7e21e33609817ca7d3d78da9b9882b6c31a82ab0f57f69bd"
+file = "information_theory/s02__v1.py"
+[s02.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session ec032c35-aa29-4e64-8f13-7b16f36adce7, effort high)"
+specified_by = "WP2 generation protocol, brief dd5c70ec48bb"
+date = "2026-10-31"
+
+[s03]
+sha256 = "b163cbf818ceba57ec15c02286ca1e023e1c136a4c728fa808a01c913f721fc1"
+file = "information_theory/s03__v1.py"
+[s03.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 718a1bcb-2efb-4a7e-a277-d101b94d9a53, effort high)"
+specified_by = "WP2 generation protocol, brief 1826289cb962"
+date = "2026-10-31"
+
+[s04]
+sha256 = "c81c847e7ee571daddb22439cca02bedc36d227294279b874e5cdbf1e0a72292"
+file = "information_theory/s04__v1.py"
+[s04.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session ade033f9-aa76-4ac0-afe9-3cd65a62b306, effort high)"
+specified_by = "WP2 generation protocol, brief c0c67a4e6fe3"
+date = "2026-10-31"
+
+[s05]
+sha256 = "04b662a8be4f99e314c42fcbc362ba5ba95c6434d9fffafffdc912a10295b03d"
+file = "information_geometry/s05__v1.py"
+[s05.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f38b5885-4f9c-4d3d-b1fe-a97ef2d28c3e, effort high)"
+specified_by = "WP2 generation protocol, brief 645b3d3a5411"
+date = "2026-10-31"
+
+[s06]
+sha256 = "7d06d7f3d2783ce52d0e9ed217a695de408a3633057e0f2fe8a88e70ac0e742c"
+file = "information_geometry/s06__v1.py"
+[s06.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 40b50a54-f7e9-49e3-92ac-1eb1469490d7, effort high)"
+specified_by = "WP2 generation protocol, brief e3526296d19b"
+date = "2026-10-31"
+
+[s07]
+sha256 = "c2c9436633f67f16bf3c03fac097825e52b328f7d8c8bebc132a9a05b8ccd3a4"
+file = "information_geometry/s07__v1.py"
+[s07.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a59c4b32-d9e4-4144-889e-bcf2c5c4f27a, effort high)"
+specified_by = "WP2 generation protocol, brief 8cd254659a61"
+date = "2026-10-31"
+
+[s08]
+sha256 = "c74a5f24deec61c79989c47dc47a392b30a569069c7b30ba07e8aa803d5448ae"
+file = "information_geometry/s08__v1.py"
+[s08.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f5b22f95-954a-46fc-be05-773c6d88f76f, effort high)"
+specified_by = "WP2 generation protocol, brief 80c0573b7bc4"
+date = "2026-10-31"
+
+[s09]
+sha256 = "dc948f6718a7727c84d35f10d69167dae5ea421eb3ffdd1146c1369abc14034e"
+file = "optimal_transport/s09__v1.py"
+[s09.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 560ccf67-96c7-49af-830b-05ef02f6a256, effort high)"
+specified_by = "WP2 generation protocol, brief f1cc00656cc6"
+date = "2026-10-31"
+
+[s10]
+sha256 = "c3ce3310e813ca8cc38f06c8fce21fda3dbda556cdd6d4e3ef4ddb80e6e578f0"
+file = "optimal_transport/s10__v1.py"
+[s10.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 2441ef46-122a-47de-a06f-2b0292c59422, effort high)"
+specified_by = "WP2 generation protocol, brief 3e53b6040c8c"
+date = "2026-10-31"
+
+[s11]
+sha256 = "f2498aee81b08dd1388d3b0fb3280e5ec1714d474d247a8525e03ba0d7803f34"
+file = "optimal_transport/s11__v1.py"
+[s11.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session ad7a5ae6-56dd-4247-ac5f-93b5f2e3b998, effort high)"
+specified_by = "WP2 generation protocol, brief 3ac194fef32a"
+date = "2026-10-31"
+
+[s12]
+sha256 = "80b213c3dc180e363e1f00dae1b03715e1be298151200e8bd070428ab3a917cf"
+file = "optimal_transport/s12__v1.py"
+[s12.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a763ec6d-2994-4a3f-8e3e-29d43bce76e5, effort high)"
+specified_by = "WP2 generation protocol, brief 04e5e53f7f44"
+date = "2026-10-31"
+
+[s13]
+sha256 = "aaa8b9d9aca7a45d65e63e68b1cbfd34befc80e38eb55a65da5c9c82bbecd8d6"
+file = "rough_paths/s13__v1.py"
+[s13.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f3702a09-0b98-492a-b442-72aa9ceec596, effort high)"
+specified_by = "WP2 generation protocol, brief e635bb8b3e43"
+date = "2026-10-31"
+
+[s14]
+sha256 = "c40da7d99b152bee93ea373d6789d8ec63e03e1ef692716e9f31aaf80e3ee6a8"
+file = "rough_paths/s14__v1.py"
+[s14.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session fe867c39-1952-4f2e-820f-d873ac6da9fc, effort high)"
+specified_by = "WP2 generation protocol, brief 1638e345b96f"
+date = "2026-10-31"
+
+[s15]
+sha256 = "2f104082b2ae8c74bc4f2ef8907805ba51d9fbe74300f4928b0eb3c724e558ae"
+file = "rough_paths/s15__v1.py"
+[s15.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session cb811c17-043c-4d22-9098-beaacdf086ca, effort high)"
+specified_by = "WP2 generation protocol, brief 2dccc998d6bc"
+date = "2026-11-01"
+
+[s16]
+sha256 = "b99ed7d28d1873207827e2af2a414c329b977212898dd234beccfb70f07f3818"
+file = "rough_paths/s16__v1.py"
+[s16.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session d4f5ef1b-7884-4d11-a38f-dd9785e43565, effort high)"
+specified_by = "WP2 generation protocol, brief dbe87f05eeaa"
+date = "2026-11-01"
+
+[s17]
+sha256 = "31d7a7479b1504256b52ef79d7e9ac82627498d3a8f81df2e548ea55bdfa523d"
+file = "fractal/s17__v1.py"
+[s17.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session bf5f3387-0100-4333-af3e-98aada2adfec, effort high)"
+specified_by = "WP2 generation protocol, brief f92660eea836"
+date = "2026-11-01"
+
+[s18]
+sha256 = "c95b0359815f751f6e440f02b7b2fb1f30647a994ed5b76d2ab15ccbf97dba4e"
+file = "fractal/s18__v1.py"
+[s18.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 4a6b3e08-505c-40c1-ad4a-570dd241d34b, effort high)"
+specified_by = "WP2 generation protocol, brief 164704d239d3"
+date = "2026-11-01"
+
+[s19]
+sha256 = "cb73f71a669925c2ba9452d3361eebcc71ce9455136879fec7ce710c3ab92055"
+file = "fractal/s19__v1.py"
+[s19.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 6db6d035-3a91-459f-9735-f28e9baa4e8a, effort high)"
+specified_by = "WP2 generation protocol, brief 2b7de2cceffb"
+date = "2026-11-01"
+
+[s20]
+sha256 = "7c2e8ad575e1cf0e93ec7183165a18d3d231290009fabf88a99e355617860753"
+file = "fractal/s20__v1.py"
+[s20.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 67d1f47d-3b0e-4eec-b222-e340cb457b10, effort high)"
+specified_by = "WP2 generation protocol, brief e01cb10d6040"
+date = "2026-11-01"
+
+[s21]
+sha256 = "dddea28219e8f93ea642cfe8376fc141fcf26e09f85b0b7fbe6facb6d0e86e2e"
+file = "statistical_physics/s21__v1.py"
+[s21.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session d5952b39-6b2f-4f91-ad2e-fadd0ff78a69, effort high)"
+specified_by = "WP2 generation protocol, brief 7562b59ce5b2"
+date = "2026-11-01"
+
+[s22]
+sha256 = "0aedd3f6d05cdb41b6453c8d5503df07b2ae82540be67db8b4e6a88964cf8142"
+file = "statistical_physics/s22__v1.py"
+[s22.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session eb60f5b9-629a-45df-b885-c7c467e97ab8, effort high)"
+specified_by = "WP2 generation protocol, brief 2f084fc39626"
+date = "2026-11-01"
+
+[s23]
+sha256 = "7f00d40d36c206a89ea381cb0dd5c1c27b5c8b89aaa81c10f347c84239f82914"
+file = "statistical_physics/s23__v1.py"
+[s23.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 721c5db1-c54f-48f3-a810-8bdd3a8b035a, effort high)"
+specified_by = "WP2 generation protocol, brief b978bfc25c50"
+date = "2026-11-01"
+
+[s24]
+sha256 = "8bb4f245fcba4397926949591bd1d1fe76556dad62bb3c9a25871ac9792036d0"
+file = "statistical_physics/s24__v1.py"
+[s24.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session e3897056-1f35-45b0-ba2c-a9f9ddb70adb, effort high)"
+specified_by = "WP2 generation protocol, brief 9c885ab5b557"
+date = "2026-11-01"
+
+[s25]
+sha256 = "ad54f77166a1c0c3fd8add026309e9373e7ab8e793f5e6ebcbc1c6e37710f01d"
+file = "spectral/s25__v1.py"
+[s25.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session d443be71-4e96-4ea3-9e38-0b57abf9e917, effort high)"
+specified_by = "WP2 generation protocol, brief 8c168f9f01ad"
+date = "2026-10-31"
+
+[s26]
+sha256 = "a9ee104dacb971b4c05c6bdbe16c2f5733f7691ebbfd6f48958e42ec90ff1445"
+file = "spectral/s26__v1.py"
+[s26.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 64668df5-5478-44b3-975f-f83b450ac4c6, effort high)"
+specified_by = "WP2 generation protocol, brief 9e449d1530a3"
+date = "2026-10-31"
+
+[s27]
+sha256 = "258b8122f495fa787a64d3809ba6de0c5269ad8d758378b3427a9b7fcc5c1ae8"
+file = "spectral/s27__v1.py"
+[s27.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session e6c5da71-fa4a-440e-8d41-df46d3c9e0a4, effort high)"
+specified_by = "WP2 generation protocol, brief 205cbb4787c4"
+date = "2026-10-31"
+
+[s28]
+sha256 = "2a00a9236c5f9727f9588c1bf4c61b00268ae7d6a7a22ddbf6c4742947c4a16a"
+file = "spectral/s28__v1.py"
+[s28.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 2e35729e-4572-4ef4-b21a-1a2a2f2ece18, effort high)"
+specified_by = "WP2 generation protocol, brief 950fad7005cc"
+date = "2026-11-01"
