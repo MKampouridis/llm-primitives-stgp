@@ -3,7 +3,7 @@
 Runs one short GP run (arms 2c and 6, PL1 training and validation data only) under several
 settings of the numerical code paths, each in a fresh process because the settings must be set
 before numpy and numba load. For each it writes an exact fingerprint of the results (floats by
-their full repr) and the time taken, to <results_dir>/node_check/<host>.json. Comparing the files
+their full repr) and the time taken, to <results_dir>/node_check2/<host>.json. Comparing the files
 of different nodes shows which setting makes every node give the same results.
 
   python scripts/ceres/node_probe.py            # on a compute node (scripts/ceres/node_check.sh)
@@ -20,17 +20,17 @@ import subprocess
 import sys
 import time
 
-AVX512 = (
-    "AVX512F AVX512CD AVX512_KNL AVX512_KNM AVX512_SKX AVX512_CLX AVX512_CNL AVX512_ICL AVX512_SPR"
-)
 NUMBA_GENERIC = {"NUMBA_CPU_NAME": "generic", "NUMBA_DISABLE_INTEL_SVML": "1"}
+BLAS_HASWELL = {"OPENBLAS_CORETYPE": "Haswell", "MKL_CBWR": "AVX2"}
+NPY_BASELINE = "<numpy's dispatched features that this CPU has>"  # filled in by main()
 VARIANTS = {
     "default": {},
-    "numba_generic": NUMBA_GENERIC,
-    "numpy_no_avx512": {"NPY_DISABLE_CPU_FEATURES": AVX512},
-    "both": {**NUMBA_GENERIC, "NPY_DISABLE_CPU_FEATURES": AVX512},
-    "both_no_avx2": {**NUMBA_GENERIC, "NPY_DISABLE_CPU_FEATURES": "AVX2 FMA3 " + AVX512},
+    "npy_baseline": {"NPY_DISABLE_CPU_FEATURES": NPY_BASELINE},
+    "blas_haswell": BLAS_HASWELL,
+    "npy_blas": {"NPY_DISABLE_CPU_FEATURES": NPY_BASELINE, **BLAS_HASWELL},
+    "npy_blas_numba": {"NPY_DISABLE_CPU_FEATURES": NPY_BASELINE, **BLAS_HASWELL, **NUMBA_GENERIC},
 }
+OUT = "node_check2"  # round 2: numpy 2.5's own feature names, and OpenBLAS's kernel type
 PROBE_RUNS = (("s2c", "EURUSD"), ("seed", "EURUSD"), ("s2c", "NATGAS"))
 
 
@@ -75,6 +75,15 @@ def probe() -> dict:
     except Exception as exc:
         out["numba_cpu"] = f"? {exc}"
     out["numpy"] = np.__version__
+    try:
+        from threadpoolctl import threadpool_info
+
+        out["blas"] = [
+            {k: i.get(k) for k in ("internal_api", "version", "architecture", "filepath")}
+            for i in threadpool_info()
+        ]
+    except Exception as exc:
+        out["blas"] = f"? {exc}"
     return out
 
 
@@ -103,17 +112,29 @@ def main() -> None:
     host = socket.gethostname().split(".")[0]
     report = {"host": host, "cpu_count": os.cpu_count(), "cpu": cpu_model(),
               "platform": platform.platform(), "variants": {}}  # fmt: skip
+    dispatched = subprocess.run(
+        [sys.executable, "-c", "from numpy._core._multiarray_umath import __cpu_dispatch__ as d, "
+         "__cpu_features__ as f; print(' '.join(x for x in d if f.get(x)))"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+    report["numpy_dispatched_here"] = dispatched
     for name, env in VARIANTS.items():
+        env = {k: (dispatched if v == NPY_BASELINE else v) for k, v in env.items()}
+        if not env.get("NPY_DISABLE_CPU_FEATURES", "x"):
+            env.pop("NPY_DISABLE_CPU_FEATURES")  # nothing dispatched on this CPU
         done = subprocess.run(
             [sys.executable, __file__, "--variant"],
             env={**os.environ, **env}, capture_output=True, text=True,
         )  # fmt: skip
         if done.returncode == 0:
             report["variants"][name] = json.loads(done.stdout.strip().splitlines()[-1])
+            report["variants"][name]["warnings"] = [
+                line for line in done.stderr.splitlines() if "CPU feature" in line or "BLAS" in line
+            ][:5]
         else:
             report["variants"][name] = {"error": done.stderr.strip().splitlines()[-3:]}
         print(name, json.dumps(report["variants"][name].get("runs", report["variants"][name])))
-    out = load_paths().results_dir / "node_check" / f"{host}.json"
+    out = load_paths().results_dir / OUT / f"{host}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=1) + "\n")
     print("written", out)
