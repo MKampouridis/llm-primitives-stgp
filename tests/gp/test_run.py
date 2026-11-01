@@ -130,3 +130,21 @@ def test_unique_budget_is_matched_exactly_across_arms(
         assert out["budget"]["cap_reached"]
         assert out["budget"]["overshoot"] == 0
         assert all(m["fit"]["fitness"] > -1e9 for m in out["hall_of_fame"])  # only scored rules
+
+
+def test_nothing_after_the_unique_cap_counts(seed_lib, fit_box):
+    """Rules after the one that spends the budget are dropped, duplicates included."""
+    import math
+    from dataclasses import replace
+
+    fp = Problem(
+        seed_lib, {"AAA": fit_box["AAA"]}, PERIOD.scored_window(Stage.FIT), COSTS,
+        FitnessConfig(), TINY.cache_bytes,
+    )  # fmt: skip
+    cfg = replace(TINY, generations=50, budget_unit="unique", max_unique_evaluations=21)
+    out = run_gp(seed_lib, fp, None, cfg, 3)
+    last = out["generations"][-1]
+    assert last["unique_evaluations"] == 21
+    assert all(math.isfinite(last[k]) for k in ("best", "median", "mean"))
+    with pytest.raises(ValueError, match="max_unique_evaluations"):
+        run_gp(seed_lib, fp, None, replace(TINY, budget_unit="unique"), 3)

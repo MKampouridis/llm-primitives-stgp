@@ -175,3 +175,20 @@ def test_identical_replan_is_untouched_and_a_changed_plan_cannot_replace_records
         plan_records(plan_path, campaign_paths, settings)
     with pytest.raises(IncompleteCampaignError):
         collect(plan_path, campaign_paths, settings)
+
+
+def test_source_digest_follows_real_source_edits(tmp_path):
+    from lpstgp.campaign.plan import source_digest
+
+    root = tmp_path / "pkg"
+    (root / "sub").mkdir(parents=True)
+    (root / "a.py").write_text("x = 1\n")
+    (root / "sub" / "b.py").write_text("y = 2\n")
+    first = source_digest(root)
+    assert source_digest(root) == first
+    (root / "sub" / "b.py").write_text("y = 3\n")
+    assert source_digest(root) != first
+    (root / "sub" / "b.py").write_text("y = 2\n")
+    assert source_digest(root) == first
+    (root / "c.py").write_text("")  # a new module counts too
+    assert source_digest(root) != first

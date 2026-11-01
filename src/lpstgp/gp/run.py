@@ -192,14 +192,18 @@ def run_gp(
     if cfg.budget_unit not in ("requested", "unique"):
         raise ValueError(f"budget_unit must be 'requested' or 'unique', not {cfg.budget_unit!r}")
     unique_cap = cfg.max_unique_evaluations if cfg.budget_unit == "unique" else 0
+    if cfg.budget_unit == "unique" and unique_cap <= 0:
+        raise ValueError("budget_unit 'unique' needs max_unique_evaluations > 0")
 
     def evaluate(population: list[Rule]) -> float:
         nonlocal eval_seconds, requested
         spent = 0.0
+        spent_out = False
         for rule in population:
             key = rule.key()
-            if unique_cap and key not in scores and len(scores) >= unique_cap:
-                rule.fitness = -math.inf  # budget spent: never scored, never selected (D-049)
+            spent_out = spent_out or bool(unique_cap and len(scores) >= unique_cap)
+            if spent_out:  # budget spent: this rule and every later one in the generation are
+                rule.fitness = -math.inf  # dropped, duplicates included (D-049, D-051)
                 continue
             requested += 1
             if key not in scores:
@@ -221,7 +225,7 @@ def run_gp(
         return (-e[0], e[1], e[2])  # higher fitness, then smaller size, then key
 
     def update(population: list[Rule], g: int, spent: float, before: int) -> None:
-        population = [r for r in population if r.key() in scores]  # unscored: past the cap
+        population = [r for r in population if r.fitness != -math.inf]  # dropped: past the cap
         for rule in population:
             s = scores[rule.key()]
             size_w = lib.weighted_size(rule.entry) + lib.weighted_size(rule.exit)

@@ -243,3 +243,6 @@ Configurations tried and dropped stay in the register.
   - The chosen calibration values live in the step reports, not in `config/settings.toml`:
     writing them there would change the settings digest under the finished runs.
   - The pilot test read is rehearsed on the validation years, then claimed once.
+- **1 Nov 2026, second-round reviews (D-051):** §6.3 judges every λ_turnover multiplier on the
+  step-2 runs at that multiplier (the go/no-go configuration: chosen parameters, all five GP
+  arms), not on steps 1–2 pooled; the step-1 figures are reported for reference.

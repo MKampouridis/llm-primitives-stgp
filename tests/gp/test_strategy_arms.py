@@ -170,3 +170,21 @@ def test_infinite_values_of_arm_2b_terminals_become_unknown():
     spec = _terminal(frozen, Sig())
     out = spec.impl(np.zeros(4), np.zeros(4))
     np.testing.assert_array_equal(out, [0.5, np.nan, np.nan, np.nan])
+
+
+def test_infinite_values_of_arm_2c_operators_become_unknown():
+    """Through the adapter that library_2c uses, not just the helper."""
+    from types import SimpleNamespace
+
+    from lpstgp.strategies.adapters import _operator
+
+    def drop_z(log_return, horizon=5):
+        return np.array([0.5, np.inf, -np.inf, np.nan])
+
+    signal = SimpleNamespace(
+        name="z", fn=drop_z, inputs=("log_return",), lookback=lambda params: 5,
+        params={"horizon": SimpleNamespace(kind="Window")},
+    )  # fmt: skip
+    strategy = SimpleNamespace(domain="spectral", name="stub", definition="d", references=())
+    spec = _operator(SimpleNamespace(sid="s99", strategy=strategy, provenance=None), signal)
+    np.testing.assert_array_equal(spec.impl(np.zeros(4), horizon=5), [0.5, np.nan, np.nan, np.nan])

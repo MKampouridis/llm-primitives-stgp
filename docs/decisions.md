@@ -732,3 +732,30 @@ A fresh Claude reviewer read only the diff `aabe6fa..c77d604` (D-047, D-049). It
    - the driver's go/no-go guards (`tests/test_wp2_driver.py`).
 
 **Not changed.** The pilot-test step has no end-to-end test, since it needs a committed manifest and two finished campaigns. Its order — validate, rehearse, claim, read — is kept short and was traced by the reviewer.
+
+### D-051 Second-round reviews by ChatGPT and Gemini — Decided (engineer, under D-042; 1 Nov 2026)
+Both reviewed the diff `aabe6fa..c77d604`. Gemini's findings check out against the code, but its list of "areas checked and found sound" describes code that does not exist here (for example `MarketCache`, `record_complete`, six libraries), so that list was disregarded. Findings already fixed in D-050 (the λ value in `settings.toml`) are not repeated.
+
+**Fixed:**
+1. **One sample for every λ multiplier** (Gemini 1). The ×1 check pooled the 720 step-1 runs with the 90 step-2 runs, while ×2 and ×4 could only use step-2 runs. The two samples are not comparable: step 1 holds only arms 2c and 6, at every candidate's parameters.
+   - Every multiplier is now judged on the step-2 runs at that multiplier, which is the go/no-go configuration: the chosen parameters and all five GP arms. The step-1 figures are reported for reference.
+   - **Departure:** this departs from §6.3's "the runs of steps 1–2" (protocol log amended). Reason: the condition should describe the configuration it adjusts, on one consistent sample.
+   - The budget unit (§6.2) is computed from the runs at the chosen multiplier.
+2. **Calibration reports carry their provenance** (ChatGPT 2):
+   - `calibration.json` and `budget_check.json` record the source digest, the settings digest and their plans' digests. `budget_check.json` also records the digest of the calibration it used.
+   - A report from other code, other settings or another calibration is refused.
+   - A budget check under way first marks `budget_check.json` as pending, so an older decision can never be combined with newer evidence. A recorded override (`lambda_decision.json`) applies only to an unresolved check, never to a pending one.
+3. **Existing go/no-go plans must match the current decision** (ChatGPT 1, Gemini 6):
+   - `gonogo` (all modes) and `freeze` compare each plan's configuration digests with the configurations the current calibration decision implies, and refuse a mismatch.
+   - `--mode plan` always goes through `write_plan`, which reuses an identical plan and refuses a different one that has records.
+   - `--mode report` checks every task's record.
+4. **`budget-check --mode plan` plans the next λ stage** once the previous one is complete (Gemini 4).
+5. **Nothing after the unique cap counts** (Gemini 3):
+   - Once the cap is reached within a generation, every later rule in that generation, cached duplicates included, is dropped from the generation's statistics, the request count and selection.
+   - `budget_unit = "unique"` with no cap raises an error.
+6. **Tests that now fail when their fix is reverted** (Gemini 5, ChatGPT 3; checked by reverting each fix):
+   - the never-trade/turnover median, with idle rules pulling it below 50;
+   - ±inf through the arm-2c adapter itself;
+   - the source digest on a real temporary source tree.
+
+**Consequence.** Item 5 changes `src/lpstgp`, so the calibration plan written at `c77d604` is stale and has been replanned.

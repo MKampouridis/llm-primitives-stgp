@@ -31,11 +31,18 @@ import numpy as np
 
 from lpstgp import calibration, pilot
 from lpstgp.campaign.execute import execute_plan, load_plan, plan_records, progress
-from lpstgp.campaign.plan import Config, data_digest, settings_digest, write_plan
+from lpstgp.campaign.plan import (
+    PLAN_IDENTITY,
+    Config,
+    data_digest,
+    settings_digest,
+    source_digest,
+    write_plan,
+)
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
-from lpstgp.freeze import FreezeManifest, claim_test_read, write_manifest
+from lpstgp.freeze import FreezeManifest, claim_test_read, digest, write_manifest
 from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
 from lpstgp.runner import configs_from_settings
 from lpstgp.sandbox import Sandbox
@@ -75,8 +82,31 @@ def records(plan_path: Path) -> list[dict]:
     return plan_records(plan_path, load_paths(), load_settings())
 
 
+def provenance(settings, plan_paths) -> dict:
+    """What a calibration report was computed from: code, settings and its plans (D-051)."""
+    return {
+        "source_digest": source_digest(),
+        "settings_digest": settings_digest(settings),
+        "plans": {
+            load_plan(p)["campaign"]: digest({k: load_plan(p)[k] for k in PLAN_IDENTITY})
+            for p in plan_paths
+        },
+    }
+
+
+def _current(report: dict, name: str) -> None:
+    """Refuse a report computed from other code or settings than the current ones."""
+    prov = report.get("provenance", {})
+    now = {"source_digest": source_digest(), "settings_digest": settings_digest(load_settings())}
+    stale = [k for k, v in now.items() if prov.get(k) != v]
+    if stale:
+        raise SystemExit(f"{name} is stale ({', '.join(stale)} changed); run that step again")
+
+
 def chosen_parameters() -> dict:
-    return json.loads((REPORTS / "calibration.json").read_text())
+    choice = json.loads((REPORTS / "calibration.json").read_text())
+    _current(choice, "calibration.json")
+    return choice
 
 
 def step_calibrate(paths, settings, workers: int, mode: str = "all") -> None:
@@ -96,6 +126,7 @@ def step_calibrate(paths, settings, workers: int, mode: str = "all") -> None:
         return
     choice = calibration.choose_candidate(records(plan))
     REPORTS.mkdir(parents=True, exist_ok=True)
+    choice["provenance"] = provenance(settings, [plan])
     (REPORTS / "calibration.json").write_text(json.dumps(choice, indent=1))
     lines = [
         "# WP2 calibration: GP parameters at equal budget (protocol §6.1)",
@@ -167,12 +198,15 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
         "tournament": c["tournament"],
     }
     cells = [((name,), "PL1") for name in CALIBRATION_INSTRUMENTS]
+    out_json = REPORTS / "budget_check.json"
+    # A check under way invalidates any earlier decision until it finishes (D-051).
+    out_json.write_text(json.dumps({"status": "pending", "lambda_turnover_multiplier": None}))
     plan = _lambda_stage(1, gp, cells, paths, settings, workers, mode)
-    if plan is None or mode == "plan":
+    if plan is None:
         return
-    recs = records(plan)
-    step1 = records(paths.results_dir / "campaigns" / "wp2-calibration" / "tasks.json")
-    lam = calibration.lambda_check(step1 + recs)  # §6.3: the runs of steps 1-2
+    stages = {1: plan}
+    base_recs = records(plan)
+    lam = calibration.lambda_check(base_recs)  # every multiplier judged on step-2 runs (D-051)
     trials = [{"multiplier": 1, **lam}]
     chosen = 1 if not (lam["raise_lambda_turnover"] or lam["no_trade_exceeded"]) else None
     if lam["raise_lambda_turnover"] and not lam["no_trade_exceeded"]:
@@ -180,6 +214,7 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
             stage = _lambda_stage(m, gp, cells, paths, settings, workers, mode)
             if stage is None:
                 return
+            stages[m] = stage
             check = calibration.lambda_check(records(stage))
             trials.append({"multiplier": m, **check})
             if check["no_trade_exceeded"]:  # a higher lambda can only make rules quieter
@@ -187,17 +222,23 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
             if not check["raise_lambda_turnover"]:
                 chosen = m
                 break
+    recs = records(stages[chosen]) if chosen else base_recs  # the runs the go/no-go will match
+    step1 = records(paths.results_dir / "campaigns" / "wp2-calibration" / "tasks.json")
     out = {
+        "status": "resolved" if chosen else "unresolved",
         "budget_unit": calibration.budget_unit(recs),
         "lambda": lam,
         "lambda_trials": trials,
+        "lambda_step1_descriptive": calibration.lambda_check(step1),
         # None: unresolved (no-trade limit exceeded, or x4 not enough): needs a recorded decision
         "lambda_turnover_multiplier": chosen,
         # The chosen values live here and in calibration.json, never in settings.toml (D-050):
         # the go/no-go refuses if the settings' base lambda is no longer this one.
         "base_lambda_turnover": settings["fitness"]["lambda_turnover"],
+        "calibration_digest": digest(c),
+        "provenance": provenance(settings, list(stages.values())),
     }
-    (REPORTS / "budget_check.json").write_text(json.dumps(out, indent=1))
+    out_json.write_text(json.dumps(out, indent=1))
     timing = defaultdict(list)
     for r in recs:
         timing[r["library"]["name"]].append(r["timings"]["per_requested_evaluation_ms"])
@@ -220,7 +261,7 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
         "|---:|---|---:|---:|",
     ]
     for t in trials:
-        runs = "steps 1-2" if t["multiplier"] == 1 else "step 2 again"
+        runs = "step 2" if t["multiplier"] == 1 else "step 2 again"
         lines.append(
             f"| x{t['multiplier']} | {runs} | {t['no_trade_share']:.1%} | "
             f"{t['median_turnover']:.1f} |"
@@ -230,7 +271,13 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
         if chosen
         else "**unresolved**: a recorded decision is needed before the go/no-go (D-047)"
     )
-    lines += ["", f"Rule: no-trade share <= 25% and median turnover <= 50 a year -> {verdict}."]
+    d1 = out["lambda_step1_descriptive"]
+    lines += [
+        "",
+        f"Rule: no-trade share <= 25% and median turnover <= 50 a year -> {verdict}.",
+        f"For reference, the step-1 runs (all candidates, arms 2c and 6): no trade "
+        f"{d1['no_trade_share']:.1%}, median turnover {d1['median_turnover']:.1f} (D-051).",
+    ]
     (REPORTS / "budget_check.md").write_text("\n".join(lines) + "\n")
     print(json.dumps(out, indent=1))
 
@@ -238,9 +285,16 @@ def step_budget_check(paths, settings, workers: int, mode: str = "all") -> None:
 def gonogo_configs() -> list[Config]:
     c = chosen_parameters()
     check = json.loads((REPORTS / "budget_check.json").read_text())
+    if check.get("status") == "pending":
+        raise SystemExit("budget_check.json: a budget check is under way; finish it first")
+    _current(check, "budget_check.json")
+    if check.get("calibration_digest") != digest(c):
+        raise SystemExit("budget_check.json was computed from another calibration; rerun it")
     m = check.get("lambda_turnover_multiplier")
     override = REPORTS / "lambda_decision.json"
-    if m is None and override.exists():  # a recorded decision resolves §6.3 (D-050)
+    if (
+        m is None and check.get("status") == "unresolved" and override.exists()
+    ):  # a recorded decision resolves §6.3 (D-050)
         decision = json.loads(override.read_text())
         m = decision["lambda_turnover_multiplier"]
         if not str(decision.get("decision", "")).startswith("D-"):
@@ -281,13 +335,24 @@ def gonogo_plans(paths) -> list[Path]:
     ]
 
 
+def check_gonogo_plan(plan_path: Path, settings) -> None:
+    """Refuse a go/no-go plan whose configurations are not the current calibration decision."""
+    expected = {c.name: c.digest(settings) for c in gonogo_configs()}
+    planned = {k: c["digest"] for k, c in load_plan(plan_path)["configs"].items()}
+    if planned != expected:
+        raise SystemExit(f"{plan_path}: its configurations differ from the current calibration")
+
+
 def step_gonogo(paths, settings, workers: int, mode: str = "all") -> None:
     for period, plan_path in zip(("PL1", "PL2"), gonogo_plans(paths), strict=True):
-        if not plan_path.exists() and mode != "report":
+        if mode != "report":  # an identical plan is reused; a different one with records refused
             cells = [((name,), period) for name in PILOT_INSTRUMENTS]
             write_plan(f"wp2-gonogo-{period}", gonogo_configs(), cells, 10, paths, settings)
+        check_gonogo_plan(plan_path, settings)
         if mode == "all":
             print(period, execute_plan(plan_path, paths, settings, workers))
+        if mode == "report":
+            records(plan_path)  # digests current and every task complete, or it refuses
         print(period, progress(plan_path, settings))
 
 
@@ -330,6 +395,7 @@ def step_freeze(paths, settings) -> None:
         raise SystemExit("commit the code first: the manifest records the code revision")
     rules = {}
     for plan_path in gonogo_plans(paths):
+        check_gonogo_plan(plan_path, settings)
         recs = records(plan_path)  # every task, complete and current
         short = [
             r["campaign"]["task_id"]

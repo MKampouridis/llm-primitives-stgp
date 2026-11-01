@@ -12,7 +12,7 @@ def _record(
     ran=None,
 ):  # fmt: skip
     comps = {"trades": trades, "no_trade": trades < 2}
-    if trades >= 2:
+    if trades >= 1:  # as market_part: every rule that trades records its turnover
         comps["median_turnover"] = turnover
     return {
         "config": {"population": pop, "tournament": tour, "generations": ran or len(best) - 1},
@@ -68,3 +68,12 @@ def test_rounded_generations_never_exceed_the_calibrated_run():
     out = choose_candidate([_record(1000, 3, 0.3, late, ran=49) for _ in range(3)])
     assert out["generations"] == 49
     assert out["requested_evaluations"] == 50_000
+
+
+def test_idle_rules_count_in_the_median_turnover():
+    """Rules that never trade count with turnover 0 (D-049), pulling the median below 50."""
+    busy = [_record(500, 5, 0, [0, 1], turnover=80.0) for _ in range(2)]
+    idle = [_record(500, 5, 0, [0, 1], trades=0) for _ in range(3)]
+    out = lambda_check(busy + idle)
+    assert out["median_turnover"] == 0.0
+    assert not out["raise_lambda_turnover"]
