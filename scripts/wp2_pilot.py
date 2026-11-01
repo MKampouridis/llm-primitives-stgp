@@ -41,7 +41,6 @@ from lpstgp.campaign.plan import (
 )
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
 from lpstgp.data.store import modelling_store
-from lpstgp.data.tier_a import git_revision
 from lpstgp.freeze import FreezeManifest, claim_test_read, digest, write_manifest
 from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
 from lpstgp.runner import configs_from_settings
@@ -57,6 +56,8 @@ PILOT_INSTRUMENTS = (
 )  # fmt: skip
 GP_ARMS = {"2a": "s2a", "2b": "s2b", "2c": "s2c", "6": "seed", "TA": "technical"}
 CAL_BUDGET = 50_000
+CAL_POPULATIONS, CAL_TOURNAMENTS = (250, 500, 1000), (3, 5)  # protocol §6.1
+CAL_RUNS, BUDGET_RUNS, GONOGO_RUNS = 10, 3, 10  # per arm and instrument (§6.1, §6.2, §7)
 UNIQUE_CEILING = 10  # unique budget: at most this many times the calibrated generations
 REPORTS = REPO_ROOT / "reports" / "wp2"
 
@@ -65,7 +66,7 @@ def prepare(name, configs, cells, runs, paths, settings, workers: int, mode: str
     """Plan (unless reporting), run here (mode all) and return the plan once every task is done."""
     plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
     if mode != "report":
-        plan_path = write_plan(name, configs, cells, runs, paths, settings)
+        plan_path = write_plan(name, configs, cells, runs, paths, settings, register=register())
     if mode == "all":
         print(execute_plan(plan_path, paths, settings, workers))
     status = progress(plan_path, settings)
@@ -80,6 +81,20 @@ def prepare(name, configs, cells, runs, paths, settings, workers: int, mode: str
 def records(plan_path: Path) -> list[dict]:
     """Every task's complete, current record, in plan order (refuses if any is missing)."""
     return plan_records(plan_path, load_paths(), load_settings())
+
+
+def register() -> Path:
+    """The trial register (reports/configuration_register.csv) beside this step's reports."""
+    return REPORTS.parent / "configuration_register.csv"
+
+
+def revision() -> str:
+    """The code revision of the repository the reports belong to (freeze and test read)."""
+    out = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True,
+        check=True,
+    )  # fmt: skip
+    return out.stdout.strip()
 
 
 def provenance(settings, plan_paths) -> dict:
@@ -117,11 +132,11 @@ def step_calibrate(paths, settings, workers: int, mode: str = "all") -> None:
             gp={"population": pop, "generations": CAL_BUDGET // pop - 1, "tournament": tour},
         )
         for arm in ("s2c", "seed")
-        for pop in (250, 500, 1000)
-        for tour in (3, 5)
+        for pop in CAL_POPULATIONS
+        for tour in CAL_TOURNAMENTS
     ]
     cells = [((name,), "PL1") for name in CALIBRATION_INSTRUMENTS]
-    plan = prepare("wp2-calibration", configs, cells, 10, paths, settings, workers, mode)
+    plan = prepare("wp2-calibration", configs, cells, CAL_RUNS, paths, settings, workers, mode)
     if plan is None:
         return
     choice = calibration.choose_candidate(records(plan))
@@ -132,7 +147,7 @@ def step_calibrate(paths, settings, workers: int, mode: str = "all") -> None:
         "# WP2 calibration: GP parameters at equal budget (protocol §6.1)",
         "",
         f"Arms 2c and 6 pooled; {', '.join(CALIBRATION_INSTRUMENTS)}; PL1 training data only; "
-        f"10 runs per arm and instrument; {CAL_BUDGET:,} requested evaluations per candidate.",
+        f"{CAL_RUNS} runs per arm and instrument; {CAL_BUDGET:,} requested evaluations per candidate.",
         "",
         "| population | tournament | runs | median validation F | median convergence gen | "
         "generations | evaluations |",
@@ -178,10 +193,10 @@ def _lambda_stage(m, gp, cells, paths, settings, workers, mode) -> Path | None:
     fitness = {} if m == 1 else {"lambda_turnover": m * settings["fitness"]["lambda_turnover"]}
     configs = [Config(f"bud-{arm}", lib, gp=gp, fitness=fitness) for arm, lib in GP_ARMS.items()]
     if mode == "all":
-        return prepare(name, configs, cells, 3, paths, settings, workers, "all")
+        return prepare(name, configs, cells, BUDGET_RUNS, paths, settings, workers, "all")
     plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
     if mode == "plan" or not plan_path.exists():
-        prepare(name, configs, cells, 3, paths, settings, workers, "plan")
+        prepare(name, configs, cells, BUDGET_RUNS, paths, settings, workers, "plan")
     status = progress(plan_path, settings)
     if status["complete"] != status["tasks"]:
         print(f"{name}: {status['complete']} of {status['tasks']} tasks complete; run them, "
@@ -347,7 +362,10 @@ def step_gonogo(paths, settings, workers: int, mode: str = "all") -> None:
     for period, plan_path in zip(("PL1", "PL2"), gonogo_plans(paths), strict=True):
         if mode != "report":  # an identical plan is reused; a different one with records refused
             cells = [((name,), period) for name in PILOT_INSTRUMENTS]
-            write_plan(f"wp2-gonogo-{period}", gonogo_configs(), cells, 10, paths, settings)
+            write_plan(
+                f"wp2-gonogo-{period}", gonogo_configs(), cells, GONOGO_RUNS, paths, settings,
+                register=register(),
+            )  # fmt: skip
         check_gonogo_plan(plan_path, settings)
         if mode == "all":
             print(period, execute_plan(plan_path, paths, settings, workers))
@@ -393,25 +411,25 @@ def source_changed_since(revision: str) -> list[str]:
 def step_freeze(paths, settings) -> None:
     if source_changed_since("HEAD"):
         raise SystemExit("commit the code first: the manifest records the code revision")
-    rules = {}
+    rules, short = {}, defaultdict(list)
     for plan_path in gonogo_plans(paths):
         check_gonogo_plan(plan_path, settings)
         recs = records(plan_path)  # every task, complete and current
-        short = [
-            r["campaign"]["task_id"]
-            for r in recs
-            if r.get("budget", {}).get("unit") == "unique" and not r["budget"]["cap_reached"]
-        ]
-        if short:  # the generation ceiling ended these runs before their budget (D-049)
-            raise SystemExit(
-                f"{len(short)} runs stopped before the unique budget (first: {short[0]}); "
-                "record a decision before freezing"
-            )
+        for r in recs:  # runs the generation ceiling ended before their unique budget
+            if r.get("budget", {}).get("unit") == "unique" and not r["budget"]["cap_reached"]:
+                short[r["campaign"]["config"]].append(r["campaign"]["task_id"])
         rules |= pilot.manifest_rules(recs)
-    context = frozen_context(paths, settings) | {"code_version": git_revision()}
+    # Kept and reported, never a reason to stop: the rule is fixed in advance (D-052), because a
+    # decision taken here would come after the go/no-go records exist (D-047).
+    (REPORTS / "unique_budget_shortfall.json").write_text(
+        json.dumps({arm: sorted(ids) for arm, ids in sorted(short.items())}, indent=1)
+    )
+    context = frozen_context(paths, settings) | {"code_version": revision()}
     path = REPORTS / "freeze_manifest.json"
     write_manifest(path, rules, context)
-    print(f"{len(rules)} rules frozen in {path}; commit it before `pilot-test`")
+    counts = ", ".join(f"{arm} {len(ids)}" for arm, ids in sorted(short.items())) or "none"
+    print(f"{len(rules)} rules frozen in {path}; runs short of the unique budget: {counts}")
+    print("commit the manifest (and unique_budget_shortfall.json) before `pilot-test`")
 
 
 def _evaluate(box: Sandbox, recs, frozen, cfg) -> dict:
@@ -454,7 +472,7 @@ def step_pilot_test(paths, settings) -> None:
     out_json = REPORTS / "pilot_go_no_go.json"
     if out_json.exists():  # protocol §8: the test years are read once
         raise SystemExit(f"{out_json} exists: the pilot test years have already been read")
-    manifest = FreezeManifest.load_committed(REPORTS / "freeze_manifest.json")
+    manifest = FreezeManifest.load_committed(REPORTS / "freeze_manifest.json", repo=REPO_ROOT)
     frozen_code = manifest.context["code_version"]
     manifest.check_context(frozen_context(paths, settings) | {"code_version": frozen_code})
     if changed := source_changed_since(frozen_code):
@@ -516,6 +534,11 @@ def step_pilot_test(paths, settings) -> None:
     }
     result = pilot.go_no_go(pooled, yearly)
     result["manifest_commit"] = manifest.commit
+    shortfall = REPORTS / "unique_budget_shortfall.json"
+    if shortfall.exists():  # reported beside the decision (D-052)
+        result["unique_budget_shortfall"] = {
+            arm: len(ids) for arm, ids in json.loads(shortfall.read_text()).items()
+        }
     result["read_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
     result["test_access"] = access
     out_json.write_text(json.dumps(result, indent=1, default=float))

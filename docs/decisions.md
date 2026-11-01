@@ -759,3 +759,23 @@ Both reviewed the diff `aabe6fa..c77d604`. Gemini's findings check out against t
    - the source digest on a real temporary source tree.
 
 **Consequence.** Item 5 changes `src/lpstgp`, so the calibration plan written at `c77d604` is stale and has been replanned.
+
+### D-052 End-to-end rehearsal of the pilot, and runs short of a unique budget — Decided (engineer, under D-042; 1 Nov 2026)
+**Rehearsal.** `tests/test_wp2_rehearsal.py` runs the real driver through every WP2 step at a tiny scale:
+- calibrate, budget-check, go/no-go (run and report), freeze;
+- a manifest committed in a throwaway git repository;
+- the one-time test read, then a refused second read;
+- the steps run on three synthetic instruments with their own data, results, reports and trial register, so nothing in the real repository is touched (checked).
+
+It has two variants:
+- **plain:** λ ×1 and the requested-evaluation budget;
+- **strict:** it forces the other branches — λ raised to ×2 and ×4, an unresolved check settled by a recorded decision, and the unique-evaluation budget.
+
+The driver's scale (instruments, candidate grid, runs) and its repository paths are now module constants, which the test overrides. Their values are unchanged.
+
+**What it found.** In the strict variant, one run reached its generation ceiling (10× the calibrated generations) before spending its unique budget: its population had converged and kept proposing rules already scored. Under D-049, `freeze` refused and asked for a decision. But a decision at that point would be taken after the go/no-go records exist, which D-047 rules out.
+
+**Rule, fixed in advance:**
+- Under a unique budget, a run that reaches the generation ceiling first is kept. It had ten times its calibrated generations to search, and failing to find new rules is a property of its arm; excluding it would bias the arm.
+- `freeze` lists such runs per arm in `reports/wp2/unique_budget_shortfall.json` (commit it with the manifest), and the go/no-go result reports the counts.
+- This replaces D-049's refusal at the freeze.
