@@ -70,7 +70,9 @@ The same task must give the same rules on CERES as on the Mac. Before the first 
 1. Plan the calibration on the Mac and copy the plan up (§6).
 2. Run elements 1–2 on CERES.
 3. Run the same two tasks on the Mac: `uv run python scripts/campaign_tasks.py run --campaign wp2-calibration --index 0 --count 2`.
-4. Compare the records' `hall_of_fame`. They must be identical.
+4. Compare them with `uv run python scripts/compare_records.py results/campaigns/wp2-portability results/campaigns/wp2-portability-ceres`. Rules, counts and selections must be identical, and floats equal up to rounding. Passed on 1 November 2026 (D-048).
+
+Use the `portability` step of `scripts/wp2_pilot.py` for this check: it is not entered in the trial register. Run every campaign wholly on one machine (D-048).
 
 If they differ, the environment's versions differ in a way that matters. Record it in `docs/decisions.md` and run the pilot on one machine only.
 

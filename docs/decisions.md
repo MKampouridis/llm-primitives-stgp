@@ -660,3 +660,19 @@ Four independent Claude reviewers (leakage, backtest and fitness, GP engine, cam
 - **Extra leakage tests.** Prefix invariance FIT→VALIDATE→TEST for all five GP libraries, and a poisoned-future canary through a whole GP run and arm-1 selection (`tests/leakage/test_library_prefix.py`).
 
 **Departures from the plan:** none. The protocol text is unchanged except where noted (§6.3's remedy, the annualisation and the unique-budget ceiling), all of which make it operational.
+
+### D-048 Portability of runs between the Mac and CERES — Decided (engineer, under D-042; 1 Nov 2026)
+**Check (`docs/CERES.md` §5).** Two calibration-size runs (arms 2c and 6; SPX; PL1; population 500 × 100 generations), campaign `wp2-portability`, were run on the Mac (Apple M1, macOS, numba 0.68.1) and on CERES (x86-64, CentOS 7, conda-forge, numba 0.68.0), from the same plan and data.
+
+**Result:**
+- **Same:** every generation evolved the same rules, with identical unique and requested evaluation counts, identical halls of fame and the same final rule.
+- **Different:** floating-point values differ only in the last bits (at most 4.4 × 10⁻¹⁶). This is rounding from the different CPUs and the numba patch release.
+- `scripts/compare_records.py` now requires identical rules, counts and selections, and floats equal within a relative 10⁻¹².
+
+**Speed.** CERES took 145 s (arm 2c) and 97 s (arm 6) per run, against 71 s and 39 s on the Mac: about 2–2.5× slower per core. With 60 concurrent tasks, that is still about 8× the Mac's throughput with six workers.
+
+**Rule.**
+- A near-tie in fitness within rounding could, in principle, send a run down a different path on the other machine. So every campaign runs entirely on one machine, with every arm and every period together. That way the paired comparison never mixes platforms.
+- Each record states its platform (`environment`).
+- Reproducing a run exactly means using the same platform; across platforms, results agree up to such rounding.
+- This check is repeated whenever the CERES environment is rebuilt.
