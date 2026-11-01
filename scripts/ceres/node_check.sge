@@ -1,0 +1,18 @@
+#!/bin/bash
+# Runs scripts/ceres/node_probe.py on one node (D-054). Submitted by scripts/ceres/node_check.sh.
+#$ -N lpstgp-node
+#$ -S /bin/bash
+#$ -q all.q
+#$ -cwd
+#$ -j y
+#$ -o logs/
+set -eo pipefail
+unset PYTHONPATH
+source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lpstgp
+export LPSTGP_PATHS="${LPSTGP_PATHS:-$PWD/config/paths.ceres.toml}"
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1
+export NUMBA_CACHE_DIR="${TMPDIR:-/tmp}/numba-cache-$USER-probe"
+echo "$(date -u +%FT%TZ) $(hostname)"
+python scripts/ceres/node_probe.py
+echo "$(date -u +%FT%TZ) done"

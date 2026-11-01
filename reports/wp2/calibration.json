@@ -1,0 +1,74 @@
+{
+ "population": 250,
+ "tournament": 5,
+ "runs": 120,
+ "median_validation": 0.673848192028073,
+ "median_convergence": 64.5,
+ "generations": 70,
+ "requested_evaluations": 17750,
+ "best_median_validation": 0.673848192028073,
+ "tolerance": 0.05,
+ "table": [
+  {
+   "population": 250,
+   "tournament": 3,
+   "runs": 120,
+   "median_validation": 0.5888534303528572,
+   "median_convergence": 58.5,
+   "generations": 60,
+   "requested_evaluations": 15250
+  },
+  {
+   "population": 250,
+   "tournament": 5,
+   "runs": 120,
+   "median_validation": 0.673848192028073,
+   "median_convergence": 64.5,
+   "generations": 70,
+   "requested_evaluations": 17750
+  },
+  {
+   "population": 500,
+   "tournament": 3,
+   "runs": 120,
+   "median_validation": 0.6025218817546177,
+   "median_convergence": 41.0,
+   "generations": 50,
+   "requested_evaluations": 25500
+  },
+  {
+   "population": 500,
+   "tournament": 5,
+   "runs": 120,
+   "median_validation": 0.49477678011078635,
+   "median_convergence": 36.5,
+   "generations": 40,
+   "requested_evaluations": 20500
+  },
+  {
+   "population": 1000,
+   "tournament": 3,
+   "runs": 120,
+   "median_validation": 0.37629928381254346,
+   "median_convergence": 32.0,
+   "generations": 40,
+   "requested_evaluations": 41000
+  },
+  {
+   "population": 1000,
+   "tournament": 5,
+   "runs": 120,
+   "median_validation": 0.6468785821966653,
+   "median_convergence": 27.0,
+   "generations": 30,
+   "requested_evaluations": 31000
+  }
+ ],
+ "provenance": {
+  "source_digest": "162019713afed85675ac460e0089c1a1e11a36a3e35310066b9e9bfe7335ba84",
+  "settings_digest": "2acb05ce32b2416ea02f0186bc046c625538fb4f207cc4ef1a9509870756d6a2",
+  "plans": {
+   "wp2-calibration": "ce94cf4c5eaa5d317c7c42ae3561c031e5ede5564219338bfb0511ea611d3794"
+  }
+ }
+}
