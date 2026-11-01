@@ -417,6 +417,7 @@ def run_session(
         (archive / "BRIEF.md").write_text(brief, encoding="utf-8")
         record["command"] = claude_command(folder, archive, session_id)
         save()
+    if not record["runs"]:  # never launched (e.g. claude missing from PATH): start, not resume
         record["runs"].append(run_claude(record["command"], folder, archive, "stream", timeout))
         save()
     # A session cut short is resumed in the same conversation, never accepted half-way: usage
