@@ -246,3 +246,6 @@ Configurations tried and dropped stay in the register.
 - **1 Nov 2026, second-round reviews (D-051):** §6.3 judges every λ_turnover multiplier on the
   step-2 runs at that multiplier (the go/no-go configuration: chosen parameters, all five GP
   arms), not on steps 1–2 pooled; the step-1 figures are reported for reference.
+- **2 Nov 2026, pilot ended (D-056–D-060):** GO. The protocol is frozen. Per-instrument test
+  results were not saved by the pilot-test step (a deviation; D-060); the validation–test gap is
+  reported in `reports/wp2/pilot_validation_gap.md`.
