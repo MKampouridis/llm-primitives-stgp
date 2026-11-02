@@ -834,3 +834,6 @@ The budget check (protocol §6.2–6.3) ran on CERES: every GP arm (2a, 2b, 2c, 
 The go/no-go campaign (D-056) ran on CERES at `9c9fc2b`: 1,122 tasks each in `wp2-gonogo-PL1` and `wp2-gonogo-PL2`, all complete, all with numpy's CPU-specific paths off (D-054), spread over all four node types. Two arm-1 tasks were run first as a test.
 
 Before the freeze, the records were checked only for completeness, current digests and code version; no results were inspected (D-047). `freeze` wrote `reports/wp2/freeze_manifest.json` (2,244 rules: task → rule hash, plus the settings, data, operator-lock and strategy-lock digests) and `reports/wp2/unique_budget_shortfall.json`, which is empty as the budget is in requested evaluations (D-056). Both are committed, so `pilot-test` may now open the PL1 and PL2 test years once.
+
+### D-058 The pilot test years are read once — Decided (PI, 2 Nov 2026)
+The PI authorised `pilot-test` ("run it") after the freeze (D-057, manifest committed in `66c26de`). This is the one read of the PL1 and PL2 test years (protocol §8), through `Sandbox.open_pilot_test`, preceded by a rehearsal on the validation years. Only the frozen rules listed in the manifest are evaluated. No other test data are unsealed.
