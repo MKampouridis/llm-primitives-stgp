@@ -110,7 +110,7 @@ Arm 5's trees pass gates 1–2 only, as type checks: they add no code.
 - **Arm 3:** 7 sessions.
 - **WP3 dry run:** 2 periods × 3 cycles × 3 arms = 18 sessions.
 - **WP4:** 18 periods × 3 cycles × 3 arms = 162 sessions.
-- At WP2's median (about 12 minutes, about $3.40 at API prices per session), WP4 needs about 32 hours of session time. The equivalent API price is about $550, which runs on the subscription, paced one session at a time (D-044). It does not fit the $60 a month API budget, so subscription use is assumed throughout.
+- At WP2's median (about 12 minutes, about $3.40 at API prices per session), WP4 needs about 32 hours of session time. The equivalent API price is about $550, which runs on the subscription, paced one session at a time (D-044). It does not fit the $60 a month API budget, so subscription use is assumed throughout. Usage beyond the subscription's monthly limit stops rather than being billed (D-068), so the constraint is time: if M4 shows that WP4's sessions would not fit, C drops to 2.
 
 ## 7. Leakage tests (with the code, before any session)
 

@@ -881,3 +881,8 @@ The LLM session needs the Mac (subscription Claude Code), and a CERES round trip
 
 ### D-067 Patch bounds and library cap — Provisional (engineer, 2 Nov 2026)
 Per cycle, 4-full may make at most 2 prunes, 2 refines and 2 grows, and 4-grow at most 2 grows. The cap is 64 cross-domain operators (about 2.3× arm 3), and core and data are never touched. A prune needs low usage and contribution in 2 consecutive cycles, checked by the gate. When 4-grow reaches the cap it stops growing, which is reported. Arm 5 proposes at most 25 rule pairs per cycle, which replace 25 of the 250 random initial individuals. All of these are checked for mechanics in the dry run.
+
+### D-068 Subscription usage stops at its limit; no bill — Decided (PI's information, 2 Nov 2026)
+The PI confirmed that usage beyond the organisation's monthly limit is not billed: sessions simply stop. So WP3 and WP4 LLM work has no money cost. The only constraint is time:
+- the 5-hour and monthly limits pause sessions; the driver resumes after the reset (D-044);
+- a monthly stop could delay WP4 maintenance by weeks. The dry run (M4) measures usage per session, and if 162 WP4 sessions would not fit comfortably within the monthly allowance, C drops from 3 to 2 (D-064), before any other change. The model is never changed (D-036).
