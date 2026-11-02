@@ -72,7 +72,7 @@ The same task must give the same rules on CERES as on the Mac. Before the first 
 3. Run the same two tasks on the Mac: `uv run python scripts/campaign_tasks.py run --campaign wp2-calibration --index 0 --count 2`.
 4. Compare them with `uv run python scripts/compare_records.py results/campaigns/wp2-portability results/campaigns/wp2-portability-ceres`. Rules, counts and selections must be identical, and floats equal up to rounding. Passed on 1 November 2026 (D-048).
 
-Use the `portability` step of `scripts/wp2_pilot.py` for this check: it is not entered in the trial register. Run every campaign wholly on one machine (D-048).
+Use the `portability` step of `scripts/wp2_pilot.py` for this check: it is not entered in the trial register. Run every campaign wholly on one machine (D-048). CERES's nodes are not all the same CPU: `scripts/ceres/tasks.sge` switches off numpy's CPU-specific code paths so that every node gives identical results, and `scripts/campaign_tasks.py run` refuses to run without that (D-054). `bash scripts/ceres/node_check.sh` re-checks the nodes, for example after the environment is rebuilt.
 
 If they differ, the environment's versions differ in a way that matters. Record it in `docs/decisions.md` and run the pilot on one machine only.
 

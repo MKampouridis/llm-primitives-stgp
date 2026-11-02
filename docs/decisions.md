@@ -785,15 +785,27 @@ The driver's scale (instruments, candidate grid, runs) and its repository paths 
 
 It was git-ignored by the general `*.csv` rule, and only mirrored to Box. It is now the one exception: in `.gitignore`, and by exact path in `scripts/check_hygiene.py`, with a test. Every other CSV is still refused, as data or results.
 
-### D-054 CERES nodes are not numerically identical; calibration choice unaffected — Provisional (engineer, under D-042; 1 Nov 2026)
+### D-054 CERES nodes are not numerically identical; calibration choice unaffected — Decided (engineer, under D-042; 1–2 Nov 2026)
 **Finding.** The calibration was run twice on CERES with the same code (`c77d604`, then `c83314a`, which differs only in unique-budget code that calibration does not use). 639 of the 720 records are identical. 81 differ, and every one of them ran on an 80-core node in exactly one of the two runs; runs on the 40-, 88- and 176-core nodes agree with each other exactly.
 - 67 differ only in per-generation population statistics, by rounding in the last digits.
 - 14 differ in their hall of fame: a last-digit difference changed a comparison, and evolution then took another path. 12 selected a different rule.
 
-So D-048's assumption that a campaign on CERES runs "on one machine" does not hold: CERES mixes CPU types, and numpy and numba pick CPU-specific code paths (vector instructions, vectorised maths) whose rounding differs.
+So D-048's assumption that a campaign on CERES runs "on one machine" does not hold: CERES mixes CPU types, and numpy picks CPU-specific code paths whose rounding differs (see the probe below).
 
 **Effect on the calibration.** None on the choice. Both runs choose population 250, tournament 5, 70 generations; the chosen candidate's median validation F is 0.718 in the first run and 0.674 in the second, and the same candidate is the best in both. The second run (`c83314a`, plan digest in `reports/wp2/calibration.json`) is the one used. The difference is noise in which seed-paths evolution follows, not a bias between arms or candidates: which node a task lands on does not depend on its arm.
 
 **Why it still matters.** Re-running a task should give the same record; the paired-seed design and the paper's reproducibility claim assume it, and `scripts/compare_records.py` is the check.
 
-**Next.** `scripts/ceres/node_check.sh` runs a short probe (`scripts/ceres/node_probe.py`) on two nodes of each type, under the default settings and under settings that pin numba to generic x86-64 code without SVML and/or switch off numpy's AVX-512 (and AVX2/FMA3) paths. The cheapest setting that makes every node agree goes into `scripts/ceres/tasks.sge` before the budget check; if none does, campaigns are pinned to one node type with `-l`. The default setting must itself show the difference between node types, or the probe is too small to tell. Status becomes Decided once the probe has been read.
+**Probe.** `scripts/ceres/node_check.sh` ran `scripts/ceres/node_probe.py` on two nodes of each type (eight nodes) in two rounds. Each probe made three short GP runs (arms 2c and 6; PL1 FIT and VALIDATE data only), and the exact results were fingerprinted.
+- The 80-core nodes are Broadwell (Xeon E5-2698 v4, no AVX-512); the 40-, 88- and 176-core nodes are Skylake or Cascade Lake with AVX-512. With default settings the two groups disagree and every node within a group agrees, as in the calibration.
+- The cause is numpy's AVX-512 code paths (`X86_V4`, numpy 2.5). With every CPU-specific path numpy dispatches switched off (`NPY_DISABLE_CPU_FEATURES`), all eight nodes give identical results, equal to the Broadwells' default results.
+- Not the cause: numba's code generation (pinning it to generic x86-64 without SVML changed nothing anywhere) and OpenBLAS's kernel choice (forcing Haswell kernels changed nothing).
+- Cost: speed is about the same; at most 10–20% slower on some arm-2c runs.
+- Round 1's numpy setting used pre-2.5 feature names, which numpy ignored. Round 2 asks numpy for its own names on each node.
+
+**Rule.**
+- `scripts/ceres/tasks.sge` switches off every CPU-specific path that numpy dispatches on the node it lands on.
+- `scripts/campaign_tasks.py run` refuses to run on x86-64 while any such path is on, so a task cannot run with node-dependent rounding by mistake.
+- No `src` change was needed, so the calibration result and the budget-check plan stay current.
+- All campaigns from the budget check onwards run this way. The calibration (default settings, mixed nodes) stands, since its choice is the same in both runs.
+- D-048's rule that a campaign runs wholly on one machine still holds: CERES, with this setting, counts as one machine.

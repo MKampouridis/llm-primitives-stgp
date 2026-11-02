@@ -27,8 +27,13 @@ conda activate lpstgp
 export LPSTGP_PATHS="${LPSTGP_PATHS:-$PWD/config/paths.ceres.toml}"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1
 export NUMBA_CACHE_DIR="${TMPDIR:-/tmp}/numba-cache-$USER"   # compiled code kept on the node, not on NFS
+# numpy picks CPU-specific code (AVX-512 on most nodes, not on the 80-core Broadwells) whose
+# rounding differs: switch off every such path this CPU has, so all nodes give identical results
+# (D-054; checked on every node type by scripts/ceres/node_check.sh).
+NPY_DISABLE_CPU_FEATURES="$(python -c "from numpy._core._multiarray_umath import __cpu_dispatch__ as d, __cpu_features__ as f; print(' '.join(x for x in d if f.get(x)))")"
+if [ -n "$NPY_DISABLE_CPU_FEATURES" ]; then export NPY_DISABLE_CPU_FEATURES; else unset NPY_DISABLE_CPU_FEATURES; fi
 COUNT="${COUNT:-1}"
 INDEX=$(( (SGE_TASK_ID - 1) * COUNT ))
-echo "$(date -u +%FT%TZ) $(hostname) $CAMPAIGN tasks $INDEX..$(( INDEX + COUNT - 1 ))"
+echo "$(date -u +%FT%TZ) $(hostname) [numpy off: ${NPY_DISABLE_CPU_FEATURES:-none}] $CAMPAIGN tasks $INDEX..$(( INDEX + COUNT - 1 ))"
 python scripts/campaign_tasks.py run --campaign "$CAMPAIGN" --index "$INDEX" --count "$COUNT"
 echo "$(date -u +%FT%TZ) done"
