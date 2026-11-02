@@ -852,3 +852,32 @@ Protocol §8 also asks for per-instrument results and validation–test gaps.
 
 ### D-061 Scope of the delegation — Decided (PI, 2 Nov 2026)
 The PI reaffirmed D-042: the engineer takes all scientific decisions from now on, recording the reasoning here. Unchanged: the PI is asked before non-scientific, outward-facing or costly actions (CERES jobs, paid API use, GitHub settings, deleting data or results). Opening any sealed test data (the P01–P18 test years, or a pilot test year a second time) stays a recorded PI decision (hard rule 1), because it cannot be undone.
+
+---
+
+## WP3 (from 2 Nov 2026)
+
+The WP3 protocol is `docs/protocol_wp3.md` (draft 0.1). Each decision below is the engineer's under D-042/D-061. "Provisional" means a value is fixed at protocol 1.0 from the dry run's mechanics, never from performance.
+
+### D-062 Arm 3 is free authoring from the domain list, without performance feedback — Decided (engineer, 2 Nov 2026)
+D-031 Q8 asked whether arm 3 implements arm 6's specifications or authors freely. **Free authoring:** same 7 domains, same quota (4 each), same contract and gates, one isolated session per domain; the brief gives domain scopes, not the plan's example operators.
+- *Why:* re-implementing arm 6's list would test only who types the code, and arm 6 was itself written with AI help (D-002), so that comparison would be nearly empty. Free authoring tests C1's actual claim: the LLM choosing and writing cross-domain primitives. H2a then compares an LLM-chosen library with an expert-specified one, at measured human effort.
+- **No backtest tool**, only gates and descriptive statistics on anonymised dev-fit data, because arm 6 was written without performance feedback. With a backtest tool, arm 3 would be tuned and arm 6 not, which would confound authorship with tuning.
+- *Departure from the plan:* the plan calls arm 6 "expert-written versions of arm 3's operators". With free authoring the two libraries contain different operators from the same domains. The paper states this.
+
+### D-063 Arms 4 and 5 start from arm 3's library — Decided (engineer, 2 Nov 2026)
+Arms 4-grow, 4-full and 5 all start from arm 3's frozen library, and arm 5 keeps it fixed.
+- *Why:* RQ3 and RQ4 should compare maintenance regimes and LLM roles from one starting point. In the plan, arm 5's "fixed 2c grammar" meant the LLM-written seed library, i.e. arm 3's library here. WP2 redefined 2c over the strategies' signals (D-037), so taking 2c literally would make H4 compare libraries as well as roles.
+
+### D-064 Maintenance runs per period on training data, carried forward — Decided (engineer, 2 Nov 2026)
+Maintenance runs C cycles on each period's FIT data, with gates on its VALIDATE year, and the library carries forward to the next period. This is causal, because each period's maintenance ends before its test year. Each period's reported runs use the library at the end of its maintenance. C = 3 per period is provisional.
+
+### D-065 Maintenance cycles run on the Mac — Provisional (engineer, 2 Nov 2026)
+The LLM session needs the Mac (subscription Claude Code), and a CERES round trip per cycle needs the PI's two-factor sign-in each time, which would be 162 times in WP4. The cycles' GP runs (about 15–20 minutes each on 6 workers) therefore run on the Mac. The reported runs run on CERES. This is revisited after the dry run's timings.
+
+### D-066 Budget accounting and the paired-seed gate — Decided (engineer, 2 Nov 2026)
+- The reported runs have the same budget in every arm. Maintenance cycles' GP evaluations and LLM tokens are reported per arm as the method's cost. The comparison is between final libraries, not between total compute; arms 4-grow, 4-full and 5 have the same number of sessions and cycles, which matches H4's budget.
+- A patch is admitted unless its paired median validation F is more than 0.05 below the previous library's (provisional). The gate uses the validation year, which can only widen the maintained arms' validation–test gap, so it is conservative for H3. Every cycle of a period uses the same seeds, so the gate needs no extra GP runs.
+
+### D-067 Patch bounds and library cap — Provisional (engineer, 2 Nov 2026)
+Per cycle, 4-full may make at most 2 prunes, 2 refines and 2 grows, and 4-grow at most 2 grows. The cap is 64 cross-domain operators (about 2.3× arm 3), and core and data are never touched. A prune needs low usage and contribution in 2 consecutive cycles, checked by the gate. When 4-grow reaches the cap it stops growing, which is reported. Arm 5 proposes at most 25 rule pairs per cycle, which replace 25 of the 250 random initial individuals. All of these are checked for mechanics in the dry run.
