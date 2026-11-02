@@ -820,3 +820,12 @@ The PI works on a MacBook Pro by day and a MacBook Air in the evenings and at we
 - Each Mac works on its own local copy at the same path (`~/code/llm-primitives-stgp`, so that Claude's memory folder matches). Box is only transport, so the rule against working inside cloud-synced folders stands.
 - Campaigns run on CERES and can be driven from either Mac. A plan must be uploaded from, and its records brought back to, the Mac that holds the project.
 - Tests in `tests/test_handover.py` simulate two Macs, and each safeguard was checked by breaking it and seeing a test fail.
+
+### D-056 Budget unit and λ from the budget check — Decided (engineer, under D-042; 2 Nov 2026)
+The budget check (protocol §6.2–6.3) ran on CERES: every GP arm (2a, 2b, 2c, 6, GP-TA) at the calibrated parameters (population 250, tournament 5, 70 generations), 3 runs on each of the six calibration instruments, PL1 FIT/VALIDATE only — 90 runs. All ran at `5154f57` with numpy's CPU-specific paths off (D-054), spread over all four node types (40, 80, 88 and 176 cores). Results in `reports/wp2/budget_check.{json,md}`.
+
+- **Budget unit: requested evaluations.** The median unique share of evaluations is 0.12–0.15 in every arm (GP-TA 0.120, 2a 0.130, 2c 0.143, 2b 0.147, 6 0.152); the spread between arms is 1.26×, well under the 2× threshold. So D-052's unique-budget shortfall rule does not come into play.
+- **λ_turnover kept at its base value (×1, 0.005).** No final rule fails to trade (0 of 90) and the median validation turnover is 11.9 position changes a year, against limits of 25% and 50. No λ step at ×2 or ×4 was needed. The step-1 calibration runs agree (0.6% no trade, median 11.1).
+- **Noted, no action:** about 85% of requested evaluations in every arm re-score a rule already seen (the evaluation cache serves them), so each run scores roughly 2,300 distinct rules. This is similar across arms, which is what the rule tests. Cost per requested evaluation differs by up to 7× between arms (2a 0.65 ms, 2c 4.6 ms median), which matters for planning the go/no-go on CERES, not for the science.
+
+Next: plan the go/no-go campaign from `calibration.json` and `budget_check.json`.

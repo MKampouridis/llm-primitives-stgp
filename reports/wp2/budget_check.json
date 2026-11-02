@@ -1,1 +1,48 @@
-{"status": "pending", "lambda_turnover_multiplier": null}
+{
+ "status": "resolved",
+ "budget_unit": {
+  "unit": "requested",
+  "median_unique_share": {
+   "s2a": 0.129943661971831,
+   "s2b": 0.14740845070422537,
+   "s2c": 0.1432112676056338,
+   "seed": 0.15160563380281689,
+   "technical": 0.12011267605633802
+  },
+  "spread": 1.2621951219512195
+ },
+ "lambda": {
+  "rules": 90,
+  "no_trade_share": 0.0,
+  "no_trade_exceeded": false,
+  "median_turnover": 11.88887462144155,
+  "raise_lambda_turnover": false
+ },
+ "lambda_trials": [
+  {
+   "multiplier": 1,
+   "rules": 90,
+   "no_trade_share": 0.0,
+   "no_trade_exceeded": false,
+   "median_turnover": 11.88887462144155,
+   "raise_lambda_turnover": false
+  }
+ ],
+ "lambda_step1_descriptive": {
+  "rules": 720,
+  "no_trade_share": 0.005555555555555556,
+  "no_trade_exceeded": false,
+  "median_turnover": 11.124840283241543,
+  "raise_lambda_turnover": false
+ },
+ "lambda_turnover_multiplier": 1,
+ "base_lambda_turnover": 0.005,
+ "calibration_digest": "73d3ceef708bfd1b38f817c0b677d75cf10867c1d219204cfe0c31fca78f112f",
+ "provenance": {
+  "source_digest": "162019713afed85675ac460e0089c1a1e11a36a3e35310066b9e9bfe7335ba84",
+  "settings_digest": "2acb05ce32b2416ea02f0186bc046c625538fb4f207cc4ef1a9509870756d6a2",
+  "plans": {
+   "wp2-budget-check": "4ab4553d02501ce93174f6e0a51ca4b2a1f8d27391f4566525abc10803cd859e"
+  }
+ }
+}
