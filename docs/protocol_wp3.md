@@ -28,17 +28,22 @@ Arm 7 (re-implemented ALPHAS2 / EvoQuantLab-style comparators) is out of scope f
   - model `claude-opus-5-5`, effort high, on the PI's subscription;
   - `--restricted` file tools in a neutral folder, no shell, no web, no CLAUDE.md, memory or skills;
   - our own MCP tools only.
-- **Free authoring, not re-implementation (D-062).** The brief gives the domain name and a one-line scope (the same wording as the WP2 strategy brief), plus the operator contract and the semantic types. It does not give the plan's example operators, which overlap arm 6. So the LLM chooses which mathematics to implement, and H2a compares an LLM-chosen and LLM-written library with an expert-specified one (arm 6: expert-specified, AI-assisted, expert-verified; D-002).
+- **Free authoring, not re-implementation (D-062).** The brief gives the domain name and a one-line scope, plus the operator contract and the semantic types. The scope is the WP2 strategy brief's wording without its "(for example …)" lists, which name many of arm 6's operators. The plan's example operators are not given either. A test checks every brief for arm 6's operator names and the plan's examples (D-069). So the LLM chooses which mathematics to implement, and H2a compares an LLM-chosen and LLM-written library with an expert-specified one (arm 6: expert-specified, AI-assisted, expert-verified; D-002).
 - **Quota:** 4 operators per domain × 7 domains = 28, as in arm 6.
   - One session per domain, run in order.
   - Each later session sees the names and signatures of the operators already accepted in other domains, so that it can avoid duplicates.
 - **Shared parts:** the data terminals (3) and the core glue (17: constructors, adaptive thresholds, comparators, logic, regimes) are the WP1 ones, shared with arm 6. Only the cross-domain operators differ between arms 3 and 6.
+- **Contract (D-069).** The session sees a self-contained `operator_api.py`, with no project code; the host binds it to the real types.
+  - Operators output a scale-free `Real`, like all 28 of arm 6's cross-domain operators. Thresholds, comparisons and logic stay in the shared core.
+  - An operator with a Series or Path input must be scale-invariant, and one with a Path input shift-invariant. These are tested.
+  - Parameters use the five standard kinds (Window, LongWindow, Lag, Quantile, KSigma) or kinds the LLM declares itself (2–9 values). Arm 6's own kinds (for example for embedding orders or p-variation exponents) are not shown, because they would point to its operators.
+  - Arm 3's operators have no independent reference tests; they are admitted by the gates alone. This is part of their lower human effort (H2a).
 - **Tools:**
-  - `check`: the WP1 admission gates. Compile and source policy, types, parameter grids, finite and non-constant output, determinism, exact lookback, prefix invariance, declared invariances.
+  - `check`: the WP1 admission gates. Compile and the source policy (the stricter WP2 one), types, parameter grids, finite and non-constant output, determinism, exact lookback, prefix invariance, declared invariances, runtime, and finite non-constant output on dev-fit data. Cross-process determinism is checked at acceptance.
   - `describe`: descriptive statistics of an operator's output on anonymised dev-fit data. These are the finite share, quantiles, lag-1 autocorrelation and the correlation with the session's other operators.
   - There is no backtest tool. Arm 6 was written without performance feedback, so arm 3 is too (D-062).
 - **Budget:** up to 100 `check` and 50 `describe` calls per session *(provisional)*.
-- **Acceptance:** as for WP2 strategies (one repair turn, then one fresh re-run of the session). The accepted files are frozen verbatim in `src/lpstgp/operators/generated/arm3/`, under a lock, and documented like `docs/operators.md`.
+- **Acceptance:** exactly four operator files, all passing, with names and declared kinds that do not clash with earlier domains. As for WP2 strategies, a failure gets one repair turn, then one fresh re-run of the session. The accepted files are frozen verbatim in `src/lpstgp/operators/generated/arm3/`, under a lock, and documented like `docs/operators.md`.
 - **Effort record (H2a):** session minutes, tokens and human minutes. The human minutes should be zero apart from launching, which is the point of H2a.
 
 ## 4. The maintenance cycle (arms 4-grow, 4-full, 5)
@@ -134,3 +139,4 @@ The dry run checks whether the machinery works. It is not used to choose between
 ## 9. Change log
 
 - **2 Nov 2026, draft 0.1:** written (engineer, under D-042/D-061). Decisions D-062–D-067.
+- **2 Nov 2026, M1 (arm 3 machinery):** the arm-3 contract and brief made concrete (D-069). Usage beyond the subscription's limit stops rather than being billed (D-068).

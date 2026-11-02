@@ -886,3 +886,11 @@ Per cycle, 4-full may make at most 2 prunes, 2 refines and 2 grows, and 4-grow a
 The PI confirmed that usage beyond the organisation's monthly limit is not billed: sessions simply stop. So WP3 and WP4 LLM work has no money cost. The only constraint is time:
 - the 5-hour and monthly limits pause sessions; the driver resumes after the reset (D-044);
 - a monthly stop could delay WP4 maintenance by weeks. The dry run (M4) measures usage per session, and if 162 WP4 sessions would not fit comfortably within the monthly allowance, C drops from 3 to 2 (D-064), before any other change. The model is never changed (D-036).
+
+### D-069 The arm-3 contract and brief — Decided (engineer, 2 Nov 2026)
+Made concrete while building M1 (`src/lpstgp/authoring/`), before any authoring session.
+- **Brief without examples.** D-062 said "same wording as WP2", but WP2's domain scopes end with "(for example …)" lists that name many of arm 6's operators: permutation entropy, Fisher–Rao, Wasserstein, Sinkhorn, Lévy area, Hurst, DFA, spectral entropy, wavelet energy, SSA and others. Arm 3's brief keeps each scope's opening definition and drops the list. A test renders every brief and refuses any arm-6 operator name, any plan example, any instrument name and any year.
+- **Real outputs only, scale-free.** Every arm-6 cross-domain operator outputs a `Real`, and every one with a Series or Path input is scale-invariant. Arm 3 is held to the same structure, so the two libraries differ in their mathematics, not in what kind of node they may add. Thresholds and logic come from the shared core in both.
+- **Parameter kinds.** Arm 3 sees the five standard kinds and may declare its own (2–9 increasing values, shared across operators by name). Arm 6's specific kinds (Order, Levels, Kmax, Moment, QEnt, Alpha, Epsilon, PVar, WLevel) are hidden, because their names point to arm 6's operators. Declared kinds become `Llm<Name>` classes, so they never clash with arm 6's.
+- **No reference tests** for arm 3: the gates are the admission test. Writing independent reference implementations would add human effort, which H2a measures.
+- **Shared code.** The WP2 source policy, the sandboxed runner and the MCP loop were generalised for this. Their behaviour for strategies is unchanged, and the WP2 tests pass.

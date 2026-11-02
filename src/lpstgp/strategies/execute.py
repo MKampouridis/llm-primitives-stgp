@@ -38,19 +38,31 @@ def run(
     inputs_path: Path | None = None,
     timeout: float = 600.0,
     threads: int = 1,
+    worker: str = "lpstgp.strategies.worker",
+    extra: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Run one worker command; returns its JSON result, or the arrays for ``evaluate``."""
+    """Run one worker command; returns its JSON result, or the arrays for ``evaluate``.
+
+    ``worker`` is the child module (strategies here; ``lpstgp.authoring.worker`` for operators);
+    ``extra`` are further file arguments, copied into the job folder first.
+    """
     job_dir = Path(job_dir).resolve()
     job_dir.mkdir(parents=True, exist_ok=True)
-    local = job_dir / "strategy.py"
+    local = job_dir / Path(strategy_path).name
     if Path(strategy_path).resolve() != local:
         shutil.copyfile(strategy_path, local)
     out = job_dir / (f"{command}.npz" if command == "evaluate" else f"{command}.json")
     error = out.with_name(out.name + ".error.json")
     out.unlink(missing_ok=True)
     error.unlink(missing_ok=True)
-    cmd = [sys.executable, "-I", "-m", "lpstgp.strategies.worker", command, str(local)]
-    cmd += [str(inputs_path) if inputs_path else "-", str(out)]
+    copies = []
+    for path in extra:
+        target = job_dir / "others" / Path(path).name
+        target.parent.mkdir(exist_ok=True)
+        shutil.copyfile(path, target)
+        copies.append(str(target))
+    cmd = [sys.executable, "-I", "-m", worker, command, str(local)]
+    cmd += [str(inputs_path) if inputs_path else "-", str(out), *copies]
     if sandboxed():
         cmd = [SANDBOX_EXEC, "-p", PROFILE.format(job=job_dir), *cmd]
     threads_env = {

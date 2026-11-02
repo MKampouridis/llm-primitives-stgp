@@ -124,16 +124,18 @@ def _respond(message_id: Any, result: Any = None, error: dict | None = None) -> 
     sys.stdout.flush()
 
 
-def serve(server: DevToolServer) -> None:
-    tools = [
-        {
-            **t,
-            "description": t["description"].format(
-                budget=server.budget, max_checks=server.max_checks
-            ),
-        }
-        for t in TOOLS
-    ]
+def serve(server, tools: list[dict] | None = None) -> None:
+    """Answer MCP requests on stdin; ``tools`` defaults to the strategy tools (WP2)."""
+    if tools is None:
+        tools = [
+            {
+                **t,
+                "description": t["description"].format(
+                    budget=server.budget, max_checks=server.max_checks
+                ),
+            }
+            for t in TOOLS
+        ]
     for line in sys.stdin:
         if not line.strip():
             continue

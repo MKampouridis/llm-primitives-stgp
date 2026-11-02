@@ -1,4 +1,7 @@
-"""Static source policy for LLM-written strategy modules (checked before any code runs).
+"""Static source policy for LLM-written modules (checked before any code runs).
+
+Used for whole strategies (WP2, ``strategy_api``) and for LLM-authored operators (WP3,
+``operator_api``): the same rules, with the module's own contract as the only extra import.
 
 Stricter than the WP1 operator policy (``lpstgp.gates.policy``), whose gaps it closes: numpy may
 be imported only whole (``import numpy`` / ``import numpy as np``); no ``numpy.random`` or file
@@ -10,13 +13,12 @@ from __future__ import annotations
 
 import ast
 
-ALLOWED_IMPORTS = (
+COMMON_IMPORTS = (
     "__future__",
     "typing",
     "collections.abc",
     "math",
     "numpy",
-    "strategy_api",
     "scipy.special",
     "scipy.stats",
     "scipy.signal",
@@ -28,6 +30,7 @@ ALLOWED_IMPORTS = (
     "scipy.spatial",
     "scipy.ndimage",
 )
+ALLOWED_IMPORTS = (*COMMON_IMPORTS, "strategy_api")
 FORBIDDEN_NAMES = {
     "open",
     "eval",
@@ -69,15 +72,21 @@ FORBIDDEN_ATTRS = {
 FORBIDDEN_KEYWORDS = {"random_state", "seed", "rng"}
 
 
-def _allowed(module: str) -> bool:
-    return any(module == a or module.startswith(a + ".") for a in ALLOWED_IMPORTS)
+def _allowed(module: str, allowed: tuple[str, ...] = ALLOWED_IMPORTS) -> bool:
+    return any(module == a or module.startswith(a + ".") for a in allowed)
 
 
 def check_strategy_source(source: str) -> list[str]:
     """Problems with a strategy module's source; an empty list means admissible."""
+    return check_llm_source(source, "strategy_api", "STRATEGY", "Strategy")
+
+
+def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str]:
+    """Problems with an LLM-written module that imports contract ``api`` and defines ``required``."""
+    allowed = (*COMMON_IMPORTS, api)
     try:
         tree = ast.parse(source)
-        compile(source, "<strategy>", "exec")
+        compile(source, "<llm module>", "exec")
     except SyntaxError as exc:
         return [f"does not compile: {exc}"]
     problems: list[str] = []
@@ -85,11 +94,11 @@ def check_strategy_source(source: str) -> list[str]:
         line = getattr(node, "lineno", 0)
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if not _allowed(alias.name) or alias.name.startswith("numpy."):
+                if not _allowed(alias.name, allowed) or alias.name.startswith("numpy."):
                     problems.append(f"line {line}: import {alias.name} is not allowed")
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            if node.level or not _allowed(module):
+            if node.level or not _allowed(module, allowed):
                 problems.append(f"line {line}: from {module or '.'} import is not allowed")
             elif module.split(".")[0] == "numpy":
                 bad = [a.name for a in node.names if a.name in FORBIDDEN_ATTRS or a.name == "*"]
@@ -109,11 +118,11 @@ def check_strategy_source(source: str) -> list[str]:
             problems.append(f"line {line}: keyword {node.arg}= is not allowed (no randomness)")
         elif isinstance(node, ast.Global | ast.Nonlocal):
             problems.append(f"line {line}: global/nonlocal state is not allowed")
-    defines_strategy = any(
+    defines = any(
         isinstance(node, ast.Assign)
-        and any(getattr(t, "id", None) == "STRATEGY" for t in node.targets)
+        and any(getattr(t, "id", None) == required for t in node.targets)
         for node in tree.body
     )
-    if not defines_strategy:
-        problems.append("the module must define STRATEGY = Strategy(...) at top level")
+    if not defines:
+        problems.append(f"the module must define {required} = {cls}(...) at top level")
     return problems
