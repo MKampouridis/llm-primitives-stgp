@@ -837,3 +837,10 @@ Before the freeze, the records were checked only for completeness, current diges
 
 ### D-058 The pilot test years are read once — Decided (PI, 2 Nov 2026)
 The PI authorised `pilot-test` ("run it") after the freeze (D-057, manifest committed in `66c26de`). This is the one read of the PL1 and PL2 test years (protocol §8), through `Sandbox.open_pilot_test`, preceded by a rehearsal on the validation years. Only the frozen rules listed in the manifest are evaluated. No other test data are unsealed.
+
+### D-059 Pilot go/no-go: GO — Decided (rule fixed in advance, protocol §8; 2 Nov 2026)
+The one test read (D-058) ran at 15:41 UTC on the MacBook Pro after the rehearsal on the validation years. The claim is in `reports/wp2/pilot_test_claim.json`; the results are in `reports/wp2/pilot_go_no_go.{json,md}`, and the daily portfolio returns are in `results/campaigns/wp2-pilot-test-portfolios.npz` (not in git). The sandbox logged 22 instrument reads per period, and no runs fell short of a unique budget.
+
+- **Decision: GO.** The rule was GO if Sharpe(2c) − Sharpe(1), pooled over both test years, is at least −0.2. It is +0.313 (2c 0.687, arm 1 0.374).
+- **How to read it.** The pilot is a feasibility check, not the confirmatory test. Every GP arm beats arm 1 on the point estimate (+0.26 to +0.37), but no paired-bootstrap interval excludes zero (p 0.29–0.48). Buy-and-hold has the highest pooled Sharpe (0.934), so none of the evolved rule sets beats the market here. That comparison is not part of the go/no-go rule, but WP4 should report it. The two years differ sharply: in PL1 every arm is positive (Sharpe 1.7–2.3), while PL2 (mid-2007 to mid-2008) is near zero or negative for every arm. So the pooled figures mostly reflect one regime, and two years cannot separate the arms.
+- Results to carry forward: the protocol continues to WP3/WP4 unchanged. The runs-per-configuration study (§6.4) runs at the start of WP4, as planned.

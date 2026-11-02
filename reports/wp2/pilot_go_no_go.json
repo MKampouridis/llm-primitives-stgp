@@ -1,0 +1,571 @@
+{
+ "rule": "GO if Sharpe(2c) - Sharpe(1), pooled, >= -0.2",
+ "difference": 0.3129056948051703,
+ "decision": "GO",
+ "pooled_sharpe": {
+  "1": 0.3744143079459291,
+  "2a": 0.6944061895597619,
+  "2b": 0.7474353351108842,
+  "2c": 0.6873200027510994,
+  "6": 0.6339919821804672,
+  "TA": 0.44998018631144093,
+  "BH": 0.9340420078080177
+ },
+ "yearly_sharpe": {
+  "PL1": {
+   "1": 1.6947057005010184,
+   "2a": 2.3318216561397582,
+   "2b": 2.237655537115692,
+   "2c": 2.1652856831013905,
+   "6": 1.9181999286803713,
+   "TA": 1.8738238340955198,
+   "BH": 2.1275438739667916
+  },
+  "PL2": {
+   "1": -0.6024832313559284,
+   "2a": -0.24612627547447752,
+   "2b": -0.005715653974846319,
+   "2c": 0.0027630649332042482,
+   "6": -0.022424154471770385,
+   "TA": -0.1872628307288709,
+   "BH": 0.14198932647710136
+  }
+ },
+ "comparisons": {
+  "2a - 1": {
+   "difference": 0.31999188161383274,
+   "ci_low": -0.383317564117047,
+   "ci_high": 1.0138574160392446,
+   "p_value": 0.36,
+   "resamples": 10000
+  },
+  "2b - 1": {
+   "difference": 0.3730210271649551,
+   "ci_low": -0.3250111206998758,
+   "ci_high": 1.0389485771565423,
+   "p_value": 0.2868,
+   "resamples": 10000
+  },
+  "2c - 1": {
+   "difference": 0.3129056948051703,
+   "ci_low": -0.4343822514397152,
+   "ci_high": 1.0678805484413465,
+   "p_value": 0.4005,
+   "resamples": 10000
+  },
+  "6 - 1": {
+   "difference": 0.25957767423453804,
+   "ci_low": -0.4667728134301509,
+   "ci_high": 0.9855869629826127,
+   "p_value": 0.4762,
+   "resamples": 10000
+  },
+  "BH - 1": {
+   "difference": 0.5596276998620886,
+   "ci_low": -0.08330616271713745,
+   "ci_high": 1.1832413178264116,
+   "p_value": 0.08,
+   "resamples": 10000
+  },
+  "TA - 1": {
+   "difference": 0.07556587836551182,
+   "ci_low": -0.6544450170514329,
+   "ci_high": 0.7964713840556954,
+   "p_value": 0.8368,
+   "resamples": 10000
+  }
+ },
+ "manifest_commit": "66c26deb17700159369cd44b673b9af458fb5443",
+ "unique_budget_shortfall": {},
+ "read_utc": "2026-11-02T15:45:19+00:00",
+ "test_access": {
+  "PL1": [
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "SPX",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1511",
+    "first_date": "2001-06-25",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "NDX",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1511",
+    "first_date": "2001-06-25",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "SMI",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1515",
+    "first_date": "2001-06-27",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "DAX",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1526",
+    "first_date": "2001-07-03",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "CAC",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "UKX",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1516",
+    "first_date": "2001-07-02",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "NKY",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1488",
+    "first_date": "2001-06-14",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "HSI",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1495",
+    "first_date": "2001-06-12",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "KOSPI",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1496",
+    "first_date": "2001-06-13",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "AS51",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1520",
+    "first_date": "2001-07-02",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "EURUSD",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "GBPUSD",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "USDJPY",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "AUDUSD",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "USDCAD",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "USDCHF",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "NZDUSD",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "EURGBP",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1531",
+    "first_date": "2001-07-06",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "NATGAS",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1494",
+    "first_date": "2001-06-25",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "GOLD",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1502",
+    "first_date": "2001-06-20",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "SILVER",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1503",
+    "first_date": "2001-06-21",
+    "last_date": "2007-06-29"
+   },
+   {
+    "period": "PL1",
+    "stage": "test",
+    "instrument": "COPPER",
+    "read_start": "2000-07-01",
+    "horizon": "2007-07-01",
+    "warmup_bars": "504",
+    "bars": "1505",
+    "first_date": "2001-06-21",
+    "last_date": "2007-06-29"
+   }
+  ],
+  "PL2": [
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "SPX",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1511",
+    "first_date": "2002-07-01",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "NDX",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1511",
+    "first_date": "2002-07-01",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "SMI",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1513",
+    "first_date": "2002-06-27",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "DAX",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1524",
+    "first_date": "2002-07-05",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "CAC",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "UKX",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1515",
+    "first_date": "2002-07-04",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "NKY",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1487",
+    "first_date": "2002-06-14",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "HSI",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1492",
+    "first_date": "2002-06-20",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "KOSPI",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1494",
+    "first_date": "2002-06-12",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "AS51",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1516",
+    "first_date": "2002-07-09",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "EURUSD",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "GBPUSD",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "USDJPY",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "AUDUSD",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "USDCAD",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "USDCHF",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "NZDUSD",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "EURGBP",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1529",
+    "first_date": "2002-07-11",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "NATGAS",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1497",
+    "first_date": "2002-06-24",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "GOLD",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1505",
+    "first_date": "2002-06-24",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "SILVER",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1506",
+    "first_date": "2002-06-24",
+    "last_date": "2008-06-30"
+   },
+   {
+    "period": "PL2",
+    "stage": "test",
+    "instrument": "COPPER",
+    "read_start": "2001-07-01",
+    "horizon": "2008-07-01",
+    "warmup_bars": "504",
+    "bars": "1508",
+    "first_date": "2002-06-24",
+    "last_date": "2008-06-30"
+   }
+  ]
+ }
+}
