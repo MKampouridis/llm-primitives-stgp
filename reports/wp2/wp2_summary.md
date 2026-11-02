@@ -1,6 +1,6 @@
 # WP2 summary — whole LLM strategies, STGP arms 1–2 and the pilot go/no-go
 
-2 November 2026, about six weeks ahead of the plan's window (14 Dec 2026 – 12 Feb 2027). The protocol is `docs/protocol.md` v1.0; every choice is recorded in `docs/decisions.md` (D-034 to D-060). The primary periods P01–P18 were not touched. The only test data read were the two pilot test years (2006-07 – 2008-06), once, after a committed freeze and the PI's go-ahead (D-058).
+2 November 2026, about six weeks ahead of the plan's window (14 Dec 2026 – 12 Feb 2027). The protocol is `docs/protocol.md` v1.0; every choice is recorded in `docs/decisions.md` (D-034 to D-061). The primary periods P01–P18 were not touched. The only test data read were the two pilot test years (2006-07 – 2008-06), once, after a committed freeze and the PI's go-ahead (D-058).
 
 **Result: GO.** Primitive-level STGP (arm 2c) is competitive with selecting among the whole LLM strategies (arm 1): the pooled test Sharpe difference 2c − 1 is +0.313, against a non-inferiority margin of −0.2. Under the protocol, the project goes on to WP3/WP4 unchanged.
 
@@ -49,7 +49,7 @@ In plain terms:
 
 ## Deviation from the protocol
 
-§8 also asks for **per-instrument results**. The pilot-test step saved only the portfolio returns per arm, so the per-instrument test figures do not exist, and computing them needs the test years again. The one-read rule forbids that without a PI decision (D-060). Everything else in §8 is reported.
+§8 also asks for **per-instrument results**. The pilot-test step saved only the portfolio returns per arm, so the per-instrument test figures do not exist, and computing them needs the test years again. They were not recomputed: a second read of the test years would weaken the one-read guarantee, for figures nothing depends on (D-060). Everything else in §8 is reported.
 
 ## Reproducibility and hygiene
 
@@ -60,7 +60,7 @@ In plain terms:
 
 ## Open items carried into WP3/WP4
 
-1. **PI:** whether to allow a re-evaluation of the frozen rules on the pilot test years for the per-instrument breakdown (D-060).
+1. **WP4 test evaluation:** keep per-instrument series from the start (D-060).
 2. **Before WP4:** a review of the data layer and operators by a non-Claude model (planned).
 3. **WP3:** the LLM maintenance arms (3–5): which model(s), and the operator-authoring protocol. All LLM work so far ran on the subscription. The open D-031 items on Tier B data, vendor futures and Tier C remain.
 4. **Start of WP4:** the runs-per-configuration study (§6.4: 100 runs of arm 2c on PL1/PL2 training data).
