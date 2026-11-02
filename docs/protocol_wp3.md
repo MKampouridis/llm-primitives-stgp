@@ -140,3 +140,10 @@ The dry run checks whether the machinery works. It is not used to choose between
 
 - **2 Nov 2026, draft 0.1:** written (engineer, under D-042/D-061). Decisions D-062–D-067.
 - **2 Nov 2026, M1 (arm 3 machinery):** the arm-3 contract and brief made concrete (D-069). Usage beyond the subscription's limit stops rather than being billed (D-068).
+- **2 Nov 2026, arm-3 isolation pre-flight:** archived in `results/wp3/preflight/20261102T232857Z/`.
+  - The session's tools were exactly Read, Write, Edit, Glob, Grep, `check` and `describe`.
+  - Reads of the repository, the home folder and the parent folder were refused.
+  - There was no shell or web tool, and no CLAUDE.md, memory or skills were loaded.
+  - `check` and `describe` worked on a toy operator (21 dev-fit instruments).
+  - The model was `claude-opus-5-5` throughout.
+  - As in WP2, Claude Code attached the account e-mail address to the context.
