@@ -10,3 +10,6 @@ cache_dir = "cache"       # disposable, size-capped caches; git-ignored
 
 # Optional one-way backup mirror, written only by scripts/backup.py (may be cloud-synced).
 # backup_dir = "~/Library/CloudStorage/Box-Box/.../llm-primitives-stgp"
+
+# Optional hand-over folder between two Macs, used only by scripts/handover.py (D-055); cloud-synced.
+# handover_dir = "~/Library/CloudStorage/Box-Box/.../llm-primitives-stgp-handover"

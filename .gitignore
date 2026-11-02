@@ -57,3 +57,4 @@ config/paths.toml
 .idea/
 .vscode/
 logs/
+/.handover.json

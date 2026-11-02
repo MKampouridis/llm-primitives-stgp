@@ -28,6 +28,7 @@ Research code for a journal paper: can an LLM author and maintain the typed prim
 - Randomness is seeded and reproducible across processes. Seeds depend only on (instruments, period, run index), never on the arm, so that arms are paired.
 - Numba: no `fastmath`, no `parallel`. One BLAS/numba thread per worker process.
 - Write in British English. Summarise each milestone in plain language.
+- Two Macs, one active at a time (D-055): start a session with `uv run python scripts/handover.py pull` and end it with `... push` (after committing and pushing). If `status` shows the other Mac holds the project, pull before doing anything that writes data or results.
 
 ## Commands
 
@@ -36,4 +37,5 @@ uv sync --all-extras                          # environment (uv-managed Python 3
 uv run pytest -m "not realdata" -n auto       # what CI runs
 uv run pytest -n auto                         # everything, incl. real-data gates
 uv run python scripts/backup.py --dry-run     # check the Box mirror before writing it
+uv run python scripts/handover.py status        # which Mac holds the project (pull / push: D-055)
 ```

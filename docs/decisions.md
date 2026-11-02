@@ -315,7 +315,7 @@ The lock hashes each contract's module, the lpstgp helper modules it imports, an
 
 ## Between WP1 and WP2 (31 Oct 2026)
 
-### D-032 One project location — Decided (PI, 31 Oct 2026)
+### D-032 One project location — Decided (PI, 31 Oct 2026); "one" means one active Mac at a time since D-055
 Everything lives in the repository folder `~/code/llm-primitives-stgp`, which supersedes the three locations of D-001.
 - **Tracked in git:** code; the research plan and survey (`docs/research_plan.md`, `docs/survey.md`); the survey working notes (`docs/survey/`, renamed from the Box `research_notes/` and survey reports, contents checksum-verified); and generated reports (`reports/<wp>/`, small markdown). WP1 kept reports out of git; they are now versioned with the code that produced them.
 - **Git-ignored subfolders:** `data/` (moved from `~/llm-primitives-stgp-data`; all 58 raw files re-verified against the manifest), `results/` (copied from Box) and `cache/`.
@@ -809,3 +809,14 @@ So D-048's assumption that a campaign on CERES runs "on one machine" does not ho
 - No `src` change was needed, so the calibration result and the budget-check plan stay current.
 - All campaigns from the budget check onwards run this way. The calibration (default settings, mixed nodes) stands, since its choice is the same in both runs.
 - D-048's rule that a campaign runs wholly on one machine still holds: CERES, with this setting, counts as one machine.
+
+### D-055 Two Macs, one active at a time — Decided (PI, 2 Nov 2026)
+The PI works on a MacBook Pro by day and a MacBook Air in the evenings and at weekends, and does not want to keep the Air running. D-032's single location becomes one *active* location at a time.
+- **git** carries code, docs, reports and the trial register, as before.
+- **`scripts/handover.py`** carries what git does not: `data/`, `results/` and Claude's project memory, through a hand-over folder in Box (`handover_dir` in `config/paths.toml`). `cache/` is not carried; it is disposable.
+  - `push` at the end of a session. It requires git to be clean and pushed, and refuses unless this Mac holds the project, i.e. the hand-over in Box is the one this Mac last pushed or pulled.
+  - `pull` at the start. It refuses while this Mac has data, results or memory changed since its own last hand-over. It verifies every copied file against the pushed checksums, since Box may still be syncing, and then makes this Mac the holder.
+  - Nothing is deleted outright: removed or overwritten files go to `_removed/<time>/` in the hand-over folder.
+- Each Mac works on its own local copy at the same path (`~/code/llm-primitives-stgp`, so that Claude's memory folder matches). Box is only transport, so the rule against working inside cloud-synced folders stands.
+- Campaigns run on CERES and can be driven from either Mac. A plan must be uploaded from, and its records brought back to, the Mac that holds the project.
+- Tests in `tests/test_handover.py` simulate two Macs, and each safeguard was checked by breaking it and seeing a test fail.
