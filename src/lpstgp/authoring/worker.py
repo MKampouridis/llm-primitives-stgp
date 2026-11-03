@@ -23,7 +23,7 @@ from lpstgp.authoring import gates
 from lpstgp.authoring.loader import OperatorLoadError, load_spec
 from lpstgp.gates import checks
 from lpstgp.operators.contract import OperatorSpec, Provenance
-from lpstgp.strategies.worker import load_inputs
+from lpstgp.strategies import channel
 
 PROVENANCE = Provenance(implemented_by="authoring session", specified_by="LLM", date="")
 DOMAIN = "core"  # placeholder for loading; the host assigns the session's domain
@@ -142,30 +142,37 @@ def output_hash(spec: OperatorSpec) -> str:
 
 
 def main(argv: list[str]) -> int:
-    command, path, inputs_path, out_path, *other_paths = argv[1:]
+    command, path, _inputs, out_path, *other_paths = argv[1:]
     out = Path(out_path)
+    # Secret and inputs first, before any LLM code is loaded (D-081).
+    secret, inputs = channel.receive()
+
+    def answer(result: dict) -> int:
+        channel.write_signed(out, json.dumps(result, default=float).encode(), secret)
+        return 0
+
     try:
         spec = load_spec(Path(path), DOMAIN, PROVENANCE)
     except OperatorLoadError as exc:
-        out.write_text(json.dumps({"ok": False, "stage": "load", "error": str(exc)}))
-        return 0
+        return answer({"ok": False, "stage": "load", "error": str(exc)})
+    except Exception as exc:  # the module's own top-level code, with data in memory (D-081)
+        return answer({"ok": False, "stage": "load", "error": gates.withheld(exc)})
     try:
         if command == "meta":
             result = {"ok": True, "operator": meta(spec)}
         elif command == "gates":
             results = gates.synthetic_gates(spec)
-            dev = load_inputs(inputs_path)
-            if dev and gates.passed(results):
-                results += gates.development_gates(spec, dev)
+            if inputs and gates.passed(results):
+                results += gates.development_gates(spec, inputs)
             result = {"ok": True, "passed": gates.passed(results), "results": results}
         elif command == "describe":
             others = []
             for other in other_paths:
                 try:
                     others.append(load_spec(Path(other), DOMAIN, PROVENANCE))
-                except OperatorLoadError:
-                    continue  # an unfinished sibling file is simply skipped
-            result = {"ok": True, **describe(spec, load_inputs(inputs_path), others)}
+                except Exception:  # an unfinished sibling file is simply skipped
+                    continue
+            result = {"ok": True, **describe(spec, inputs, others)}
         elif command == "hash":
             result = {"ok": True, "hash": output_hash(spec)}
         else:
@@ -181,8 +188,7 @@ def main(argv: list[str]) -> int:
                 "error": f"{type(exc).__name__}: {exc}",
                 "traceback": "".join(tb[-6:]),
             }
-    out.write_text(json.dumps(result, default=float))
-    return 0
+    return answer(result)
 
 
 if __name__ == "__main__":

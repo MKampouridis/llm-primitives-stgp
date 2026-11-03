@@ -185,3 +185,7 @@ The dry run checks whether the machinery works. It is not used to choose between
   - retirement history comes from the lineage;
   - repair turns are driven to completion;
   - ties get average ranks.
+- **3 Nov 2026, follow-up review (D-081):** ChatGPT confirmed 7 of D-074's fixes and found 3 remaining defects, all fixed:
+  - an untrusted module could reach the builtins through the contract's `inspect`; fixed by a contract-only import policy, inputs and a secret sent through stdin, signed results and narrower reads;
+  - the order of periods is now part of the campaign specification;
+  - the source digest now covers the prompts and resources, and the data digest the `describe` cohort.

@@ -1021,3 +1021,23 @@ On 3 Nov 2026 the PI reaffirmed that scientific decisions are the engineer's, an
   Period p's validation year is period p−1's test year (D-017). Reading it for period p's modelling is causal, because period p−1's rules and libraries depend only on earlier data.
 - **Guard against human leakage.** Between M3 and the freeze, run records and cycle records are checked only for completeness, digests and code version, as in WP2 (D-047). Nothing is changed in the protocol, code or configurations on the basis of a P01–P18 validation figure. Validation figures of period p are test-year figures of period p−1, so looking at them would be looking at test data in effect.
 - **The test read (M6, M7)** still needs the PI's explicit go-ahead, recorded here before it happens (CLAUDE.md rule 1).
+
+### D-081 Fixes from ChatGPT's follow-up review of D-074 — Decided (engineer, under D-042/D-061; 3 Nov 2026)
+ChatGPT re-reviewed `d75583b` (through the PI's ChatGPT account). It found 7 of D-074's 9 fixes correct, and 3 remaining defects, all confirmed by tracing:
+1. **Untrusted code could still escape isolation** (critical). The contract module `operator_api` imports `inspect`, and the policy allowed `from operator_api import <any name>`, so `inspect.currentframe().f_builtins` reached the builtins without a forbidden name. With them, an operator's top-level code could read the worker's inputs file and return it in a load error, or write its own passing result file. Fixes:
+   - **Policy.** Only the contract's own public names may be imported from it, never a module or a name it imported itself. `import operator_api` as a whole is refused. Introspection attributes are refused (frames, tracebacks, `currentframe`, `argv`, `environ`, `modules`, `builtins` and similar).
+   - **Inputs and secret through stdin.** The host sends the worker a one-time secret and the input arrays through stdin, and the worker reads them before importing the untrusted module. The sandbox no longer lets the worker read any inputs file.
+   - **Signed results.** The worker signs its result with HMAC-SHA256 under the secret. The host refuses an unsigned or altered result ("integrity"), so a result file written by the untrusted code is detected.
+   - **Narrower reads.** Inside the package, the sandbox now also denies reading the other libraries' sources (arm 6's domains, the conventional terminals, the WP2 strategies, arm 3's files) and the experiment machinery (`maintenance`, `campaign`, `analysis`, the prompts).
+   - **No messages with data in memory.** Errors raised by a module's own top-level code are reported without their message whenever inputs are present, like errors on development data (D-074).
+
+   *Evidence:* no file among the 3,435 that the WP2 and WP3 sessions wrote or ran uses `inspect`, frame attributes or any similar route, so nothing was exploited. All 959 frozen and stored LLM files pass the new policy.
+
+   *Threat model, stated in the paper:* these controls stop accidental or opportunistic leakage and make tampering with gate results detectable. An admitted operator then runs inside the GP process, like every library. Protection against a deliberately adversarial LLM therefore rests on the static policy, the signed gate results and the archived verbatim code, which can be audited, not on process isolation of admitted code.
+2. **Period order was not part of the campaign specification** (critical). The specification now stores the periods as an ordered list. A campaign refuses repeated or non-chronological periods, so a period can only inherit from its predecessor.
+3. **The fingerprint omitted prompts and the `describe` cohort** (major).
+   - `source_digest` now covers every file of the package (prompt templates, locks, frozen files), not only `.py` files.
+   - A maintenance campaign's specification adds the digest of every processed tier-A file, the development cohort of `describe` included.
+   - On resume, a stored session must have been started from the brief rendered now.
+
+The broader `source_digest` makes every earlier plan stale, as any code change does (D-049). Those plans' records were all collected and frozen before the change. The WP4 runs study (`wp4-runs-study`) was planned and reported before this change was merged. Each fix has a regression test (`tests/maintenance/test_review_fixes.py`, `tests/strategies/test_strategy_gates.py`).

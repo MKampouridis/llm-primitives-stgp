@@ -27,7 +27,13 @@ from pathlib import Path
 from typing import Any
 
 from lpstgp.campaign.execute import is_complete
-from lpstgp.campaign.plan import data_digest, run_seed, settings_digest, source_digest
+from lpstgp.campaign.plan import (
+    data_digest,
+    run_seed,
+    settings_digest,
+    source_digest,
+    tier_digest,
+)
 from lpstgp.config import load_paths, load_settings
 from lpstgp.data.tier_a import load_universe
 from lpstgp.freeze import digest
@@ -104,11 +110,22 @@ class Cycle:
         self.asset_class = {i: universe[i] for i in self.instruments}
         self.claude_version = claude_version
         self.session_runner = session_runner or session.run
+        self._check_periods(self.periods)
         self.spec = self.specification()
         self.spec_digest = digest(self.spec)
         self._check_specification()
 
     # --- what a campaign's results depend on (D-074) ----------------------------------------
+
+    def _check_periods(self, periods: Sequence[str]) -> None:
+        """Each period inherits the previous one's library, so the order is part of the design:
+        distinct periods, in chronological order (D-081)."""
+        if len(set(periods)) != len(periods):
+            raise ValueError(f"a period appears twice in {list(periods)}")
+        settings = getattr(self, "settings", None) or load_settings()
+        starts = [all_periods(settings)[p].fit_start for p in periods]
+        if starts != sorted(starts):
+            raise ValueError(f"periods must be in chronological order, not {list(periods)}")
 
     def specification(self) -> dict[str, Any]:
         """Everything a cycle's results depend on: settings, GP and fitness configuration,
@@ -117,7 +134,7 @@ class Cycle:
         return {
             "schema": SPEC_SCHEMA,
             "campaign": self.campaign,
-            "periods": {p: asdict(periods[p]) for p in self.periods},
+            "periods": [asdict(periods[p]) for p in self.periods],  # in order (D-081)
             "instruments": list(self.instruments),
             "runs": self.runs,
             "cycles": self.cycles,
@@ -125,6 +142,7 @@ class Cycle:
             "fitness": asdict(self.fit_cfg),
             "settings_digest": settings_digest(self.settings),
             "data_digest": digest(data_digest(self.paths, self.instruments)),
+            "tier_digest": tier_digest(self.paths),  # the describe tool's cohort too (D-081)
             "source_digest": source_digest(),
         }
 

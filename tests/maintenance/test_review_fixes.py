@@ -168,3 +168,86 @@ def test_a_campaign_resumes_only_under_its_own_specification():
             first._checked(fake, root / "cycle.json")
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+
+# --- the follow-up review (D-081) -------------------------------------------------------------
+
+
+def test_contract_imports_are_limited_to_the_contracts_own_names():
+    """Follow-up finding 1: ``from operator_api import inspect`` reached the builtins."""
+    from lpstgp.strategies.policy import check_llm_source
+
+    attacks = [
+        "from operator_api import Operator, inspect\nOPERATOR = 1\n",
+        "from operator_api import np\nOPERATOR = 1\n",
+        "import operator_api\nOPERATOR = 1\n",
+        "import numpy as np\nf = np.linalg.norm\nx = f.__call__\nOPERATOR = 1\n",
+        "from operator_api import Operator\nx = Operator.__init__\nOPERATOR = 1\n",
+        "import scipy.stats as st\nx = st.norm.cdf.f_globals\nOPERATOR = 1\n",
+        "import numpy as np\nx = np.sys.argv\nOPERATOR = 1\n",
+        "import numpy as np\nx = np.os.environ\nOPERATOR = 1\n",
+    ]
+    for source in attacks:
+        assert check_llm_source(source, "operator_api", "OPERATOR", "Operator"), source
+    ok = "from operator_api import Operator, Real, Series, trailing_windows\nOPERATOR = 1\n"
+    assert not check_llm_source(ok, "operator_api", "OPERATOR", "Operator")
+
+
+def test_a_result_the_worker_did_not_sign_is_refused(tmp_path, monkeypatch):
+    """Follow-up finding 1: an operator wrote its own passing ``gates.json`` and exited."""
+    import subprocess
+
+    from lpstgp.strategies import execute
+
+    def forged(cmd, **kwargs):
+        out = __import__("pathlib").Path(cmd[cmd.index("-") + 1])
+        out.write_text(json.dumps({"ok": True, "passed": True, "results": []}))
+        return subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+    monkeypatch.setattr(execute.subprocess, "run", forged)
+    (tmp_path / "op.py").write_text("OPERATOR = 1\n")
+    result = execute.run("gates", tmp_path / "op.py", tmp_path / "job")
+    assert result == {"ok": False, "stage": "integrity", "error": "the result was not the worker's"}
+
+
+def test_the_channel_signs_and_verifies(tmp_path):
+    from lpstgp.strategies import channel
+
+    secret = channel.new_secret()
+    path = tmp_path / "r.json"
+    channel.write_signed(path, b'{"ok": true}', secret)
+    assert channel.read_verified(path, secret) == b'{"ok": true}'
+    assert channel.read_verified(path, channel.new_secret()) is None
+    path.write_bytes(b'{"ok": true, "passed": true}')  # changed after signing
+    assert channel.read_verified(path, secret) is None
+    arrays = tmp_path / "in.npz"
+    np.savez(arrays, **{"lp::I01": np.ones(3), "lr::I01": np.zeros(3), "start::I01": np.int64(1)})
+    got_secret, inputs = channel.receive(__import__("io").BytesIO(channel.message(secret, arrays)))
+    assert got_secret == secret
+    assert inputs["I01"][2] == 1
+
+
+def test_the_campaign_specification_keeps_the_period_order():
+    """Follow-up finding 2: swapping the periods left the specification's digest unchanged."""
+    loop = cycle.Cycle.__new__(cycle.Cycle)
+    with pytest.raises(ValueError, match="chronological"):
+        loop._check_periods(("PL2", "PL1"))
+    with pytest.raises(ValueError, match="twice"):
+        loop._check_periods(("PL1", "PL1"))
+    loop._check_periods(("PL1", "PL2"))
+
+
+def test_the_source_digest_covers_prompts_and_other_resources(tmp_path):
+    """Follow-up finding 3: a prompt change did not change the source digest."""
+    from lpstgp.campaign.plan import source_digest
+
+    (tmp_path / "a.py").write_text("x = 1\n")
+    (tmp_path / "prompts").mkdir()
+    prompt = tmp_path / "prompts" / "brief.md"
+    prompt.write_text("Do this.")
+    before = source_digest(tmp_path)
+    prompt.write_text("Do that.")
+    assert source_digest(tmp_path) != before
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "a.pyc").write_bytes(b"junk")
+    assert source_digest(tmp_path) == source_digest(tmp_path)
