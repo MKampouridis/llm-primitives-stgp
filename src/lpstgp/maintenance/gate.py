@@ -2,9 +2,14 @@
 
 The candidate library's cycle runs and the current library's runs share their seeds (instrument,
 period, run). Each run's final rule (selected on validation, as in every arm) has a validation
-fitness F in its record. The candidate is admitted unless the median paired difference
-(candidate - current) is below ``THRESHOLD``. A guard against harm, not a search for improvement
-(D-066). The LLM is told only whether its patch was admitted, never the figure (D-071).
+fitness F in its record. The candidate is rejected only when a one-sided Wilcoxon signed-rank
+test of the paired differences (candidate - current) finds it worse at level ``ALPHA`` (D-072). A
+guard against harm, not a search for improvement (D-066). The LLM is told only whether its patch
+was admitted, never the figure (D-071).
+
+D-072 replaced the first rule (reject when the median difference is below -0.05): in the M4 dry
+run, the median difference of two replicate batches of the same library had a standard deviation
+of about 0.13 at 66 pairs, so that rule rejected roughly a third of harmless patches.
 """
 
 from __future__ import annotations
@@ -13,7 +18,9 @@ import statistics
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-THRESHOLD = -0.05  # provisional (D-066)
+from scipy.stats import wilcoxon
+
+ALPHA = 0.05  # provisional (D-072)
 
 
 def validation_f(record: Mapping[str, Any]) -> float:
@@ -33,11 +40,16 @@ def paired_check(
         raise ValueError("candidate and current runs are not paired seed for seed")
     diffs = [b[k] - a[k] for k in sorted(a)]
     median = statistics.median(diffs)
+    p_harm = (
+        1.0 if all(d == 0 for d in diffs) else float(wilcoxon(diffs, alternative="less").pvalue)
+    )
     return {
         "pairs": len(diffs),
         "median_difference": median,
-        "threshold": THRESHOLD,
-        "admitted": median >= THRESHOLD,
+        "test": "wilcoxon signed-rank, one-sided (candidate worse)",
+        "p_harm": p_harm,
+        "alpha": ALPHA,
+        "admitted": p_harm >= ALPHA,
         "share_better": sum(d > 0 for d in diffs) / len(diffs),
         "share_equal": sum(d == 0 for d in diffs) / len(diffs),
     }

@@ -218,9 +218,9 @@ def _gate_two(
         key = by_name[name].key
         if not evidence.prunable(key, current, previous):
             patch.problems.append(
-                f"prune of {name}: an operator may be pruned only when its usage is at most "
-                f"{evidence.PRUNE_MAX_USAGE} and its contribution at most "
-                f"{evidence.PRUNE_MAX_CONTRIBUTION} in this cycle and the previous one"
+                f"prune of {name}: only operators marked prunable in the evidence table may be "
+                "pruned (bottom quarter of the library by both usage and contribution in this "
+                "cycle and the previous one)"
             )
     size = len(state.entries) + len(patch.grows) - len(patch.prunes)
     if size > LIBRARY_CAP:

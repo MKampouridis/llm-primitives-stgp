@@ -132,7 +132,13 @@ def render(
     asset_class: Mapping[str, str],
     runs_per_instrument: int,
     gp_cfg,
+    previous_rows: Mapping[str, Mapping] | None = None,
 ) -> str:
+    prunable = (
+        evidence.prunable_keys(rows, previous_rows)
+        if patch.BOUNDS.get(arm, {}).get("prune")
+        else None
+    )
     common = {
         "domains": domains_listing(),
         "n_runs": summary["runs"],
@@ -142,7 +148,7 @@ def render(
         "core": core_listing(lib),
         "library": library_listing(lib),
         "summary": summary_text(summary),
-        "evidence": evidence.render_table(rows, history),
+        "evidence": evidence.render_table(rows, history, prunable),
         "n_elite": len(elite),
         "elite": elite_listing(elite),
         "last_outcome": outcome_text(last),
@@ -165,9 +171,9 @@ def render(
         allowed.append(f"- refine: up to {b['refine']} existing operators (a new version)")
     if b["prune"]:
         allowed.append(
-            f"- prune: up to {b['prune']} operators, only if usage is at most "
-            f"{evidence.PRUNE_MAX_USAGE} and contribution at most "
-            f"{evidence.PRUNE_MAX_CONTRIBUTION} (or `–`) in this cycle and the previous one"
+            f"- prune: up to {b['prune']} operators, only those marked **yes** in the table's "
+            "*prunable* column (in the library's bottom quarter by both usage and contribution "
+            "in this cycle and the previous one)"
         )
     allowed.append(f"- the library may hold at most {patch.LIBRARY_CAP} of these operators")
     refine_prune = ""

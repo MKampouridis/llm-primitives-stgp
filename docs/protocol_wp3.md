@@ -87,7 +87,7 @@ The maintainer also receives the library's contracts and its own code (arm 3's l
 | 4-full | ≤ 2 | ≤ 2 | ≤ 2 | 64 cross-domain operators |
 | 5 | — | — | — | fixed (arm 3) |
 
-- **Prune** needs low usage and low contribution in at least 2 consecutive cycles, checked by the gate rather than left to the LLM. A pruned operator can come back only as a new grow.
+- **Prune** needs low usage and low contribution in at least 2 consecutive cycles, checked by the gate rather than left to the LLM. *Low* means the library's bottom quarter by both measures, and the brief marks the operators that qualify (D-072; the fixed thresholds of D-071 were never met in M4). A pruned operator can come back only as a new grow.
 - **Refine** issues a new version under a new identity (contracts are immutable). Its lineage is kept, and the old version retires.
 - **Core glue and data terminals** are never pruned or refined. Every grown operator is in one of the 7 domains, so the domain quota is not fixed after arm 3.
 - **When 4-grow reaches the cap** it stops growing. Each period's report records whether the cap was hit (D-067). All limits are *provisional*.
@@ -98,7 +98,7 @@ The maintainer also receives the library's contracts and its own code (arm 3's l
 
 1. Every new or refined operator passes the WP1 admission gates (as `check`). Its code meets the source policy and runs under `sandbox-exec` on the Mac before it is ever imported.
 2. The bounds and the cap of §4.2 hold, and prunes meet the evidence rule.
-3. **Paired-seed check:** the patched library's runs (the next cycle's runs) are paired with the previous library's runs at the same seeds, and their final rules are scored on VALIDATE. The patch is admitted unless the median paired difference in validation F is below −0.05 *(provisional)*. This is a guard against harm, not a search for improvement. Because it uses the validation year, it can only *widen* the validation–test gap of the maintained arms, so it works against H3 and is conservative (D-066).
+3. **Paired-seed check:** the patched library's runs (the next cycle's runs) are paired with the previous library's runs at the same seeds, and their final rules are scored on VALIDATE. The patch is rejected only when a one-sided Wilcoxon signed-rank test on the paired differences in validation F finds it worse at α = 0.05 *(provisional; D-072 replaced the first rule, median difference below −0.05, which M4 showed rejected about a third of harmless patches)*. This is a guard against harm, not a search for improvement. Because it uses the validation year, it can only *widen* the validation–test gap of the maintained arms, so it works against H3 and is conservative (D-066).
 4. If a patch is rejected, the library stays the same for the next cycle. The rejection and its reason are part of the evidence the LLM sees next.
 
 Arm 5's trees pass gates 1–2 as type checks (they add no code) and gate 3 like a patch (D-071).
@@ -159,4 +159,7 @@ The dry run checks whether the machinery works. It is not used to choose between
   - Batches of runs are shared across arms by content.
   - A token whitelist guards the parsing of arm 5's trees.
   - The maintainer pre-flight passed for both tool sets.
-
+- **3 Nov 2026, M4 (dry run, D-072):** 18 sessions on PL1 → PL2, all completed on `claude-opus-5-5`, with no repair turns. 9 of 18 proposals admitted. Wall clock 3 h 49 min (about 12.7 minutes per cycle), 246k output tokens, no bill. Report: `reports/wp3/m4_dryrun.md`; lineage: `reports/wp3/m4_lineage/`.
+  - The prune rule could never be met, so it was made relative (§4.2).
+  - Gate 3's threshold sat inside the noise, so it was replaced by a one-sided Wilcoxon test (§4.3).
+  - WP4's maintenance is re-estimated at about 34 Mac-hours, against the 60–80 in §4.

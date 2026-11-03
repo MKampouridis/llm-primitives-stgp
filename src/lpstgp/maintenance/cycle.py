@@ -165,11 +165,11 @@ class Cycle:
         elite = evidence.elite_rules(records, self.asset_class)
         summary = evidence.summary(records)
         lib = build(state.library(state.PREFIX + current.state_id))
+        previous_rows = before.get("evidence") if before else None
         brief = session.render(
             arm, lib, rows, history, summary, elite, before and before.get("decision"),
-            self.asset_class, self.runs, self.gp_cfg,
+            self.asset_class, self.runs, self.gp_cfg, previous_rows,
         )  # fmt: skip
-        previous_rows = before.get("evidence") if before else None
         sess_dir = out_dir / "session"
         stored = {e.key: state.states_root(self.paths.results_dir) / lib_state.id / e.file
                   for e in lib_state.entries}  # fmt: skip

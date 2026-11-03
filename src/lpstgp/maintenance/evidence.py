@@ -17,10 +17,12 @@ import numpy as np
 
 from lpstgp.operators.contract import OperatorSpec
 
-# Prune rule (§4.2, provisional, D-071): low usage and low contribution in this cycle and the one
-# before (the last cycle of the previous period counts as the one before the first).
-PRUNE_MAX_USAGE = 0.02
-PRUNE_MAX_CONTRIBUTION = 0.01
+# Prune rule (§4.2, provisional; D-071, made relative by D-072): an operator is low in a cycle when
+# it is in the library's bottom quarter by usage and by contribution (no contribution counts as
+# lowest); it may be pruned when low in this cycle and the one before (the last cycle of the
+# previous period counts as the one before the first). The M4 dry run showed fixed thresholds were
+# never met: usage was at least 0.021 and contribution at least 0.41 in all 356 operator-cycles.
+PRUNE_QUANTILE = 0.25
 
 
 def _iqr(values: Sequence[float]) -> float | None:
@@ -84,24 +86,34 @@ def operator_rows(
     return rows
 
 
-def low(row: Mapping[str, Any]) -> bool:
-    contribution = row.get("contribution")
-    return row["usage"] <= PRUNE_MAX_USAGE and (
-        contribution is None or contribution <= PRUNE_MAX_CONTRIBUTION
-    )
+def low_keys(rows: Mapping[str, Mapping[str, Any]]) -> set[str]:
+    """The keys in the bottom ``PRUNE_QUANTILE`` of ``rows`` by both usage and contribution."""
+    if not rows:
+        return set()
+    usage_cut = float(np.quantile([r["usage"] for r in rows.values()], PRUNE_QUANTILE))
+    known = [r["contribution"] for r in rows.values() if r.get("contribution") is not None]
+    contribution_cut = float(np.quantile(known, PRUNE_QUANTILE)) if known else 0.0
+    return {
+        k
+        for k, r in rows.items()
+        if r["usage"] <= usage_cut
+        and (r.get("contribution") is None or r["contribution"] <= contribution_cut)
+    }
+
+
+def prunable_keys(
+    current: Mapping[str, Mapping], previous: Mapping[str, Mapping] | None
+) -> set[str]:
+    """The gate's prune rule: low in this cycle and in the previous one (same key)."""
+    if not previous:
+        return set()
+    return low_keys(current) & low_keys(previous)
 
 
 def prunable(
     key: str, current: Mapping[str, Mapping], previous: Mapping[str, Mapping] | None
 ) -> bool:
-    """The gate's prune rule: low in this cycle and in the previous one (same key)."""
-    return (
-        key in current
-        and previous is not None
-        and key in previous
-        and low(current[key])
-        and low(previous[key])
-    )
+    return key in prunable_keys(current, previous)
 
 
 def elite_rules(
@@ -141,16 +153,24 @@ def summary(records: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def render_table(rows: Mapping[str, Mapping[str, Any]], history: Mapping[str, Sequence]) -> str:
-    """Markdown evidence table; ``history`` gives each key's rows from earlier cycles."""
+def render_table(
+    rows: Mapping[str, Mapping[str, Any]],
+    history: Mapping[str, Sequence],
+    prunable: set[str] | None = None,
+) -> str:
+    """Markdown evidence table; ``history`` gives each key's rows from earlier cycles.
+
+    With ``prunable`` (arms that may prune), a last column marks the operators the gate would let
+    be pruned this cycle."""
 
     def f(x, d=3):
         return "–" if x is None else f"{x:.{d}f}"
 
     lines = [
         "| operator | GP node | usage | survival | contribution | stab. (instr. IQR) | "
-        "stab. (segment IQR) | ms/call | earlier usage / contribution |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---|",
+        "stab. (segment IQR) | ms/call | earlier usage / contribution |"
+        + (" prunable |" if prunable is not None else ""),
+        "|---|---|---:|---:|---:|---:|---:|---:|---|" + ("---|" if prunable is not None else ""),
     ]
     for key in sorted(rows):
         r = rows[key]
@@ -161,5 +181,6 @@ def render_table(rows: Mapping[str, Mapping[str, Any]], history: Mapping[str, Se
             f"| `{key}` | `{r['gp_name']}` | {f(r['usage'], 3)} | {f(r['survival'], 3)} | "
             f"{f(r['contribution'])} | {f(r['stability_instruments_iqr'])} | "
             f"{f(r['stability_segments_iqr'])} | {f(r['cost_ms'], 1)} | {past or '–'} |"
+            + ((" yes |" if key in prunable else " |") if prunable is not None else "")
         )
     return "\n".join(lines)

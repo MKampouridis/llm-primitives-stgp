@@ -1,0 +1,99 @@
+{
+ "arm": "5",
+ "period": "PL2",
+ "cycles": [
+  {
+   "cycle": 1,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "cf9449cba2e4dc94-c5e2529236c8",
+   "decision": {
+    "status": "admitted",
+    "what": "proposal of 25 rule pairs"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": 0.2675929964428352,
+    "threshold": -0.05,
+    "admitted": true,
+    "share_better": 0.5606060606060606,
+    "share_equal": 0.030303030303030304
+   },
+   "session": {
+    "session_id": "5d28dc24-5abe-49db-8ce5-9aea88acf2ad",
+    "brief_sha12": "22a122f8b1ac",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "606cce9312ddbd4743c23bd9217115ccec108a85163ccf899b05363645a22af1",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 2,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94-c5e2529236c8",
+   "rules_out": "cf9449cba2e4dc94-ee849661f6ed",
+   "decision": {
+    "status": "admitted",
+    "what": "proposal of 25 rule pairs"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": 0.0,
+    "threshold": -0.05,
+    "admitted": true,
+    "share_better": 0.45454545454545453,
+    "share_equal": 0.10606060606060606
+   },
+   "session": {
+    "session_id": "8fe18827-96a1-49b3-bda0-54e05f70e519",
+    "brief_sha12": "7143c9b56942",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "a7411fe212721b5d58b36e21e009e41d66ae6dc80ce8c1822dffc24bbc1ca3f6",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 3,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94-ee849661f6ed",
+   "rules_out": "cf9449cba2e4dc94-93af5e892df6",
+   "decision": {
+    "status": "admitted",
+    "what": "proposal of 25 rule pairs"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": 0.04073151710816858,
+    "threshold": -0.05,
+    "admitted": true,
+    "share_better": 0.5303030303030303,
+    "share_equal": 0.09090909090909091
+   },
+   "session": {
+    "session_id": "e8142493-4e35-4162-9edd-ec648593255e",
+    "brief_sha12": "5ad3c3ae1a43",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "ded9faebbd3e98f4c9ad3c4895af0b0c967d08edf7511643398394f83ef530dc",
+   "code_version": "9c040d3"
+  }
+ ]
+}

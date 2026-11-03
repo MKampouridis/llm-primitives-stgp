@@ -1,0 +1,100 @@
+{
+ "arm": "4-grow",
+ "period": "PL2",
+ "cycles": [
+  {
+   "cycle": 1,
+   "state_in": "a3b717c7e3117eac",
+   "state_out": "a3b717c7e3117eac",
+   "rules_in": "a3b717c7e3117eac",
+   "rules_out": "a3b717c7e3117eac",
+   "decision": {
+    "status": "rejected",
+    "what": "patch (2 grow, 0 refine, 0 prune)",
+    "reason": "the changed library's results on held-out data were clearly worse"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.09100261101564588,
+    "threshold": -0.05,
+    "admitted": false,
+    "share_better": 0.45454545454545453,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "370d8b3c-c83e-406f-82db-f4c6d19ca9aa",
+    "brief_sha12": "9f26c9193aa0",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "1f67e0c3897ac2eb3f80e6dfa18027ee67c8fce38d93abcbd7700ea95d9283f2",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 2,
+   "state_in": "a3b717c7e3117eac",
+   "state_out": "0c31b03260afdbc0",
+   "rules_in": "a3b717c7e3117eac",
+   "rules_out": "0c31b03260afdbc0",
+   "decision": {
+    "status": "admitted",
+    "what": "patch (2 grow, 0 refine, 0 prune)"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": 0.05204140838314546,
+    "threshold": -0.05,
+    "admitted": true,
+    "share_better": 0.5,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "5e24a1b9-f61c-4474-a605-52b97feb7bee",
+    "brief_sha12": "cc44cfdaeb80",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "77411fb88b3ff8dbf07b1a58263fa61873a14e820e44be91f51a89c347899bb7",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 3,
+   "state_in": "0c31b03260afdbc0",
+   "state_out": "2e5a201167ffb25f",
+   "rules_in": "0c31b03260afdbc0",
+   "rules_out": "2e5a201167ffb25f",
+   "decision": {
+    "status": "admitted",
+    "what": "patch (2 grow, 0 refine, 0 prune)"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": 0.09293520459161195,
+    "threshold": -0.05,
+    "admitted": true,
+    "share_better": 0.5606060606060606,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "7daf7d23-e09a-4e65-8173-36a7a06f8711",
+    "brief_sha12": "f9eb825a2f09",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "828df509bcd92d5593c8fef4c4e022e43ba4c804f54a5c4ef68ae90f4ccfdf8b",
+   "code_version": "9c040d3"
+  }
+ ]
+}

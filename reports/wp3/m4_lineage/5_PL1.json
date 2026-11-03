@@ -1,0 +1,102 @@
+{
+ "arm": "5",
+ "period": "PL1",
+ "cycles": [
+  {
+   "cycle": 1,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "cf9449cba2e4dc94",
+   "decision": {
+    "status": "rejected",
+    "what": "proposal of 25 rule pairs",
+    "reason": "the changed library's results on held-out data were clearly worse"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.10989949357590251,
+    "threshold": -0.05,
+    "admitted": false,
+    "share_better": 0.3787878787878788,
+    "share_equal": 0.045454545454545456
+   },
+   "session": {
+    "session_id": "3b423456-f46b-428f-b69a-7a7a732ac047",
+    "brief_sha12": "cfeac9cb1f20",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "1011157b077416b45ca33017891df58a190fde7c9fd37995ae79d3a41aab369c",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 2,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "cf9449cba2e4dc94",
+   "decision": {
+    "status": "rejected",
+    "what": "proposal of 25 rule pairs",
+    "reason": "the changed library's results on held-out data were clearly worse"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.13854217548038733,
+    "threshold": -0.05,
+    "admitted": false,
+    "share_better": 0.42424242424242425,
+    "share_equal": 0.045454545454545456
+   },
+   "session": {
+    "session_id": "6ae86f30-be65-436b-ba6a-dfe6635978ef",
+    "brief_sha12": "0fffd34a5628",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "53bb0285e118456a5afdeaa87bf0564a813923a17e3b52c1d0f32a7b1d7a7370",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 3,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "cf9449cba2e4dc94",
+   "decision": {
+    "status": "rejected",
+    "what": "proposal of 24 rule pairs",
+    "reason": "the changed library's results on held-out data were clearly worse"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.20375727542346322,
+    "threshold": -0.05,
+    "admitted": false,
+    "share_better": 0.3787878787878788,
+    "share_equal": 0.030303030303030304
+   },
+   "session": {
+    "session_id": "de9d73b1-a802-4136-ba76-029aff63a475",
+    "brief_sha12": "838fe07f3c26",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "e8ecf68490f22326bb9deb652cbf5f0bb7e8afa219f5add0c80094b7ff00c80f",
+   "code_version": "9c040d3"
+  }
+ ]
+}

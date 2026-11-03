@@ -1,0 +1,101 @@
+{
+ "arm": "4-full",
+ "period": "PL1",
+ "cycles": [
+  {
+   "cycle": 1,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "cf9449cba2e4dc94",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "cf9449cba2e4dc94",
+   "decision": {
+    "status": "rejected",
+    "what": "patch (2 grow, 1 refine, 0 prune)",
+    "reason": "the changed library's results on held-out data were clearly worse"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.2972178394872812,
+    "threshold": -0.05,
+    "admitted": false,
+    "share_better": 0.4090909090909091,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "d818561f-775f-40bf-8096-853060e69a61",
+    "brief_sha12": "0d6c85b76750",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "4ccc05d2d29be44769a3ab1710790ea117f9533b37a842cfe036f4c33f04929c",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 2,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "a801ab58aeafefc5",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "a801ab58aeafefc5",
+   "decision": {
+    "status": "admitted",
+    "what": "patch (1 grow, 1 refine, 0 prune)"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.00527971990075346,
+    "threshold": -0.05,
+    "admitted": true,
+    "share_better": 0.48484848484848486,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "91cf3f90-75cf-4b9a-8f23-672a5ae2b2c0",
+    "brief_sha12": "afcadb84a588",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "6205dd9f912b2fb7e4eb75567bbf9c1a89e42c27cb0d924bb821ef891ce9aedc",
+   "code_version": "9c040d3"
+  },
+  {
+   "cycle": 3,
+   "state_in": "a801ab58aeafefc5",
+   "state_out": "a801ab58aeafefc5",
+   "rules_in": "a801ab58aeafefc5",
+   "rules_out": "a801ab58aeafefc5",
+   "decision": {
+    "status": "rejected",
+    "what": "patch (2 grow, 0 refine, 0 prune)",
+    "reason": "the changed library's results on held-out data were clearly worse"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.20989839127716728,
+    "threshold": -0.05,
+    "admitted": false,
+    "share_better": 0.3787878787878788,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "aefac90a-03e1-444b-9f30-7002c254b1b9",
+    "brief_sha12": "12c94894a072",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "42933fc3708cfc9c9314ceb07619c761c9c090485aac812cb6dfd00f6c2697c2",
+   "code_version": "9c040d3"
+  }
+ ]
+}

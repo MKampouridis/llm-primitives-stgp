@@ -186,11 +186,19 @@ def _rec(inst, seed, v):
 
 
 def test_paired_gate():
-    cur = [_rec("A", 1, 1.0), _rec("B", 2, 1.0), _rec("C", 3, 1.0)]
-    worse = [_rec("A", 1, 0.9), _rec("B", 2, 0.9), _rec("C", 3, 1.2)]
+    n = 30
+    cur = [_rec(f"I{k}", k, 1.0) for k in range(n)]
+    worse = [
+        _rec(f"I{k}", k, 1.0 - 0.1 * (k % 5 + 1) + (0.15 if k % 7 == 0 else 0)) for k in range(n)
+    ]
     out = gate.paired_check(cur, worse)
-    assert out["median_difference"] == pytest.approx(-0.1)
+    assert out["median_difference"] < 0
+    assert out["p_harm"] < gate.ALPHA
     assert not out["admitted"]
+    noisy = [_rec(f"I{k}", k, 0.9 if k < 16 else 1.3) for k in range(n)]
+    out = gate.paired_check(cur, noisy)
+    assert out["median_difference"] < -0.05  # the first rule (D-066) would have rejected this
+    assert out["admitted"]  # but it is noise, not harm (D-072)
     same = gate.paired_check(cur, cur)
     assert same["admitted"]
     assert same["share_equal"] == 1
@@ -198,13 +206,34 @@ def test_paired_gate():
         gate.paired_check(cur, cur[:2])
 
 
-def test_prune_rule_needs_two_low_cycles():
-    lo = {"k@1": {"usage": 0.0, "contribution": None}}
-    hi = {"k@1": {"usage": 0.3, "contribution": 0.5}}
-    assert evidence.prunable("k@1", lo, lo)
+def _library_rows(k_usage, k_contribution):
+    rows = {f"o{i}@1": {"usage": 0.1 + i / 100, "contribution": 1.0 + i / 10} for i in range(12)}
+    rows["k@1"] = {"usage": k_usage, "contribution": k_contribution}
+    for r in rows.values():
+        r.update(gp_name="X", survival=0.1, stability_instruments_iqr=None,
+                 stability_segments_iqr=None, cost_ms=None)  # fmt: skip
+    return rows
+
+
+def test_prune_rule_is_relative_and_needs_two_low_cycles():
+    lo, none, hi = _library_rows(0.05, 0.4), _library_rows(0.0, None), _library_rows(0.3, 3.0)
+    only_usage = _library_rows(0.05, 3.0)
+    assert "k@1" in evidence.low_keys(lo)
+    assert "k@1" in evidence.low_keys(none)  # no rule used it: lowest contribution
+    assert "k@1" not in evidence.low_keys(only_usage)  # both measures must be low
+    assert evidence.prunable("k@1", lo, none)
     assert not evidence.prunable("k@1", lo, None)
     assert not evidence.prunable("k@1", lo, hi)
     assert not evidence.prunable("k@1", hi, lo)
+    assert evidence.prunable_keys({}, None) == set()
+
+
+def test_brief_marks_prunable_operators_only_for_the_arm_that_may_prune():
+    rows = _library_rows(0.05, 0.4)
+    table = evidence.render_table(rows, {}, evidence.prunable_keys(rows, rows))
+    line = next(x for x in table.splitlines() if "`k@1`" in x)
+    assert line.endswith("| yes |")
+    assert "prunable" not in evidence.render_table(rows, {})
 
 
 def test_stub_grown_operator_is_valid_python():

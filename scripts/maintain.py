@@ -47,7 +47,8 @@ def run_stub(workers: int) -> None:
             print(
                 f"{arm:7s} {c['period']} c{c['cycle']}: {d['status']:9s} {d.get('what', '')} "
                 f"{c['state_in']['state_id']} -> {c['state_out']['state_id']} "
-                f"gate={c['gate'] and round(c['gate']['median_difference'], 3)}"
+                f"gate={c['gate'] and round(c['gate']['median_difference'], 3)} "
+                f"p_harm={c['gate'] and round(c['gate'].get('p_harm', float('nan')), 3)}"
             )
 
 
