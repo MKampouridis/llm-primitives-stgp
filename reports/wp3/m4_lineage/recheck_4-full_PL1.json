@@ -1,0 +1,105 @@
+{
+ "arm": "4-full",
+ "period": "PL1",
+ "cycles": [
+  {
+   "cycle": 1,
+   "state_in": "cf9449cba2e4dc94",
+   "state_out": "4bcd3301648c7339",
+   "rules_in": "cf9449cba2e4dc94",
+   "rules_out": "4bcd3301648c7339",
+   "decision": {
+    "status": "admitted",
+    "what": "patch (2 grow, 1 refine, 0 prune)"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.12680201592643947,
+    "test": "wilcoxon signed-rank, one-sided (candidate worse)",
+    "p_harm": 0.24612999447062006,
+    "alpha": 0.05,
+    "admitted": true,
+    "share_better": 0.45454545454545453,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "2aa0a96f-ef52-45fd-938a-b3c5a4e56974",
+    "brief_sha12": "5dad1b891d63",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "3a3ec4a961ecb375ba4a2cf13a3fcf1d1ef97c2525435e58719e8f0d92d6d47c",
+   "code_version": "1dda63b"
+  },
+  {
+   "cycle": 2,
+   "state_in": "4bcd3301648c7339",
+   "state_out": "7f2e40c476e8e21a",
+   "rules_in": "4bcd3301648c7339",
+   "rules_out": "7f2e40c476e8e21a",
+   "decision": {
+    "status": "admitted",
+    "what": "patch (2 grow, 0 refine, 1 prune)"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": 0.03816425775320248,
+    "test": "wilcoxon signed-rank, one-sided (candidate worse)",
+    "p_harm": 0.3686713890455475,
+    "alpha": 0.05,
+    "admitted": true,
+    "share_better": 0.5303030303030303,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "ddde2a88-0ee9-4a00-ac07-9acd9ab7ef17",
+    "brief_sha12": "4a55800baa0e",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "b667302cadab3d5ce8b9d381d17e96ebe86c492fa6053a5e0ed02e91d5351c06",
+   "code_version": "1dda63b"
+  },
+  {
+   "cycle": 3,
+   "state_in": "7f2e40c476e8e21a",
+   "state_out": "c621982c65c75f41",
+   "rules_in": "7f2e40c476e8e21a",
+   "rules_out": "c621982c65c75f41",
+   "decision": {
+    "status": "admitted",
+    "what": "patch (2 grow, 0 refine, 0 prune)"
+   },
+   "gate": {
+    "pairs": 66,
+    "median_difference": -0.05795365500004797,
+    "test": "wilcoxon signed-rank, one-sided (candidate worse)",
+    "p_harm": 0.6783665172507785,
+    "alpha": 0.05,
+    "admitted": true,
+    "share_better": 0.5,
+    "share_equal": 0.0
+   },
+   "session": {
+    "session_id": "9bc15404-21da-43b5-9c85-ab0570801038",
+    "brief_sha12": "860e6c6a41b8",
+    "model_ok": true,
+    "models": [
+     "claude-opus-5-5"
+    ],
+    "completed": true,
+    "repaired": null
+   },
+   "transcript_sha256": "c52e8c4cb28a40ea3ab8b1215f9f6b74db1202e16bd73a8edaecdeab78e1c351",
+   "code_version": "1dda63b"
+  }
+ ]
+}

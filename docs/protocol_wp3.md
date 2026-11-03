@@ -163,3 +163,4 @@ The dry run checks whether the machinery works. It is not used to choose between
   - The prune rule could never be met, so it was made relative (§4.2).
   - Gate 3's threshold sat inside the noise, so it was replaced by a one-sided Wilcoxon test (§4.3).
   - WP4's maintenance is re-estimated at about 34 Mac-hours, against the 60–80 in §4.
+  - Re-check of 4-full under D-072 (6 sessions): pruning used in 3 of 6 cycles, every patch admitted, no failures.

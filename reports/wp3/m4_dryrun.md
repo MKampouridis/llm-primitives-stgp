@@ -82,3 +82,32 @@ Everything else stays as provisionally set:
 None of these showed a mechanical problem.
 
 Neither change has yet run with a real LLM session. A short re-check of 4-full alone (PL1 → PL2, 6 sessions, about 1.3 hours) would exercise the new prune path before WP4. Whether to run it is for the PI to decide.
+
+## Re-check of 4-full under D-072 (3 Nov 2026, PI go-ahead)
+
+Campaign `recheck`: 4-full only, PL1 → PL2, 3 cycles each, the new prune rule and gate, same seeds and settings. Archive: `results/wp3/maintenance/recheck/`; lineage: `reports/wp3/m4_lineage/recheck_4-full_*.json`.
+
+| period | cycle | proposal | prunable (marked in brief) | decision | median Δ val. F | p (harm) | library |
+|---|---|---|---|---|---:|---:|---|
+| PL1 | 1 | 2 grows, 1 refine | – (first cycle) | admitted | −0.127 | 0.25 | 28 → 30 |
+| PL1 | 2 | 2 grows, 1 prune | `dcca_coefficient` | admitted | +0.038 | 0.37 | 30 → 31 |
+| PL1 | 3 | 2 grows | none | admitted | −0.058 | 0.68 | 31 → 33 |
+| PL2 | 1 | 2 grows, 1 prune | `net_transfer_entropy` | admitted | −0.085 | 0.22 | 33 → 34 |
+| PL2 | 2 | 2 grows, 1 prune | `generalized_hurst_spread` | admitted | +0.351 | 1.00 | 34 → 35 |
+| PL2 | 3 | 2 grows | none | admitted | −0.240 | 0.066 | 35 → 37 |
+
+- **The prune path works.**
+  - The rule marked one operator as prunable in 3 of the 6 cycles, and the LLM pruned it each time.
+  - Each prune passed the gate's own check of the rule, and the pruned operators left the library state as retired.
+  - The LLM never tried to prune an unmarked operator.
+- **The gate admitted all 6 patches.**
+  - The old rule would have rejected 4 of them (medians −0.127, −0.058, −0.085, −0.240).
+  - The closest call was PL2 cycle 3 (p = 0.066).
+  - This is the intended behaviour of a harm guard calibrated to the noise: about 5% false rejections, rather than about a third.
+- **The library grows faster.** The net growth was +9 operators in 6 cycles, since grows are rarely refused and prunes are at most one per cycle in practice. At this rate 4-grow and 4-full would reach the cap of 64 around WP4 period 6–8, not 10–12. The cap and its hits are recorded per period as designed (D-067); this is an expected consequence, not a fault.
+- **Mechanics:**
+  - 6/6 sessions completed on `claude-opus-5-5`, with no repair turns and no problems at the host's check.
+  - 25.5 minutes of session time, about $5.38 at API prices (subscription, not billed).
+  - The whole run took 1 h 10 min of wall clock.
+
+With both changes now exercised by real sessions, the provisional values go to protocol 1.0 (M5) as they stand.
