@@ -54,8 +54,8 @@ build-backend = "uv_build"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests", "scripts"]
-# Frozen LLM-written strategies are kept verbatim (D-038): never reformatted or linted.
-extend-exclude = ["src/lpstgp/strategies/generated"]
+# Frozen LLM-written strategies and operators are kept verbatim (D-038): never reformatted or linted.
+extend-exclude = ["src/lpstgp/strategies/generated", "src/lpstgp/authoring/generated"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "NPY", "RUF", "SIM", "PT"]

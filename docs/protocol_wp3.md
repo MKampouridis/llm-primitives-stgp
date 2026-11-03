@@ -43,7 +43,7 @@ Arm 7 (re-implemented ALPHAS2 / EvoQuantLab-style comparators) is out of scope f
   - `describe`: descriptive statistics of an operator's output on anonymised dev-fit data. These are the finite share, quantiles, lag-1 autocorrelation and the correlation with the session's other operators.
   - There is no backtest tool. Arm 6 was written without performance feedback, so arm 3 is too (D-062).
 - **Budget:** up to 100 `check` and 50 `describe` calls per session *(provisional)*.
-- **Acceptance:** exactly four operator files, all passing, with names and declared kinds that do not clash with earlier domains. As for WP2 strategies, a failure gets one repair turn, then one fresh re-run of the session. The accepted files are frozen verbatim in `src/lpstgp/operators/generated/arm3/`, under a lock, and documented like `docs/operators.md`.
+- **Acceptance:** exactly four operator files, all passing, with names and declared kinds that do not clash with earlier domains. As for WP2 strategies, a failure gets one repair turn, then one fresh re-run of the session. The accepted files are frozen verbatim in `src/lpstgp/authoring/generated/arm3/`, under `src/lpstgp/authoring/arm3.lock.toml`, outside the WP1 registry (D-070), and documented in `docs/operators_arm3.md`.
 - **Effort record (H2a):** session minutes, tokens and human minutes. The human minutes should be zero apart from launching, which is the point of H2a.
 
 ## 4. The maintenance cycle (arms 4-grow, 4-full, 5)
@@ -147,3 +147,8 @@ The dry run checks whether the machinery works. It is not used to choose between
   - `check` and `describe` worked on a toy operator (21 dev-fit instruments).
   - The model was `claude-opus-5-5` throughout.
   - As in WP2, Claude Code attached the account e-mail address to the context.
+- **3 Nov 2026, M2 (arm 3 authored and frozen, D-070):** 8 sessions, 51 minutes of session time, `claude-opus-5-5` throughout, no tools beyond the seven allowed.
+  - Information theory's first session left a superseded draft in its folder, which it could not delete (no shell). The final check counted five files, so the session failed after its repair turn. Its fresh re-run was accepted, and the first attempt's operators are not used.
+  - The other six domains were accepted at the first attempt. One kind was declared (`DccaBox`).
+  - 28 operators frozen (lock `6d97234bda3f`). Report: `reports/wp3/arm3_authoring.md`; catalogue: `docs/operators_arm3.md`.
+  - One name coincides with arm 6: `permutation_entropy`.

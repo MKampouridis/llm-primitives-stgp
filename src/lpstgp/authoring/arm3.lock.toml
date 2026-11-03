@@ -1,0 +1,253 @@
+# Frozen LLM-authored operators (arm3, WP3). Do not edit: written by the freeze.
+
+[jensen_shannon_distance]
+sha256 = "b7ca5ce99d8147ac19b07d07e91d310fe5dc2f30c18cea87a692f1ce48256b49"
+file = "information_theory/jensen_shannon_distance__v1.py"
+domain = "information_theory"
+[jensen_shannon_distance.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f2adc5ad-0501-4516-89c8-2f36dce43351, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 46d1c49870e9"
+date = "2026-11-03"
+
+[lagged_mutual_information]
+sha256 = "846ec0110cdad5b8628bd50c66175c9d43b7db271e5bacc5b12a9ec71aee53c3"
+file = "information_theory/lagged_mutual_information__v1.py"
+domain = "information_theory"
+[lagged_mutual_information.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f2adc5ad-0501-4516-89c8-2f36dce43351, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 46d1c49870e9"
+date = "2026-11-03"
+
+[lempel_ziv_complexity]
+sha256 = "261db2f273acd9d04b647a4402824fcef452f76fd19c0a6e50dab8066b834f3c"
+file = "information_theory/lempel_ziv_complexity__v1.py"
+domain = "information_theory"
+[lempel_ziv_complexity.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f2adc5ad-0501-4516-89c8-2f36dce43351, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 46d1c49870e9"
+date = "2026-11-03"
+
+[permutation_entropy]
+sha256 = "394534a1ad72b530e5ef2f7e70690d288a1506ee2de1eeb762e96687e9bbb0da"
+file = "information_theory/permutation_entropy__v1.py"
+domain = "information_theory"
+[permutation_entropy.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session f2adc5ad-0501-4516-89c8-2f36dce43351, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 46d1c49870e9"
+date = "2026-11-03"
+
+[fisher_rao_gaussian_distance]
+sha256 = "9541d5456a4343b6804b5b9b38e170b37ca10042cb56ad671bfe48b1ac81fa65"
+file = "information_geometry/fisher_rao_gaussian_distance__v1.py"
+domain = "information_geometry"
+[fisher_rao_gaussian_distance.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 0b3dcb89-b69e-4715-93e4-be165127fbb6, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 0925f12a1baa"
+date = "2026-11-03"
+
+[fisher_rao_mirror_asymmetry]
+sha256 = "cb9202299de46afbd43e7bddf63dfa3f9f64e810d37eee9db95e725f31caed55"
+file = "information_geometry/fisher_rao_mirror_asymmetry__v1.py"
+domain = "information_geometry"
+[fisher_rao_mirror_asymmetry.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 0b3dcb89-b69e-4715-93e4-be165127fbb6, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 0925f12a1baa"
+date = "2026-11-03"
+
+[fisher_rao_path_efficiency]
+sha256 = "331f286c9103f4efb9d084037e2f4bca8ef90e1e13e262f70605be30990111e0"
+file = "information_geometry/fisher_rao_path_efficiency__v1.py"
+domain = "information_geometry"
+[fisher_rao_path_efficiency.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 0b3dcb89-b69e-4715-93e4-be165127fbb6, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 0925f12a1baa"
+date = "2026-11-03"
+
+[gaussian_projection_divergence]
+sha256 = "3873310ee1c0fc543f5edd21030c0ba7bb593ce25a65d4ae5deb8c845c04f55a"
+file = "information_geometry/gaussian_projection_divergence__v1.py"
+domain = "information_geometry"
+[gaussian_projection_divergence.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 0b3dcb89-b69e-4715-93e4-be165127fbb6, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 0925f12a1baa"
+date = "2026-11-03"
+
+[monotone_rearrangement_index]
+sha256 = "fedf6540790b2f57d65971a566b5c99f1374829ccc0ed39604a6540fb14651a4"
+file = "optimal_transport/monotone_rearrangement_index__v1.py"
+domain = "optimal_transport"
+[monotone_rearrangement_index.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a936626e-a3a4-42cc-bbfa-f4688d8cdd46, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 3636def814ed"
+date = "2026-11-03"
+
+[transport_direction]
+sha256 = "d46617bdb71b41a842b57009ac76f45b93222a6bd1b9211b526a38b88d541342"
+file = "optimal_transport/transport_direction__v1.py"
+domain = "optimal_transport"
+[transport_direction.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a936626e-a3a4-42cc-bbfa-f4688d8cdd46, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 3636def814ed"
+date = "2026-11-03"
+
+[variance_clock_transport]
+sha256 = "2d2db37f55b5ab26095c12bdd570919a419d38457fac1e739aa0fbbd02143e2c"
+file = "optimal_transport/variance_clock_transport__v1.py"
+domain = "optimal_transport"
+[variance_clock_transport.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a936626e-a3a4-42cc-bbfa-f4688d8cdd46, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 3636def814ed"
+date = "2026-11-03"
+
+[wasserstein_shape_discrepancy]
+sha256 = "06df728c41d85a01629fa4d4c57b78c997ffdbb50605eb101245b1df07676b97"
+file = "optimal_transport/wasserstein_shape_discrepancy__v1.py"
+domain = "optimal_transport"
+[wasserstein_shape_discrepancy.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a936626e-a3a4-42cc-bbfa-f4688d8cdd46, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 3636def814ed"
+date = "2026-11-03"
+
+[lead_lag_dispersion_area]
+sha256 = "4751de293c58b23bccad6121c9331b4033b8d5bc8792018c488dbba82bd4c6b1"
+file = "rough_paths/lead_lag_dispersion_area__v1.py"
+domain = "rough_paths"
+[lead_lag_dispersion_area.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a4421e54-ccce-4b63-beb1-2b7a0a42b86b, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 2c350eafcbff"
+date = "2026-11-03"
+
+[signature_shape_novelty]
+sha256 = "59cf7a37f815bf47c6017848eb3f29f238ce67573b2423eae4dbcd3900324c2f"
+file = "rough_paths/signature_shape_novelty__v1.py"
+domain = "rough_paths"
+[signature_shape_novelty.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a4421e54-ccce-4b63-beb1-2b7a0a42b86b, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 2c350eafcbff"
+date = "2026-11-03"
+
+[time_levy_area]
+sha256 = "3d01d6c234754c6cbf6cdb8a27d09012579a2460790c83e6a59bff021f634cf0"
+file = "rough_paths/time_levy_area__v1.py"
+domain = "rough_paths"
+[time_levy_area.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a4421e54-ccce-4b63-beb1-2b7a0a42b86b, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 2c350eafcbff"
+date = "2026-11-03"
+
+[two_variation_excess]
+sha256 = "5ca4fa7e8575fa0738a56abe28e72e4d987b45fcf111071682765eb9b2abcc1a"
+file = "rough_paths/two_variation_excess__v1.py"
+domain = "rough_paths"
+[two_variation_excess.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session a4421e54-ccce-4b63-beb1-2b7a0a42b86b, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 2c350eafcbff"
+date = "2026-11-03"
+
+[dcca_coefficient]
+sha256 = "6529f2e9dac193a0f5456013a4571b3100fc2c89a6e5a8d538eed65068fbecce"
+file = "fractal/dcca_coefficient__v1.py"
+domain = "fractal"
+[dcca_coefficient.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 6e8b2c1d-d685-464e-8275-df0cdd6718bb, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 12d450f17efe"
+date = "2026-11-03"
+
+[dfa_exponent]
+sha256 = "f82f23ea99e0150ee815413ca1427ca8e2f83f975496b36a84c428900e23e30f"
+file = "fractal/dfa_exponent__v1.py"
+domain = "fractal"
+[dfa_exponent.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 6e8b2c1d-d685-464e-8275-df0cdd6718bb, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 12d450f17efe"
+date = "2026-11-03"
+
+[generalized_hurst_spread]
+sha256 = "e0273ac58b2d6eb895e47c53071a71528e83491e0d9ddfcdb7b3ebd92595fb37"
+file = "fractal/generalized_hurst_spread__v1.py"
+domain = "fractal"
+[generalized_hurst_spread.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 6e8b2c1d-d685-464e-8275-df0cdd6718bb, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 12d450f17efe"
+date = "2026-11-03"
+
+[higuchi_dimension]
+sha256 = "276e53a7884c696e25d3cb0bea76db52758988bf1ed9027e071676871758169e"
+file = "fractal/higuchi_dimension__v1.py"
+domain = "fractal"
+[higuchi_dimension.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 6e8b2c1d-d685-464e-8275-df0cdd6718bb, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 12d450f17efe"
+date = "2026-11-03"
+
+[cycle_affinity]
+sha256 = "fb8558cbe6d7a2f0a916b6f733d3557e7433bb01e00b72d05929ec3fe672d635"
+file = "statistical_physics/cycle_affinity__v1.py"
+domain = "statistical_physics"
+[cycle_affinity.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 2eacc334-27c1-4cf0-b5ba-15379c7ec326, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief a7d5a183e7de"
+date = "2026-11-03"
+
+[hawkes_branching_ratio]
+sha256 = "edf5e8ad13b69c06554bac6b174cfde470c80bae42ed29f0275d5729f209941b"
+file = "statistical_physics/hawkes_branching_ratio__v1.py"
+domain = "statistical_physics"
+[hawkes_branching_ratio.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 2eacc334-27c1-4cf0-b5ba-15379c7ec326, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief a7d5a183e7de"
+date = "2026-11-03"
+
+[ising_coupling]
+sha256 = "4cc64a6cb10dcd987085cf5d303cf842f3015012d29ebf6dbe684f35920eda3f"
+file = "statistical_physics/ising_coupling__v1.py"
+domain = "statistical_physics"
+[ising_coupling.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 2eacc334-27c1-4cf0-b5ba-15379c7ec326, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief a7d5a183e7de"
+date = "2026-11-03"
+
+[tsallis_q_index]
+sha256 = "e546e2c8505e5ee9f94c27e0309627a539cab066b3f18c8afc47153581b74ea7"
+file = "statistical_physics/tsallis_q_index__v1.py"
+domain = "statistical_physics"
+[tsallis_q_index.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 2eacc334-27c1-4cf0-b5ba-15379c7ec326, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief a7d5a183e7de"
+date = "2026-11-03"
+
+[dominant_cycle_phase]
+sha256 = "4f22cab43b5cad5f9eceb36b2b383a57e1726e0685320a69a27d2ab15fe58552"
+file = "spectral/dominant_cycle_phase__v1.py"
+domain = "spectral"
+[dominant_cycle_phase.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 5f2943d3-2bd2-467b-89eb-fb7a4d8b62d5, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 22a35eb01521"
+date = "2026-11-03"
+
+[singular_spectrum_concentration]
+sha256 = "f98320f79cca7b3d8d8f5dfcfa588c2af7d910b53aef4d24ef51abed4ea53da7"
+file = "spectral/singular_spectrum_concentration__v1.py"
+domain = "spectral"
+[singular_spectrum_concentration.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 5f2943d3-2bd2-467b-89eb-fb7a4d8b62d5, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 22a35eb01521"
+date = "2026-11-03"
+
+[spectral_flatness]
+sha256 = "39d9743e9ba85072ba0816124f2543489ead40865f9461f929fa4604fa3e954f"
+file = "spectral/spectral_flatness__v1.py"
+domain = "spectral"
+[spectral_flatness.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 5f2943d3-2bd2-467b-89eb-fb7a4d8b62d5, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 22a35eb01521"
+date = "2026-11-03"
+
+[spectral_shape_change]
+sha256 = "309e0315cf650f33db6d2c10240b2ce72db99af0d8a6e04a74ce738870f37b9a"
+file = "spectral/spectral_shape_change__v1.py"
+domain = "spectral"
+[spectral_shape_change.provenance]
+implemented_by = "claude-opus-5-5 via Claude Code 2.1.316 (Claude Code) (headless session 5f2943d3-2bd2-467b-89eb-fb7a4d8b62d5, effort high)"
+specified_by = "WP3 arm-3 authoring protocol, brief 22a35eb01521"
+date = "2026-11-03"

@@ -1,4 +1,5 @@
-"""Named primitive sets for GP runs: the WP1 registry libraries and the WP2 strategy arms."""
+"""Named primitive sets for GP runs: the WP1 registry libraries, the WP2 strategy arms and the
+WP3 LLM-authored operator libraries."""
 
 from __future__ import annotations
 
@@ -14,7 +15,8 @@ STRATEGY_LIBRARIES = {
     "s2b": adapters.library_2b,
     "s2c": adapters.library_2c,
 }
-NAMES = (*LIBRARIES, *STRATEGY_LIBRARIES)
+AUTHORED_LIBRARIES = ("arm3",)
+NAMES = (*LIBRARIES, *STRATEGY_LIBRARIES, *AUTHORED_LIBRARIES)
 
 
 def resolve(name: str, frozen: Sequence[Frozen] | None = None) -> list[OperatorSpec | TerminalSpec]:
@@ -29,4 +31,8 @@ def resolve(name: str, frozen: Sequence[Frozen] | None = None) -> list[OperatorS
         if not frozen:
             raise ValueError(f"library {name} needs frozen strategies; none are locked yet")
         return STRATEGY_LIBRARIES[name](frozen)
+    if name in AUTHORED_LIBRARIES:
+        from lpstgp.authoring import registry
+
+        return registry.library(name)
     raise KeyError(f"unknown library {name!r}; known: {NAMES}")
