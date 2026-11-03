@@ -971,3 +971,42 @@ The PI had ChatGPT review commit `4a9adf5` with `docs/code_review_prompt_wp3.md`
 9. **Spearman ties** (minor). `describe` now ranks ties by their average rank (`scipy.stats.rankdata`), so constant series give no correlation.
 
 M4's conclusions stand. Finding 4 could not occur in M4, and finding 6 does not change the re-check's prunable sets. The others concern robustness of resuming and isolation, which no M4 cycle met.
+
+---
+
+## WP4 (from 3 Nov 2026)
+
+The WP4 protocol is `docs/protocol_wp4.md` (draft 0.1). Each decision below is the engineer's under D-042/D-061, made before any WP4 code, run or P01–P18 data read. Values marked *provisional* are fixed at protocol 1.0, before the first WP4 run.
+
+### D-075 WP4 scope, data default and order — Provisional (engineer, 3 Nov 2026)
+- **Scope.** WP4's confirmatory experiment is tier A on P01–P18. A post-cutoff period PC (fit 2023-07 – 2025-06, validation 2025-07 – 2026-06, test from 2026-07) is frozen and read separately. Tiers B and C are separate, later campaigns that depend on the PI providing data (D-015, D-016), and are not part of the confirmatory family.
+- **Data default.** Use the free WP1/WP2 sources as they stand, with their proxies and roll gaps disclosed (D-013), unless the PI supplies vendor futures before M2 (D-031 item 11). Waiting for vendor data would hold up every later milestone, and the proxies affect all arms alike.
+- **Data cap.** The WP2 cap (2008-07-01) is replaced by stage sealing over P01–P18 and PC. The TEST stage opens only through a freeze-checked reader, once. This needs a PI decision recorded at M1 (CLAUDE.md rule 1).
+- **Order.** Runs study (M2), then maintenance on the Mac (M3), reported runs on CERES (M4), freeze (M5), and one test read (M6), as in WP2's sequence.
+
+### D-076 H2b's comparator is GP-conv (technical and directional change) — Provisional (engineer, 3 Nov 2026)
+The plan's H2b compares against "STGP with conventional terminals only", and its Method §1 defines conventional terminals as technical and directional-change indicators. The registry already has this library (`conventional`). WP2's pilot used technical analysis alone (GP-TA), which is kept in WP4 as a secondary arm, so the two can be compared. Directional change is also the Essex group's own established baseline (DC-GP), so leaving it out would weaken H2b.
+
+### D-077 Arm 7 and the external baselines are outside WP4's confirmatory family — Provisional (engineer, 3 Nov 2026)
+- **Arm 7** (ALPHAS2- and EvoQuantLab-style re-implementations) is not run. A faithful re-implementation of either system from its paper would cost more than the rest of WP4's engineering, and an approximate one would not support a positioning claim. The risk table already allows dropping it. The paper positions against both in related work and states the omission.
+- **DC-GP and ActTrade** are compared on tier C's published datasets and splits, where the comparison is head to head (D-016).
+- **An LLM code-evolution loop (ProFiT/CogAlpha-style) and the LLQ pipeline** are optional secondary studies after M6, if time and the LLM budget allow. Neither changes any confirmatory test.
+
+### D-078 One Holm family for the eight confirmatory comparisons; H2a's margin — Provisional (engineer, 3 Nov 2026)
+- **Comparisons.**
+  - H1: 2c − 1, 2c − 2a.
+  - H2a: 3 − 6, non-inferiority.
+  - H2b: 3 − GP-conv, 6 − GP-conv.
+  - H3: 4-full − 3, 4-full − 4-grow.
+  - H4: 4-full − 5.
+
+  Each takes a one-sided p-value from the paired stationary block bootstrap of WP2 §9 (mean block 10 days, 10,000 resamples). All eight go into one Holm family at α = 0.05.
+  - *Why one family:* the paper's claims rest on all of them together. Separate families per hypothesis would give a weaker overall error control than the reader expects.
+- **H2a's margin:** 0.1 annualised Sharpe on the 18-year concatenated portfolio, about half the standard error of an 18-year Sharpe. The plan's "matches" needs a margin, and this one is set before any WP4 figure exists. The go/no-go's −0.2 margin was for a two-year gate, not a confirmatory claim.
+- **H3's secondary claims** (smaller library, smaller validation–test gap) are tested descriptively: library sizes, and a paired sign test of the per-period gap over the 18 periods. They are outside the Holm family.
+- This completes WP2 protocol §9, and resolves D-031 item 7 (aggregation): equal weight over the period's eligible instruments on the union calendar, days without a session flat, and runs averaged per instrument.
+
+### D-079 Test-year records per instrument; freeze covers maintained states — Provisional (engineer, 3 Nov 2026)
+- The test read writes the daily net return series of every frozen rule, so the per-instrument results of the plan exist after one read (D-060).
+- The freeze manifest includes the digests of the arm-3 lock and of every maintained library state and seed set used by a reported run. These come from the lineage manifests of WP3 protocol §5. So no maintained arm can change after the freeze.
+- A validation-year rehearsal of the test path runs before the read, as in WP2 (D-058).
