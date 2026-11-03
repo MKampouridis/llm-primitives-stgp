@@ -175,3 +175,13 @@ The dry run checks whether the machinery works. It is not used to choose between
   - gate 3 as a one-sided Wilcoxon test with α = 0.05.
 
   §6's estimate is updated from the dry run. Next is the code review by non-Claude models (`docs/code_review_prompt_wp3.md`).
+- **3 Nov 2026, code review (D-074):** ChatGPT reported nine findings on `4a9adf5`, and all were confirmed and fixed:
+  - the sandbox now blocks reads of user files;
+  - campaigns now resume only under their own specification;
+  - node-name collisions are refused;
+  - nested knock-outs use the node's own output;
+  - `describe` runs only on a checked file;
+  - prune ranks run over the whole library;
+  - retirement history comes from the lineage;
+  - repair turns are driven to completion;
+  - ties get average ranks.

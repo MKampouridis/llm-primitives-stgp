@@ -17,6 +17,7 @@ import traceback
 from pathlib import Path
 
 import numpy as np
+from scipy.stats import rankdata
 
 from lpstgp.authoring import gates
 from lpstgp.authoring.loader import OperatorLoadError, load_spec
@@ -81,10 +82,8 @@ def _stats(out: np.ndarray, scored: np.ndarray) -> dict:
 
 
 def _rank(x: np.ndarray) -> np.ndarray:
-    order = np.argsort(x, kind="stable")
-    ranks = np.empty(len(x))
-    ranks[order] = np.arange(len(x))
-    return ranks
+    """Average ranks of ties (D-074; ranking by position gave tied values distinct ranks)."""
+    return rankdata(x, method="average")
 
 
 def _spearman(a: np.ndarray, b: np.ndarray) -> float | None:
@@ -172,13 +171,16 @@ def main(argv: list[str]) -> int:
         else:
             result = {"ok": False, "stage": "command", "error": f"unknown command {command}"}
     except Exception as exc:  # the operator's own code failed
-        tb = traceback.format_exception(exc)
-        result = {
-            "ok": False,
-            "stage": command,
-            "error": f"{type(exc).__name__}: {exc}",
-            "traceback": "".join(tb[-6:]),
-        }
+        if command == "describe":  # it ran on development data: no message (D-074)
+            result = {"ok": False, "stage": command, "error": gates.withheld(exc)}
+        else:  # synthetic inputs only: the full message helps the session fix its code
+            tb = traceback.format_exception(exc)
+            result = {
+                "ok": False,
+                "stage": command,
+                "error": f"{type(exc).__name__}: {exc}",
+                "traceback": "".join(tb[-6:]),
+            }
     out.write_text(json.dumps(result, default=float))
     return 0
 

@@ -265,31 +265,47 @@ def run(
     def save() -> None:
         state.write_text(json.dumps(record, indent=1, default=float), encoding="utf-8")
 
-    if not record["runs"]:
-        record["runs"].append(wp2.run_claude(record["command"], folder, archive, "stream", timeout))
-        save()
-    while not wp2.completed(record["runs"][-1]):
-        last = record["runs"][-1]
-        waits = sum(1 for r in record["runs"] if wp2.limited(r))
-        failures = sum(1 for r in record["runs"] if not wp2.limited(r) and not wp2.completed(r))
-        if waits > wp2.LIMIT_WAITS or failures > wp2.MAX_RESUMES:
-            break
-        time.sleep(wp2.seconds_until_reset(last) if wp2.limited(last) else wp2.RESUME_WAIT_S)
-        cmd = claude_command(arm, folder, archive, session_id, resume=wp2.RESUME_PROMPT)
-        record["runs"].append(
-            wp2.run_claude(cmd, folder, archive, f"resume{len(record['runs'])}", timeout)
-        )
-        save()
-    if not wp2.completed(record["runs"][-1]):
+    def drive(first: Callable[[], dict[str, Any]], since: int) -> bool:
+        """Run a turn (unless already run) and resume it until it completes; False if it never
+        does. Used for the first turn and, the same way, for the repair turn (D-074)."""
+        if len(record["runs"]) <= since:
+            record["runs"].append(first())
+            save()
+        while not wp2.completed(record["runs"][-1]):
+            turn = record["runs"][since:]
+            last = turn[-1]
+            waits = sum(1 for r in turn if wp2.limited(r))
+            failures = sum(1 for r in turn if not wp2.limited(r) and not wp2.completed(r))
+            if waits > wp2.LIMIT_WAITS or failures > wp2.MAX_RESUMES:
+                return False
+            time.sleep(wp2.seconds_until_reset(last) if wp2.limited(last) else wp2.RESUME_WAIT_S)
+            cmd = claude_command(arm, folder, archive, session_id, resume=wp2.RESUME_PROMPT)
+            record["runs"].append(
+                wp2.run_claude(cmd, folder, archive, f"resume{len(record['runs'])}", timeout)
+            )
+            save()
+        return True
+
+    def incomplete() -> dict[str, Any]:
         record.update({"completed": False, "result": None})
         save()
         return record
-    result = finish(folder)
-    prompt = repair_prompt(result)
-    if prompt and not record.get("repaired"):
-        cmd = claude_command(arm, folder, archive, session_id, resume=prompt)
-        record["runs"].append(wp2.run_claude(cmd, folder, archive, "repair", timeout / 2))
-        record["repaired"] = True
+
+    if not record.get("repair_from"):
+        if not drive(
+            lambda: wp2.run_claude(record["command"], folder, archive, "stream", timeout), 0
+        ):
+            return incomplete()
+        result = finish(folder)
+        prompt = repair_prompt(result)
+        if prompt:
+            record.update(repair_from=len(record["runs"]), repaired=True, repair_prompt=prompt)
+            save()
+    if record.get("repair_from"):
+        start = record["repair_from"]
+        cmd = claude_command(arm, folder, archive, session_id, resume=record["repair_prompt"])
+        if not drive(lambda: wp2.run_claude(cmd, folder, archive, "repair", timeout / 2), start):
+            return incomplete()  # an interrupted repair is not a completed session
         result = finish(folder)
     wp2.copy_transcript(folder, session_id, archive)
     models = sorted({m for r in record["runs"] for m in r.get("models", [])})

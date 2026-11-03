@@ -127,6 +127,8 @@ def build(specs: Iterable[OperatorSpec | TerminalSpec], name: str = "rule") -> P
     kinds: list[type[Param]] = []
     data_types: list[type[SemType]] = []
     for spec in sorted(specs, key=lambda s: s.key):
+        if spec.gp_name in operators or spec.gp_name in terminals:  # D-074
+            raise ValueError(f"two contracts share the GP node name {spec.gp_name}")
         if isinstance(spec, OperatorSpec):
             in_types = list(spec.inputs) + [p.kind for p in spec.params]
             pset.addPrimitive(_not_compiled, in_types, spec.output, name=spec.gp_name)
@@ -146,6 +148,8 @@ def build(specs: Iterable[OperatorSpec | TerminalSpec], name: str = "rule") -> P
     for kind in kinds:
         for value in kind.grid:
             label = param_name(kind, value)
+            if label in params or label in operators or label in terminals:
+                raise ValueError(f"the node name {label} is used twice")
             pset.addTerminal(value, kind, name=label)
             params[label] = (kind, value)
     return PrimitiveLibrary(name, pset, operators, terminals, params, tuple(data_types))

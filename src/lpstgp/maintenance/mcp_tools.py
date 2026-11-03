@@ -90,7 +90,7 @@ class MaintenanceServer(AuthoringServer):
         current = state.read(c["state_id"], Path(c["results_dir"]))
         p = patch.read_patch(
             self.session, c["arm"], current, c["initial"], c["initial_sha"],
-            c["evidence"], c.get("previous_evidence"), current.meta.get("retired", ()),
+            c["evidence"], c.get("previous_evidence"), c.get("used_names", ()),
             self.archive / "jobs" / "patch", gates=False,
         )  # fmt: skip
         return {

@@ -10,6 +10,7 @@ in the WP1 real-data gate. Each result is ``{check, passed, detail}``.
 from __future__ import annotations
 
 import time
+import traceback
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -159,6 +160,23 @@ def synthetic_gates(spec: OperatorSpec) -> list[dict]:
     return results
 
 
+def withheld(exc: BaseException) -> str:
+    """An error raised on development data, without its message, which could quote data values
+    (D-074): the exception type and the lines of the operator's own code where it was raised."""
+    import sys
+
+    system = tuple({sys.prefix, sys.base_prefix})
+    own = [
+        f
+        for f in traceback.extract_tb(exc.__traceback__)
+        if "/lpstgp/" not in f.filename and not f.filename.startswith(system)
+    ]
+    where = "; ".join(f"line {f.lineno}: {(f.line or '').strip()}" for f in own[-3:])
+    return f"{type(exc).__name__} raised on development data (message withheld)" + (
+        f" at {where}" if where else ""
+    )
+
+
 def development_gates(spec: OperatorSpec, data: DevInputs) -> list[dict]:
     """Finite and non-constant on the development instruments, at every sampled grid point."""
     results: list[dict] = []
@@ -174,9 +192,7 @@ def development_gates(spec: OperatorSpec, data: DevInputs) -> list[dict]:
                 finite_bad += [f"{anon}: {p}" for p in problems if "finite" in p]
                 constant += any("constant" in p for p in problems)
         except Exception as exc:
-            _result(
-                results, f"development data {spec.name}{params}", [f"{type(exc).__name__}: {exc}"]
-            )
+            _result(results, f"development data {spec.name}{params}", [withheld(exc)])
             continue
         _result(results, f"development data finite {spec.name}{params}", finite_bad)
         share = 1 - constant / max(len(data), 1)

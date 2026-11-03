@@ -97,6 +97,17 @@ class Patch:
         }
 
 
+def gp_stem(name: str) -> str:
+    """The GP node name of an operator without its version suffix."""
+    return "".join(part.capitalize() for part in name.split("_"))
+
+
+def shared_stems() -> set[str]:
+    from lpstgp.operators.registry import discover
+
+    return {s.gp_name.rsplit("_v", 1)[0] for s in discover().domain("data", "core")}
+
+
 def _meta(path: Path, job: Path) -> dict[str, Any]:
     return execute.run("meta", path, job, worker="lpstgp.authoring.worker")
 
@@ -109,7 +120,7 @@ def read_patch(
     initial_sha: Mapping[str, str],
     current: Mapping[str, Mapping],
     previous: Mapping[str, Mapping] | None,
-    retired: Sequence[str],
+    used_names: Sequence[str],
     work: Path,
     dev=None,
     gates: bool = True,
@@ -117,6 +128,9 @@ def read_patch(
     """Classify the folder's changes and apply gates 1-2 (gate 1 only if ``gates``)."""
     patch = Patch()
     by_name = state.by_name()
+    # Names are compared as the GP sees them (``toy_a`` and ``toy__a`` are both ``ToyA``), against
+    # every name the arm's lineage has used and the shared core's and data terminals' (D-074).
+    taken = {gp_stem(n) for n in (*by_name, *used_names)} | shared_stems()
     files = sorted(p for p in folder.glob("*.py") if p.name != API_FILE)
     present = {p.name for p in files}
     for fname, name in initial.items():
@@ -159,9 +173,10 @@ def read_patch(
                 patch.problems.append(
                     f'{path.name}: set DOMAIN = "<domain>" to one of {", ".join(DOMAINS)}'
                 )
-            if op["name"] in by_name or op["name"] in retired:
+            if gp_stem(op["name"]) in taken:
                 patch.problems.append(
-                    f"{path.name}: the name {op['name']} is or was in the library; choose a new name"
+                    f"{path.name}: the name {op['name']} is, or was, in the library (or matches "
+                    "one of its node names); choose a new name"
                 )
             row["domain"] = domain
             patch.grows.append(row)
@@ -172,9 +187,9 @@ def read_patch(
                     patch.problems.append(f"{path.name}: kind {p['kind'][3:]} has two grids")
         if gates:
             _gate_one(path, work / path.stem, dev, row, patch)
-    names = [r["operator"]["name"] for r in patch.grows]
-    if len(names) != len(set(names)):
-        patch.problems.append("two new files define the same operator name")
+    stems = [gp_stem(r["operator"]["name"]) for r in patch.grows]
+    if len(stems) != len(set(stems)):
+        patch.problems.append("two new files define the same operator name (or node name)")
     _gate_two(arm, state, patch, current, previous)
     return patch
 
@@ -257,5 +272,6 @@ def apply(
     for e, row in zip(add, [*patch.refines, *patch.grows], strict=True):
         sources[e.key] = folder / row["file"]
     remove = [r["operator"]["name"] for r in patch.refines] + list(patch.prunes)
-    retired = sorted({*state.meta.get("retired", ()), *patch.prunes})
-    return state.with_changes(remove, add, {"retired": retired}), sources
+    # Which names an arm has retired is a property of its lineage, not of a library state: two
+    # lineages can reach one state (D-074). The cycle derives it from the cycle records.
+    return state.with_changes(remove, add), sources

@@ -90,7 +90,6 @@ def test_patch_reads_grows_refines_and_prunes(tmp_path, results):
     assert "dfa_exponent@1" not in keys
     assert "new_tstat@1" in keys
     assert "ising_coupling@1" not in keys
-    assert new.meta["retired"] == ["ising_coupling", "tsallis_q_index"]
     assert new.by_name()["dfa_exponent"].parent == "dfa_exponent@1"
     state.save(new, sources, root)
     specs = {s.key: s for s in state.load_specs(new.id, str(root))}
@@ -114,7 +113,7 @@ def test_bounds_prune_rule_domain_and_names(tmp_path, results):
     assert "5 grow(s)" in text
     assert "prune is not allowed" in text
     assert "no_domain.py: set DOMAIN" in text
-    assert "is or was in the library" in text
+    assert "is, or was, in the library" in text
     p = patch.read_patch(
         folder, "4-full", arm3, initial, initial_sha, busy, None, (), tmp_path / "w2", gates=False
     )

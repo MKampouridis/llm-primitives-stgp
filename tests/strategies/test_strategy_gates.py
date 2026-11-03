@@ -179,7 +179,7 @@ def test_sandbox_profile_blocks_writes_outside_the_job_and_network(tmp_path):
 
     job = tmp_path / "job"
     job.mkdir()
-    profile = execute.PROFILE.format(job=job.resolve())
+    profile = execute.profile(job.resolve())
     outside = tmp_path / "outside.txt"
     write = f"open({str(outside)!r}, 'w').write('x')"
     proc = subprocess.run(
@@ -192,6 +192,49 @@ def test_sandbox_profile_blocks_writes_outside_the_job_and_network(tmp_path):
         [execute.SANDBOX_EXEC, "-p", profile, sys.executable, "-c", net], capture_output=True
     )
     assert proc.returncode != 0
+
+
+@pytest.mark.skipif(not execute.sandboxed(), reason="needs macOS sandbox-exec")
+def test_sandbox_profile_blocks_reads_outside_the_runtime_job_and_inputs(tmp_path):
+    """D-074: code that slipped past the source policy cannot read data or results."""
+    import subprocess
+    import sys
+
+    from lpstgp.config import REPO_ROOT
+
+    job, secret, inputs = tmp_path / "job", tmp_path / "secret.txt", tmp_path / "inputs.npz"
+    job.mkdir()
+    secret.write_text("CANARY-SECRET")
+    inputs.write_text("INPUTS")
+    profile = execute.profile(job.resolve(), inputs.resolve())
+
+    def read(path) -> subprocess.CompletedProcess:
+        code = f"import numpy, lpstgp.authoring.worker; print(open({str(path)!r}).read())"
+        return subprocess.run(
+            [execute.SANDBOX_EXEC, "-p", profile, sys.executable, "-I", "-c", code],
+            capture_output=True, text=True, cwd=job,
+        )  # fmt: skip
+
+    for path in (secret, REPO_ROOT / "config" / "settings.toml", REPO_ROOT / "pyproject.toml"):
+        proc = read(path)
+        assert proc.returncode != 0, path
+        assert "CANARY" not in proc.stdout
+    assert read(inputs).stdout.strip() == "INPUTS"  # the one inputs file stays readable
+    (job / "own.txt").write_text("OWN")
+    assert read(job / "own.txt").stdout.strip() == "OWN"
+
+
+def test_source_policy_refuses_numpy_file_reading_routes():
+    for line in (
+        "x = np.lib._datasource.open('f').read()",
+        "x = np.fromregex('f', 'r', float)",
+        "x = np.ma.mrecords.fromtextfile('f')",
+        "x = np._core",
+    ):
+        source = f"import numpy as np\n{line}\nSTRATEGY = 1\n"
+        assert check_strategy_source(source), line
+    ok = "import numpy as np\nx = np.lib.stride_tricks.sliding_window_view\nSTRATEGY = 1\n"
+    assert not check_strategy_source(ok)
 
 
 def test_worker_reports_failures_without_raising(tmp_path):

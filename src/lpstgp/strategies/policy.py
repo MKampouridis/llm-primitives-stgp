@@ -6,7 +6,8 @@ Used for whole strategies (WP2, ``strategy_api``) and for LLM-authored operators
 Stricter than the WP1 operator policy (``lpstgp.gates.policy``), whose gaps it closes: numpy may
 be imported only whole (``import numpy`` / ``import numpy as np``); no ``numpy.random`` or file
 I/O under any alias or ``from`` import; no randomness via ``rvs``/``random_state``; no
-reflection (``getattr``, ``vars``, dunder attributes) and no ``global``/``nonlocal`` state.
+reflection (``getattr``, ``vars``, private or dunder attributes) and no ``global``/``nonlocal``
+state.
 """
 
 from __future__ import annotations
@@ -68,6 +69,12 @@ FORBIDDEN_ATTRS = {
     "npyio",
     "open_memmap",
     "rvs",
+    # file reading reachable through numpy without a forbidden import (D-074)
+    "open",
+    "fromregex",
+    "fromtextfile",
+    "recfromtxt",
+    "recfromcsv",
 }
 FORBIDDEN_KEYWORDS = {"random_state", "seed", "rng"}
 
@@ -111,8 +118,8 @@ def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str
         ):
             problems.append(f"line {line}: use of {node.id} is not allowed")
         elif isinstance(node, ast.Attribute) and (
-            node.attr in FORBIDDEN_ATTRS or node.attr.startswith("__")
-        ):
+            node.attr in FORBIDDEN_ATTRS or node.attr.startswith("_")
+        ):  # private attributes (e.g. ``np.lib._datasource``) as well as dunders (D-074)
             problems.append(f"line {line}: attribute .{node.attr} is not allowed")
         elif isinstance(node, ast.keyword) and node.arg in FORBIDDEN_KEYWORDS:
             problems.append(f"line {line}: keyword {node.arg}= is not allowed (no randomness)")

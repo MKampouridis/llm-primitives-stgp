@@ -1,9 +1,12 @@
 """Run strategy code in a separate, locked-down process (host side).
 
 The worker (``lpstgp.strategies.worker``) runs with a scrubbed environment, a timeout and, on
-macOS, a ``sandbox-exec`` profile that denies all network access and every file write outside
-the job folder. The source policy has already rejected file, network and reflection APIs; the
-sandbox is defence in depth for code that has not been reviewed yet.
+macOS, a ``sandbox-exec`` profile that denies all network access, every file write outside the
+job folder, and reading the contents of any file under the user, volume and temporary areas
+except the Python runtime, the ``lpstgp`` package, the job folder and the one inputs file (D-074).
+So code that slips past the source policy cannot read data, results or validation records. The
+source policy has already rejected file, network and reflection APIs; the sandbox is defence in
+depth for code that has not been reviewed yet.
 """
 
 from __future__ import annotations
@@ -24,7 +27,32 @@ PROFILE = """(version 1)
 (deny file-write*)
 (allow file-write* (subpath "{job}") (literal "/dev/null") (literal "/dev/stdout")
        (literal "/dev/stderr") (regex #"^/dev/tty"))
+(deny file-read-data {denied})
+(allow file-read-data {readable})
 """
+# Areas whose file contents the worker may not read (data, results, caches, home, mounts) ...
+DENIED_READS = ("/Users", "/Volumes", "/private/tmp", "/private/var/folders", "/tmp", "/opt")
+
+
+def _readable(job: Path, inputs_path: Path | None) -> list[str]:
+    """... except these: the Python runtime and environment, the package, the job, the inputs."""
+    import lpstgp
+
+    package = Path(lpstgp.__file__).resolve().parent
+    runtime = {Path(sys.prefix), Path(sys.base_prefix), Path(sys.executable).resolve().parents[1]}
+    rules = [f'(subpath "{p.resolve()}")' for p in sorted(runtime)]
+    rules += [f'(literal "{package.parent}")', f'(subpath "{package}")', f'(subpath "{job}")']
+    if inputs_path is not None:
+        rules.append(f'(literal "{Path(inputs_path).resolve()}")')
+    return rules
+
+
+def profile(job: Path, inputs_path: Path | None = None) -> str:
+    denied = " ".join(f'(subpath "{d}")' for d in DENIED_READS)
+    home = Path.home().resolve()
+    if not any(home.is_relative_to(d) for d in DENIED_READS):
+        denied += f' (subpath "{home}")'
+    return PROFILE.format(job=job, denied=denied, readable=" ".join(_readable(job, inputs_path)))
 
 
 def sandboxed() -> bool:
@@ -64,7 +92,7 @@ def run(
     cmd = [sys.executable, "-I", "-m", worker, command, str(local)]
     cmd += [str(inputs_path) if inputs_path else "-", str(out), *copies]
     if sandboxed():
-        cmd = [SANDBOX_EXEC, "-p", PROFILE.format(job=job_dir), *cmd]
+        cmd = [SANDBOX_EXEC, "-p", profile(job_dir, inputs_path), *cmd]
     threads_env = {
         k: str(threads)
         for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMBA_NUM_THREADS")

@@ -80,6 +80,7 @@ def test_seeds_are_paired_across_arms_states_and_cycles():
     loop = cycle.Cycle.__new__(cycle.Cycle)
     loop.instruments, loop.runs, loop.campaign = ("SPX", "GOLD"), 3, "t"
     loop.gp_cfg = loop.fit_cfg = None
+    loop.spec_digest = "s"
     a = loop.tasks("PL1", ArmState("aaaa"))
     b = loop.tasks("PL1", ArmState("bbbb", (("x", "y"),)))
     assert [t.seed for t in a] == [t.seed for t in b]

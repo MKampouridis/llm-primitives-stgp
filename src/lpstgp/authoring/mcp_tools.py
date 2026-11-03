@@ -47,7 +47,8 @@ TOOLS = [
             "Descriptive statistics of an operator's output on the development data, at several "
             "grid points: finite share, quantiles, lag-1 autocorrelation, share of distinct "
             "values, and rank correlation with the other operator files in your folder (medians "
-            "across instruments). No performance figures. Up to {max_describes} calls."
+            "across instruments). Only for a file whose current version has passed check. No "
+            "performance figures. Up to {max_describes} calls."
         ),
         "inputSchema": {
             "type": "object",
@@ -78,6 +79,10 @@ def describe(path: Path, job: Path, dev: devtool.DevData, others: list[Path]) ->
     )
 
 
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def operator_files(session: Path) -> list[Path]:
     return sorted(p for p in session.glob("*.py") if p.name != API_FILE)
 
@@ -97,6 +102,18 @@ class AuthoringServer:
             for line in log.read_text(encoding="utf-8").splitlines():
                 tool = json.loads(line)["tool"]
                 self.used[tool] = self.used.get(tool, 0) + 1
+
+    def _passed(self) -> set[str]:
+        """Hashes of the file versions that passed ``check`` in this session."""
+        log = self.archive / "evaluations.jsonl"
+        if not log.exists():
+            return set()
+        out = set()
+        for line in log.read_text(encoding="utf-8").splitlines():
+            entry = json.loads(line)
+            if entry["tool"] == "check" and entry["result"].get("passed"):
+                out.add(entry["sha256"])
+        return out
 
     def _file(self, name: str | None) -> Path:
         if not name:
@@ -118,6 +135,12 @@ class AuthoringServer:
                     "error": f"the {tool} budget of {self.limits[tool]} is used up",
                 }
             path = self._file(arguments.get("file"))
+            if tool == "describe" and _sha(path) not in self._passed():
+                return {  # real-data statistics only for code that passed every gate (D-074)
+                    "ok": False,
+                    "error": "describe works only on a file whose current version has passed "
+                    "check; run check on it first (no describe call was used)",
+                }
             self.used[tool] += 1
             n = sum(self.used.values())
             version = self.archive / "versions" / f"{n:03d}_{tool}_{path.name}"

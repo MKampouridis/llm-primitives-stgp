@@ -38,9 +38,11 @@ class KnockoutEvaluator(TreeEvaluator):
         span = tree.searchSubtree(i)
         if all(n.name != self.target for n in tree[span]):
             return self.base._value(tree, i)  # untouched subtree: the run's own (true) values
-        out = super()._value(tree, i)
         if node.name != self.target:
-            return out
+            return super()._value(tree, i)  # an ancestor: evaluated on knocked-out children
+        # The target node itself: its neutral value comes from its own true output, never from
+        # an output whose children were knocked out already (nested uses; D-074).
+        out = self.base._value(tree, i)
         if self.lib.operators[node.name].output is Bool:
             neutral = np.full(out.shape, np.nan)
         else:

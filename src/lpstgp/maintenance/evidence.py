@@ -8,6 +8,7 @@ instrument, only asset classes.
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -17,9 +18,9 @@ import numpy as np
 
 from lpstgp.operators.contract import OperatorSpec
 
-# Prune rule (§4.2; D-071, made relative by D-072, fixed by D-073): an operator is low in a cycle when
-# it is in the library's bottom quarter by usage and by contribution (no contribution counts as
-# lowest); it may be pruned when low in this cycle and the one before (the last cycle of the
+# Prune rule (§4.2; D-071, made relative by D-072, fixed by D-073, ranks by D-074): an operator is
+# low in a cycle when it is in the library's bottom quarter by usage and by contribution (no
+# contribution counts as lowest); it may be pruned when low in this cycle and the one before (the last cycle of the
 # previous period counts as the one before the first). The M4 dry run showed fixed thresholds were
 # never met: usage was at least 0.021 and contribution at least 0.41 in all 356 operator-cycles.
 PRUNE_QUANTILE = 0.25
@@ -86,19 +87,25 @@ def operator_rows(
     return rows
 
 
-def low_keys(rows: Mapping[str, Mapping[str, Any]]) -> set[str]:
-    """The keys in the bottom ``PRUNE_QUANTILE`` of ``rows`` by both usage and contribution."""
-    if not rows:
+def _bottom(values: Mapping[str, float]) -> set[str]:
+    """The keys among the ``ceil(PRUNE_QUANTILE * n)`` smallest values; a tie at the boundary is
+    included whole."""
+    if not values:
         return set()
-    usage_cut = float(np.quantile([r["usage"] for r in rows.values()], PRUNE_QUANTILE))
-    known = [r["contribution"] for r in rows.values() if r.get("contribution") is not None]
-    contribution_cut = float(np.quantile(known, PRUNE_QUANTILE)) if known else 0.0
-    return {
-        k
+    k = max(1, math.ceil(PRUNE_QUANTILE * len(values)))
+    cut = sorted(values.values())[k - 1]
+    return {key for key, v in values.items() if v <= cut}
+
+
+def low_keys(rows: Mapping[str, Mapping[str, Any]]) -> set[str]:
+    """The keys in the library's bottom quarter by usage and by contribution, each ranked over
+    the whole library, with no contribution (no rule used it) ranked lowest (D-072, D-074)."""
+    usage = {k: float(r["usage"]) for k, r in rows.items()}
+    contribution = {
+        k: -math.inf if r.get("contribution") is None else float(r["contribution"])
         for k, r in rows.items()
-        if r["usage"] <= usage_cut
-        and (r.get("contribution") is None or r["contribution"] <= contribution_cut)
     }
+    return _bottom(usage) & _bottom(contribution)
 
 
 def prunable_keys(

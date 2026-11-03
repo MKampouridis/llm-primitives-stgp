@@ -47,7 +47,8 @@ class Entry:
 @dataclass(frozen=True)
 class LibraryState:
     entries: tuple[Entry, ...]
-    meta: Mapping[str, Any] = field(default_factory=dict)  # not part of the id
+    meta: Mapping[str, Any] = field(default_factory=dict)  # not part of the id; never used in
+    # decisions (D-074: an equal state reached by another lineage keeps the first one's meta)
 
     def manifest(self) -> dict[str, Any]:
         return {"operators": [asdict(e) for e in sorted(self.entries, key=lambda e: e.key)]}

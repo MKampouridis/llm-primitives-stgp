@@ -22,17 +22,19 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from lpstgp.campaign.plan import run_seed
+from lpstgp.campaign.execute import is_complete
+from lpstgp.campaign.plan import data_digest, run_seed, settings_digest, source_digest
 from lpstgp.config import load_paths, load_settings
 from lpstgp.data.tier_a import load_universe
+from lpstgp.freeze import digest
 from lpstgp.gp.pset import build
 from lpstgp.maintenance import evidence, gate, patch, rules, session, state
 from lpstgp.runner import RunTask, configs_from_settings, record_path, run_many, write_atomic
-from lpstgp.splits import Stage
+from lpstgp.splits import Stage, all_periods
 
 # The WP2 go/no-go's instruments and calibrated GP parameters (protocol.md §6; D-047, D-056).
 PILOT_INSTRUMENTS = (
@@ -44,7 +46,12 @@ GP_PARAMETERS = {"population": 250, "generations": 70, "tournament": 5}
 RUNS_PER_INSTRUMENT = 3
 CYCLES = 3  # per period (D-064; fixed at protocol 1.0, D-073)
 ARMS = ("4-grow", "4-full", "5")
+SPEC_SCHEMA = "wp3-maintenance-campaign/1"
 REJECTED_BY_GATE = "the changed library's results on held-out data were clearly worse"
+
+
+class CampaignMismatchError(RuntimeError):
+    """A campaign's stored results were made under another specification."""
 
 
 @dataclass(frozen=True)
@@ -97,6 +104,45 @@ class Cycle:
         self.asset_class = {i: universe[i] for i in self.instruments}
         self.claude_version = claude_version
         self.session_runner = session_runner or session.run
+        self.spec = self.specification()
+        self.spec_digest = digest(self.spec)
+        self._check_specification()
+
+    # --- what a campaign's results depend on (D-074) ----------------------------------------
+
+    def specification(self) -> dict[str, Any]:
+        """Everything a cycle's results depend on: settings, GP and fitness configuration,
+        instruments, runs, cycles, period definitions, the data files and the package source."""
+        periods = all_periods(self.settings)
+        return {
+            "schema": SPEC_SCHEMA,
+            "campaign": self.campaign,
+            "periods": {p: asdict(periods[p]) for p in self.periods},
+            "instruments": list(self.instruments),
+            "runs": self.runs,
+            "cycles": self.cycles,
+            "gp": asdict(self.gp_cfg),
+            "fitness": asdict(self.fit_cfg),
+            "settings_digest": settings_digest(self.settings),
+            "data_digest": digest(data_digest(self.paths, self.instruments)),
+            "source_digest": source_digest(),
+        }
+
+    def _check_specification(self) -> None:
+        """A campaign resumes only under the specification it started with; it is written on
+        the first run and never silently replaced."""
+        path = self.root / "campaign.json"
+        spec = json.loads(json.dumps(self.spec, default=str))
+        if path.exists():
+            old = json.loads(path.read_text())
+            changed = sorted(k for k in {*old, *spec} if old.get(k) != spec.get(k))
+            if changed:
+                raise CampaignMismatchError(
+                    f"campaign {self.campaign} was started under another specification "
+                    f"(changed: {', '.join(changed)}); start a new campaign"
+                )
+            return
+        write_atomic(path, json.dumps(spec, indent=1, sort_keys=True) + "\n")
 
     # --- runs ------------------------------------------------------------------------------
 
@@ -110,7 +156,10 @@ class Cycle:
                     RunTask(
                         f"wp3-maintenance-{self.campaign}", library, (inst,), period,
                         run_seed((inst,), period, run), self.gp_cfg, self.fit_cfg,
-                        campaign=(("task_id", task_id), ("run", str(run))),
+                        campaign=(
+                            ("task_id", task_id), ("run", str(run)),
+                            ("spec_digest", self.spec_digest),
+                        ),
                         knockouts=True, seed_rules=arm_state.seed_rules,
                     )
                 )  # fmt: skip
@@ -119,7 +168,9 @@ class Cycle:
     def batch(self, period: str, arm_state: ArmState) -> list[dict[str, Any]]:
         """The run records of a library state on a period (runs what is missing)."""
         tasks = self.tasks(period, arm_state)
-        todo = [t for t in tasks if not record_path(self.paths.results_dir, t).exists()]
+        # A record counts only if it is complete and was made under this campaign's specification
+        # (its campaign metadata carry the specification's digest); anything else is re-run.
+        todo = [t for t in tasks if not is_complete(record_path(self.paths.results_dir, t), t)]
         if todo:
             run_many(todo, self.workers, self.paths.results_dir)
         return [json.loads(record_path(self.paths.results_dir, t).read_text()) for t in tasks]
@@ -144,13 +195,18 @@ class Cycle:
         path = self._dir(arm, period, c) / "cycle.json"
         if not path.exists():
             raise FileNotFoundError(f"{arm} {period} cycle {c} has not run")
-        return json.loads(path.read_text())
+        return self._checked(json.loads(path.read_text()), path)
+
+    def _checked(self, record: dict[str, Any], path: Path) -> dict[str, Any]:
+        if record.get("spec_digest") != self.spec_digest:
+            raise CampaignMismatchError(f"{path} was made under another campaign specification")
+        return record
 
     def run_cycle(self, arm: str, period: str, c: int) -> dict[str, Any]:
         out_dir = self._dir(arm, period, c)
         done = out_dir / "cycle.json"
         if done.exists():
-            return json.loads(done.read_text())
+            return self._checked(json.loads(done.read_text()), done)
         if c == 1:
             current, before = self.start_state(arm, period)
         else:
@@ -174,6 +230,7 @@ class Cycle:
         stored = {e.key: state.states_root(self.paths.results_dir) / lib_state.id / e.file
                   for e in lib_state.entries}  # fmt: skip
         initial = {f"{e.name}.py": e.name for e in lib_state.entries}
+        used_names = self.used_names(arm, period, c)
         initial_sha = {f"{e.name}.py": e.sha256 for e in lib_state.entries}
         context = {
             "arm": arm,
@@ -184,6 +241,7 @@ class Cycle:
             "initial_sha": initial_sha,
             "evidence": rows,
             "previous_evidence": previous_rows,
+            "used_names": used_names,
         }
         sess_dir.mkdir(parents=True, exist_ok=True)
         (sess_dir / "context.json").write_text(json.dumps(context, indent=1, default=float))
@@ -205,7 +263,7 @@ class Cycle:
                 return {"rules": admitted, "problems": problems}
             p = patch.read_patch(
                 folder, arm, lib_state, initial, initial_sha, rows, previous_rows,
-                lib_state.meta.get("retired", ()), sess_dir / "jobs", dev,
+                used_names, sess_dir / "jobs", dev,
             )  # fmt: skip
             return p.as_dict()
 
@@ -233,6 +291,7 @@ class Cycle:
         out = current if decision["status"] != "admitted" else candidate
         cycle = {
             "campaign": self.campaign,
+            "spec_digest": self.spec_digest,
             "arm": arm,
             "period": period,
             "cycle": c,
@@ -301,6 +360,20 @@ class Cycle:
         new_state, sources = patch.apply(lib_state, p, folder, entered, provenance)
         state.save(new_state, sources, self.paths.results_dir)
         return {"status": "pending", "what": what}, ArmState(new_state.id), None
+
+    def used_names(self, arm: str, period: str, c: int) -> list[str]:
+        """Every operator name in any library state of this arm's lineage before cycle ``c`` of
+        ``period`` (arm 3's included): a grow must not reuse one (D-071, D-074)."""
+        names = {e.name for e in state.arm3_state().entries}
+        for p in self.periods[: self.periods.index(period) + 1]:
+            for k in range(1, self.cycles + 1):
+                if p == period and k >= c:
+                    break
+                cyc = self.cycle_record(arm, p, k)
+                for key in ("state_in", "state_out"):
+                    s = state.read(cyc[key]["state_id"], self.paths.results_dir)
+                    names |= {e.name for e in s.entries}
+        return sorted(names)
 
     def _history(self, arm: str, period: str, c: int) -> dict[str, list[dict]]:
         """Evidence rows of earlier cycles of this arm (all periods), oldest first."""

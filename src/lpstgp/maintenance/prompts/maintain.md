@@ -72,7 +72,8 @@ $last_outcome
 - **check** (`file`): the admission checks on one operator file. Up to $max_checks calls.
 - **describe** (`file`): descriptive statistics of one operator's output on separate
   development data (anonymised markets, no dates), with its rank correlation with the other
-  operator files in the folder. Up to $max_describes calls.
+  operator files in the folder. It works only once the file's current version has passed
+  **check**. Up to $max_describes calls.
 - **check_patch**: how the host reads your changes. Up to $max_check_patch calls.
 
 When you finish, reply with a short summary: what you changed and why, in a few sentences.

@@ -952,3 +952,22 @@ Reasons, from the mechanics only:
 - The cap may be reached around WP4 period 6–8. It is kept, because the cap is part of the arm's definition (D-067) and its hits are reported.
 
 Nothing was set from any arm's validation results. The remaining step of M5 is the independent code review by non-Claude models (`docs/code_review_prompt_wp3.md`), as before WP2's calibration (D-049, D-051).
+
+### D-074 Fixes from the WP3 code review by ChatGPT — Decided (engineer, under D-042/D-061; 3 Nov 2026)
+The PI had ChatGPT review commit `4a9adf5` with `docs/code_review_prompt_wp3.md`. It reported nine findings, and each was traced through the code and confirmed. Its 13 test failures came from its own environment, which blocks `sandbox-exec`, and are not defects. Every fix has a regression test that reproduces the reported case (`tests/maintenance/test_review_fixes.py` and `tests/strategies/test_strategy_gates.py`).
+
+1. **Untrusted code could read files** (critical). The sandbox denied network access and writes but allowed reads, and the source policy missed `np.lib._datasource.open`.
+   - The worker's profile now denies reading file contents anywhere under `/Users`, `/Volumes`, the temporary areas and `/opt`. The exceptions are the Python runtime and environment, the `lpstgp` package, the job folder and the one inputs file.
+   - The policy now refuses every private attribute (`_…`), as well as `open`, `fromregex`, `fromtextfile`, `recfromtxt` and `recfromcsv`.
+   - Errors raised on development data (`describe`, development gates) give only the exception type and the operator's own lines, never the message.
+   - Evidence: no file among the 3,435 that the WP2 and WP3 sessions wrote or ran contains any of these routes, so nothing was exploited. All stored LLM files still pass the new policy.
+2. **Resume accepted stale runs and cycles** (major). A campaign now writes `campaign.json`, its specification: period definitions, instruments, runs, cycles, GP and fitness configuration, and the digests of the settings, data and package source. A resume under any other specification is refused. Every run record carries the specification's digest and counts only when it is complete and current. Every cycle record carries the digest too, and is refused under another one.
+3. **GP node-name collisions** (major). A grow's name is now compared as a GP node name (`toy_a` and `toy__a` are both `ToyA`) against the library, the arm's whole lineage, the shared core and the data terminals. `build()` also refuses duplicate node names. All 29 states built so far still build.
+4. **Nested knock-outs** (major). The knocked-out node's median now comes from its own true output, never from one whose children were already knocked out. This did not affect M4: no LLM-written operator takes its own output type as an input, so no operator could nest.
+5. **`describe` ran unchecked drafts on real data** (major). It now works only on a file version that has passed `check` in the session, and a refused call uses no budget. The arm-3 brief is unchanged, since it is the frozen library's provenance; the tool description states the rule.
+6. **Prune ranking** (major). Usage and contribution are each ranked over the whole library, with no contribution ranked lowest. A key is in the bottom quarter if its value is at most the ⌈n/4⌉-th smallest, with ties at the boundary included. The re-check's prunable sets are unchanged.
+7. **Retirement history was lost when a state recurred** (major). The names an arm may not reuse now come from its lineage: every state in its earlier cycle records, plus arm 3's. They no longer come from a state's metadata, which is ignored for decisions, because two lineages can reach the same state.
+8. **An interrupted repair counted as complete** (major). The repair turn now has the same completion and resume handling as the first turn. A repair that never completes leaves the session incomplete, and so the cycle has no candidate.
+9. **Spearman ties** (minor). `describe` now ranks ties by their average rank (`scipy.stats.rankdata`), so constant series give no correlation.
+
+M4's conclusions stand. Finding 4 could not occur in M4, and finding 6 does not change the re-check's prunable sets. The others concern robustness of resuming and isolation, which no M4 cycle met.
