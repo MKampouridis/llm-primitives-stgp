@@ -42,7 +42,7 @@ PILOT_INSTRUMENTS = (
 )  # fmt: skip
 GP_PARAMETERS = {"population": 250, "generations": 70, "tournament": 5}
 RUNS_PER_INSTRUMENT = 3
-CYCLES = 3  # per period (D-064, provisional)
+CYCLES = 3  # per period (D-064; fixed at protocol 1.0, D-073)
 ARMS = ("4-grow", "4-full", "5")
 REJECTED_BY_GATE = "the changed library's results on held-out data were clearly worse"
 

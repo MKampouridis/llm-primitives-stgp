@@ -20,7 +20,7 @@ from typing import Any
 
 from scipy.stats import wilcoxon
 
-ALPHA = 0.05  # provisional (D-072)
+ALPHA = 0.05  # D-072, fixed at protocol 1.0 (D-073)
 
 
 def validation_f(record: Mapping[str, Any]) -> float:

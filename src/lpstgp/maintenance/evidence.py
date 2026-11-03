@@ -17,7 +17,7 @@ import numpy as np
 
 from lpstgp.operators.contract import OperatorSpec
 
-# Prune rule (§4.2, provisional; D-071, made relative by D-072): an operator is low in a cycle when
+# Prune rule (§4.2; D-071, made relative by D-072, fixed by D-073): an operator is low in a cycle when
 # it is in the library's bottom quarter by usage and by contribution (no contribution counts as
 # lowest); it may be pruned when low in this cycle and the one before (the last cycle of the
 # previous period counts as the one before the first). The M4 dry run showed fixed thresholds were

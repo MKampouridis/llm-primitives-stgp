@@ -28,8 +28,8 @@ from lpstgp.maintenance import evidence
 from lpstgp.maintenance.state import Entry, LibraryState
 from lpstgp.strategies import execute
 
-LIBRARY_CAP = 64  # cross-domain operators (D-067, provisional)
-BOUNDS = {  # per cycle (D-067, provisional)
+LIBRARY_CAP = 64  # cross-domain operators (D-067; fixed at protocol 1.0, D-073)
+BOUNDS = {  # per cycle (D-067; fixed at protocol 1.0, D-073)
     "4-grow": {"grow": 2, "refine": 0, "prune": 0},
     "4-full": {"grow": 2, "refine": 2, "prune": 2},
 }

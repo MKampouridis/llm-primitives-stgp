@@ -1,6 +1,6 @@
 # WP3 protocol: LLM-authored and LLM-maintained operator libraries (arms 3, 4-grow, 4-full, 5)
 
-**Status: draft 0.1 (2 Nov 2026).** Written by the engineer under the PI's delegation of scientific decisions (D-042, D-061), after the WP2 pilot (GO, D-059) and before any WP3 code, LLM session or GP run. Choices are recorded in `docs/decisions.md` (D-062 onwards). Items marked *provisional* are checked by the WP3 dry run (§8) and fixed at version 1.0, before any data that the paper reports on are touched. Everything not stated here is as in the WP2 protocol (`docs/protocol.md`): data tiers, costs, execution lag 2, fitness F, final-rule selection on validation, paired seeds, budget in requested evaluations, and the calibrated GP parameters (population 250, tournament 5, 70 generations).
+**Status: version 1.0 (3 Nov 2026), fixed before WP4 (D-073).** Draft 0.1 was dated 2 Nov 2026. Written by the engineer under the PI's delegation of scientific decisions (D-042, D-061), after the WP2 pilot (GO, D-059) and before any WP3 code, LLM session or GP run. Choices are recorded in `docs/decisions.md` (D-062 onwards). The values draft 0.1 marked *provisional* were checked by the WP3 dry run (§8, M4) and are fixed in this version, from the mechanics only (D-072, D-073), before any data that the paper reports on are touched. Everything not stated here is as in the WP2 protocol (`docs/protocol.md`): data tiers, costs, execution lag 2, fitness F, final-rule selection on validation, paired seeds, budget in requested evaluations, and the calibrated GP parameters (population 250, tournament 5, 70 generations).
 
 ## 1. Purpose
 
@@ -42,7 +42,7 @@ Arm 7 (re-implemented ALPHAS2 / EvoQuantLab-style comparators) is out of scope f
   - `check`: the WP1 admission gates. Compile and the source policy (the stricter WP2 one), types, parameter grids, finite and non-constant output, determinism, exact lookback, prefix invariance, declared invariances, runtime, and finite non-constant output on dev-fit data. Cross-process determinism is checked at acceptance.
   - `describe`: descriptive statistics of an operator's output on anonymised dev-fit data. These are the finite share, quantiles, lag-1 autocorrelation and the correlation with the session's other operators.
   - There is no backtest tool. Arm 6 was written without performance feedback, so arm 3 is too (D-062).
-- **Budget:** up to 100 `check` and 50 `describe` calls per session *(provisional)*.
+- **Budget:** up to 100 `check` and 50 `describe` calls per session.
 - **Acceptance:** exactly four operator files, all passing, with names and declared kinds that do not clash with earlier domains. As for WP2 strategies, a failure gets one repair turn, then one fresh re-run of the session. The accepted files are frozen verbatim in `src/lpstgp/authoring/generated/arm3/`, under `src/lpstgp/authoring/arm3.lock.toml`, outside the WP1 registry (D-070), and documented in `docs/operators_arm3.md`.
 - **Effort record (H2a):** session minutes, tokens and human minutes. The human minutes should be zero apart from launching, which is the point of H2a.
 
@@ -62,7 +62,7 @@ reported runs for period p use L(p, C)
 ```
 
 - **Causality.** Maintenance for period p sees only period p's FIT and VALIDATE years, which end before p's test year. Carrying the library forward is causal, because L(p-1, C) used only data before p's test year (D-064).
-- **Cycles:** C = 3 per period *(provisional)*. That gives 6 cycles in the WP3 dry run and 54 over P01–P18.
+- **Cycles:** C = 3 per period. That gives 6 cycles in the WP3 dry run and 54 over P01–P18.
 - **Cycle runs:** 3 runs per eligible instrument, at the calibrated GP parameters, on FIT data. The seeds come from (instrument, period, run), never from the arm or the cycle, so the three LLM arms share them, and every cycle of a period uses the same seeds. The runs of a patched library are then both the gate's paired-seed check (§4.3) and, if the patch is admitted, the next cycle's runs. No extra GP runs are needed.
 - **Where it runs:** wholly on the active Mac (D-065). An arm-3-sized cycle takes about 15–20 minutes on 6 workers, judging by arm 6's cost in the budget check (about 90 runs at about 63 s each), plus the knock-outs. So a period takes about an hour per arm, and WP4's maintenance needs about 60–80 Mac-hours over the three arms. Running on the Mac avoids a CERES round trip with two-factor sign-in at every cycle. The reported runs go to CERES, as in WP2. If M4 shows the Mac is too slow, the cycles move to CERES, with the LLM session still on the Mac.
 
@@ -90,7 +90,7 @@ The maintainer also receives the library's contracts and its own code (arm 3's l
 - **Prune** needs low usage and low contribution in at least 2 consecutive cycles, checked by the gate rather than left to the LLM. *Low* means the library's bottom quarter by both measures, and the brief marks the operators that qualify (D-072; the fixed thresholds of D-071 were never met in M4). A pruned operator can come back only as a new grow.
 - **Refine** issues a new version under a new identity (contracts are immutable). Its lineage is kept, and the old version retires.
 - **Core glue and data terminals** are never pruned or refined. Every grown operator is in one of the 7 domains, so the domain quota is not fixed after arm 3.
-- **When 4-grow reaches the cap** it stops growing. Each period's report records whether the cap was hit (D-067). All limits are *provisional*.
+- **When 4-grow reaches the cap** it stops growing. Each period's report records whether the cap was hit (D-067). These limits are fixed at 1.0 (D-073). The dry run suggests the cap may be reached around WP4 period 6–8.
 
 **Arm 5's session** proposes up to 25 entry/exit rule pairs over arm 3's library. They may be new seeds, semantic mutations of elite trees, or simplifications. Each pair is parsed against the typed primitive set; a pair that fails parsing or the type check is discarded. The admitted pairs replace 25 of the 250 random individuals in the initial population of every run in the next cycle and in the period's reported runs. Arm 5 never changes the library.
 
@@ -98,7 +98,7 @@ The maintainer also receives the library's contracts and its own code (arm 3's l
 
 1. Every new or refined operator passes the WP1 admission gates (as `check`). Its code meets the source policy and runs under `sandbox-exec` on the Mac before it is ever imported.
 2. The bounds and the cap of §4.2 hold, and prunes meet the evidence rule.
-3. **Paired-seed check:** the patched library's runs (the next cycle's runs) are paired with the previous library's runs at the same seeds, and their final rules are scored on VALIDATE. The patch is rejected only when a one-sided Wilcoxon signed-rank test on the paired differences in validation F finds it worse at α = 0.05 *(provisional; D-072 replaced the first rule, median difference below −0.05, which M4 showed rejected about a third of harmless patches)*. This is a guard against harm, not a search for improvement. Because it uses the validation year, it can only *widen* the validation–test gap of the maintained arms, so it works against H3 and is conservative (D-066).
+3. **Paired-seed check:** the patched library's runs (the next cycle's runs) are paired with the previous library's runs at the same seeds, and their final rules are scored on VALIDATE. The patch is rejected only when a one-sided Wilcoxon signed-rank test on the paired differences in validation F finds it worse at α = 0.05 (D-072 replaced the first rule, median difference below −0.05, which M4 showed rejected about a third of harmless patches). This is a guard against harm, not a search for improvement. Because it uses the validation year, it can only *widen* the validation–test gap of the maintained arms, so it works against H3 and is conservative (D-066).
 4. If a patch is rejected, the library stays the same for the next cycle. The rejection and its reason are part of the evidence the LLM sees next.
 
 Arm 5's trees pass gates 1–2 as type checks (they add no code) and gate 3 like a patch (D-071).
@@ -115,7 +115,7 @@ Arm 5's trees pass gates 1–2 as type checks (they add no code) and gate 3 like
 - **Arm 3:** 7 sessions.
 - **WP3 dry run:** 2 periods × 3 cycles × 3 arms = 18 sessions.
 - **WP4:** 18 periods × 3 cycles × 3 arms = 162 sessions.
-- At WP2's median (about 12 minutes, about $3.40 at API prices per session), WP4 needs about 32 hours of session time. The equivalent API price is about $550, which runs on the subscription, paced one session at a time (D-044). It does not fit the $60 a month API budget, so subscription use is assumed throughout. Usage beyond the subscription's monthly limit stops rather than being billed (D-068), so the constraint is time: if M4 shows that WP4's sessions would not fit, C drops to 2.
+- In the M4 dry run, a maintenance session took 3.4 minutes on average, about $0.65 at API prices. At that rate WP4 needs about 9 hours of session time, about $105 at API prices, and about 34 Mac-hours for the cycles' GP runs. This replaces draft 0.1's estimate from WP2 (about 32 hours, about $550). The sessions run on the subscription, paced one session at a time (D-044). It does not fit the $60 a month API budget, so subscription use is assumed throughout. Usage beyond the subscription's monthly limit stops rather than being billed (D-068), so the constraint is time: M4 showed that WP4's sessions fit, so C stays at 3.
 
 ## 7. Leakage tests (with the code, before any session)
 
@@ -132,7 +132,7 @@ Arm 5's trees pass gates 1–2 as type checks (they add no code) and gate 3 like
 | M2 | Arm 3 authoring: 7 sessions, freeze and lock, `docs/operators_arm3.md` | **PI go-ahead** (subscription use) |
 | M3 | Maintenance machinery: cycle planner, evidence (§4.1), maintainer and arm-5 briefs and tools, patch format, gates (§4.3), lineage storage, leakage tests | code |
 | M4 | Dry run on PL1 → PL2 training data, all three LLM arms. Checks the mechanics only: patch admission rates, library sizes, cap hits, tokens, time, failure modes. Validation only; no test data (the pilot test years are spent) | **PI go-ahead** (18 sessions) |
-| M5 | Protocol 1.0: the provisional values fixed from M4's mechanics, never from performance; code review by a non-Claude model, as planned before WP4 | — |
+| M5 | Protocol 1.0: the provisional values fixed from M4's mechanics, never from performance; code review by a non-Claude model, as planned before WP4 | PI (review by other LLMs) |
 
 The dry run checks whether the machinery works. It is not used to choose between arms or to tune them on performance. Any provisional value changed after M4 is changed for a mechanical reason, such as patches that never pass the gates or caps reached in the first period, and is logged here.
 
@@ -164,3 +164,14 @@ The dry run checks whether the machinery works. It is not used to choose between
   - Gate 3's threshold sat inside the noise, so it was replaced by a one-sided Wilcoxon test (§4.3).
   - WP4's maintenance is re-estimated at about 34 Mac-hours, against the 60–80 in §4.
   - Re-check of 4-full under D-072 (6 sessions): pruning used in 3 of 6 cycles, every patch admitted, no failures.
+- **3 Nov 2026, version 1.0 (M5, D-073):** the provisional values are fixed as they stood after D-072:
+  - C = 3 cycles per period;
+  - 3 runs per instrument;
+  - bounds 2 grows, 2 refines and 2 prunes per cycle;
+  - a cap of 64;
+  - 25 arm-5 seeds;
+  - tool budgets of 100/50/30 for the maintainers and 30 for arm 5;
+  - the relative prune rule (bottom quarter, two consecutive cycles);
+  - gate 3 as a one-sided Wilcoxon test with α = 0.05.
+
+  §6's estimate is updated from the dry run. Next is the code review by non-Claude models (`docs/code_review_prompt_wp3.md`).

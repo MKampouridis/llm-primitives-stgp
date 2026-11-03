@@ -932,3 +932,23 @@ The M4 dry run (18 sessions, report `reports/wp3/m4_dryrun.md`) checked the main
 - **Not changed:** C = 3, 3 runs per instrument, the per-cycle bounds, the cap of 64, 25 arm-5 seeds and the tool budgets. None showed a mechanical problem: no tool budget came within 96 calls of its limit, and the cap was not approached (34 operators after 6 cycles).
 - **Not re-run.** The dry run's lineage stays as run under the old rules. A 6-session check of 4-full under the new rules (PL1 → PL2) would exercise the prune path with a real LLM before WP4. It is offered to the PI and not started (subscription use).
 - **Re-check (3 Nov 2026, PI go-ahead).** Six 4-full sessions under the new rules: the prune rule marked an operator in 3 of 6 cycles, and the LLM pruned it each time. Gate 3 admitted all 6 patches; the old rule would have rejected 4. All sessions completed with no repairs. Net library growth was +9 in 6 cycles, so the cap of 64 may be reached around WP4 period 6–8; it is kept, and its hits are recorded (D-067). Details: `reports/wp3/m4_dryrun.md`.
+
+### D-073 WP3 protocol 1.0: provisional values fixed — Decided (engineer, under D-042/D-061; 3 Nov 2026)
+`docs/protocol_wp3.md` becomes version 1.0 before any WP4 data are touched. The values marked *provisional* in draft 0.1 are fixed as they stood after D-072:
+- C = 3 cycles per period;
+- 3 runs per instrument per cycle;
+- per-cycle bounds of 2 grows (4-grow), and 2 grows, 2 refines and 2 prunes (4-full);
+- a cap of 64 cross-domain operators;
+- 25 arm-5 seed pairs;
+- tool budgets: check 100, describe 50 and check_patch 30 for the maintainers, check_rules 30 for arm 5;
+- the relative prune rule (bottom quarter by usage and contribution in two consecutive cycles);
+- gate 3 as a one-sided Wilcoxon signed-rank test with α = 0.05.
+
+Reasons, from the mechanics only:
+- In M4 and its re-check, 24 sessions completed with no failures or repairs.
+- No tool budget came within 96 calls of its limit.
+- Every gate and every patch type was exercised.
+- WP4's projected cost (about 9 hours of session time and about 34 Mac-hours) fits the schedule, so C does not drop to 2 (§6).
+- The cap may be reached around WP4 period 6–8. It is kept, because the cap is part of the arm's definition (D-067) and its hits are reported.
+
+Nothing was set from any arm's validation results. The remaining step of M5 is the independent code review by non-Claude models (`docs/code_review_prompt_wp3.md`), as before WP2's calibration (D-049, D-051).

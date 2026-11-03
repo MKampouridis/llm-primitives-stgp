@@ -17,7 +17,7 @@ from lpstgp.gp.pset import PrimitiveLibrary
 from lpstgp.gp.variation import Limits, valid
 from lpstgp.runner import parse_tree
 
-MAX_RULES = 25  # of the 250 initial individuals (D-067, provisional)
+MAX_RULES = 25  # of the 250 initial individuals (D-067; fixed at protocol 1.0, D-073)
 RULES_FILE = "rules.json"
 ALLOWED_KEYS = {"entry", "exit", "note"}
 
