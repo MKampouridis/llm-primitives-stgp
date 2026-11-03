@@ -240,6 +240,11 @@ def run(
     if state.exists():
         record = json.loads(state.read_text(encoding="utf-8"))
         folder, session_id = Path(record["folder"]), record["session_id"]
+        if record.get("brief_sha12") != wp2.sha12(brief):  # resume only the same task (D-081)
+            raise ValueError(
+                f"{archive}: the stored session was started from another brief; "
+                "start a new campaign"
+            )
     else:
         session_id = str(uuid.uuid4())
         folder = root / session_id

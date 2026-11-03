@@ -77,6 +77,38 @@ FORBIDDEN_ATTRS = {
     "recfromcsv",
 }
 FORBIDDEN_KEYWORDS = {"random_state", "seed", "rng"}
+# Introspection that reaches builtins, frames, the process or the interpreter without a
+# forbidden name (D-081: ``inspect.currentframe().f_builtins`` got past the first policy).
+INTROSPECTION_ATTRS = {
+    "f_builtins", "f_globals", "f_locals", "f_back", "f_code", "f_trace", "f_lineno",
+    "gi_frame", "gi_code", "cr_frame", "cr_code", "ag_frame", "ag_code", "tb_frame", "tb_next",
+    "currentframe", "getmembers", "getsource", "getfile", "getmodule",
+    "modules", "argv", "environ", "stdin", "stdout", "stderr", "system", "popen", "spawn",
+    "builtins", "inspect", "importlib", "import_module", "loader", "spec", "func_globals",
+    "co_consts", "co_code", "mro", "subclasses",
+}  # fmt: skip
+CONTRACT_MODULES = {
+    "strategy_api": "lpstgp.strategies.api",
+    "operator_api": "lpstgp.authoring.operator_api",
+}
+
+
+def contract_names(api: str) -> frozenset[str]:
+    """The names a module may import from its contract: the contract's own public classes,
+    functions and constants, never a module or a name it imported itself (``inspect``, ``np``,
+    ``dataclass``; D-081)."""
+    import importlib
+    import inspect as _inspect
+
+    module = importlib.import_module(CONTRACT_MODULES[api])
+    out = set()
+    for name, value in vars(module).items():
+        if name.startswith("_") or _inspect.ismodule(value):
+            continue
+        owner = getattr(value, "__module__", None)
+        if owner is None or owner == module.__name__ or not callable(value):
+            out.add(name)
+    return frozenset(out)
 
 
 def _allowed(module: str, allowed: tuple[str, ...] = ALLOWED_IMPORTS) -> bool:
@@ -101,12 +133,22 @@ def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str
         line = getattr(node, "lineno", 0)
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if not _allowed(alias.name, allowed) or alias.name.startswith("numpy."):
+                if (
+                    not _allowed(alias.name, allowed)
+                    or alias.name.startswith("numpy.")
+                    or alias.name == api  # the contract only through ``from api import name``
+                ):
                     problems.append(f"line {line}: import {alias.name} is not allowed")
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             if node.level or not _allowed(module, allowed):
                 problems.append(f"line {line}: from {module or '.'} import is not allowed")
+            elif module == api:
+                extra = [a.name for a in node.names if a.name not in contract_names(api)]
+                if extra:
+                    problems.append(
+                        f"line {line}: {', '.join(extra)} is not part of {api}'s contract"
+                    )
             elif module.split(".")[0] == "numpy":
                 bad = [a.name for a in node.names if a.name in FORBIDDEN_ATTRS or a.name == "*"]
                 if module != "numpy" or bad:
@@ -118,7 +160,9 @@ def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str
         ):
             problems.append(f"line {line}: use of {node.id} is not allowed")
         elif isinstance(node, ast.Attribute) and (
-            node.attr in FORBIDDEN_ATTRS or node.attr.startswith("_")
+            node.attr in FORBIDDEN_ATTRS
+            or node.attr in INTROSPECTION_ATTRS
+            or node.attr.startswith("_")
         ):  # private attributes (e.g. ``np.lib._datasource``) as well as dunders (D-074)
             problems.append(f"line {line}: attribute .{node.attr} is not allowed")
         elif isinstance(node, ast.keyword) and node.arg in FORBIDDEN_KEYWORDS:

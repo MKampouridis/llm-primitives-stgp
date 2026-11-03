@@ -195,8 +195,9 @@ def test_sandbox_profile_blocks_writes_outside_the_job_and_network(tmp_path):
 
 
 @pytest.mark.skipif(not execute.sandboxed(), reason="needs macOS sandbox-exec")
-def test_sandbox_profile_blocks_reads_outside_the_runtime_job_and_inputs(tmp_path):
-    """D-074: code that slipped past the source policy cannot read data or results."""
+def test_sandbox_profile_blocks_reads_outside_the_runtime_and_job(tmp_path):
+    """D-074, D-081: untrusted code cannot read data, results, inputs files or the other
+    libraries' sources."""
     import subprocess
     import sys
 
@@ -206,7 +207,7 @@ def test_sandbox_profile_blocks_reads_outside_the_runtime_job_and_inputs(tmp_pat
     job.mkdir()
     secret.write_text("CANARY-SECRET")
     inputs.write_text("INPUTS")
-    profile = execute.profile(job.resolve(), inputs.resolve())
+    profile = execute.profile(job.resolve())
 
     def read(path) -> subprocess.CompletedProcess:
         code = f"import numpy, lpstgp.authoring.worker; print(open({str(path)!r}).read())"
@@ -215,11 +216,17 @@ def test_sandbox_profile_blocks_reads_outside_the_runtime_job_and_inputs(tmp_pat
             capture_output=True, text=True, cwd=job,
         )  # fmt: skip
 
-    for path in (secret, REPO_ROOT / "config" / "settings.toml", REPO_ROOT / "pyproject.toml"):
+    src = REPO_ROOT / "src" / "lpstgp"
+    private = [
+        next((src / "operators" / "fractal").glob("*.py")),
+        next((src / "strategies" / "generated").rglob("*.py")),
+        next((src / "authoring" / "generated").rglob("*.py")),
+        src / "maintenance" / "cycle.py",
+    ]
+    for path in (secret, inputs, REPO_ROOT / "config" / "settings.toml", *private):
         proc = read(path)
         assert proc.returncode != 0, path
         assert "CANARY" not in proc.stdout
-    assert read(inputs).stdout.strip() == "INPUTS"  # the one inputs file stays readable
     (job / "own.txt").write_text("OWN")
     assert read(job / "own.txt").stdout.strip() == "OWN"
 

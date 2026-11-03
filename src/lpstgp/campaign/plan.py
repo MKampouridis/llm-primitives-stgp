@@ -81,18 +81,25 @@ def data_digest(paths: Paths, instruments: Sequence[str], tier: str = "A") -> di
 
 
 def source_digest(root: Path = SOURCE_ROOT) -> str:
-    """Digest of the package's Python source (paths and contents): the code that makes results.
-
-    Any change to it, however small, makes a campaign's plan and records stale (D-049), so a
-    campaign never mixes results from different code. Byte-identical on the Mac and on CERES.
+    """Digest of the package's source and resources (paths and contents): the code that makes
+    results, and the prompt templates, locks and frozen files it reads (D-081; Python files only
+    before). Any change to it, however small, makes a campaign's plan and records stale (D-049),
+    so a campaign never mixes results from different code. Byte-identical on the Mac and CERES.
     """
     h = hashlib.sha256()
-    for path in sorted(root.rglob("*.py")):
-        if "__pycache__" in path.parts:
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
             continue
         h.update(path.relative_to(root).as_posix().encode() + b"\0")
         h.update(path.read_bytes() + b"\0")
     return h.hexdigest()
+
+
+def tier_digest(paths: Paths, tier: str = "A") -> str:
+    """Digest of every processed file of a tier: the data any tool may read, including the
+    development cohort of the LLM's ``describe`` tool, not only a campaign's instruments (D-081)."""
+    processed = paths.tier_dir(tier) / "processed"
+    return digest({p.name: _file_digest(p) for p in sorted(processed.glob("*.parquet"))})
 
 
 def settings_digest(settings: Mapping[str, Any]) -> str:
