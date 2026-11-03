@@ -37,7 +37,8 @@ def load_plan(path: Path) -> dict:
 
 def _config(plan: Mapping, name: str) -> Config:
     c = plan["configs"][name]
-    return Config(c["name"], c["library"], c["kind"], c["gp"], c["fitness"])
+    rules = tuple(tuple(r) for r in c.get("seed_rules", ()))
+    return Config(c["name"], c["library"], c["kind"], c["gp"], c["fitness"], rules)
 
 
 def verify(plan: Mapping, paths: Paths, settings: Mapping[str, Any]) -> list[str]:
@@ -78,6 +79,7 @@ def run_task(plan: Mapping, task: Mapping, settings: Mapping[str, Any]) -> RunTa
         gp=gp_cfg,
         fitness=fit_cfg,
         campaign=_meta(plan, task),
+        seed_rules=_config(plan, task["config"]).seed_rules,
     )
 
 

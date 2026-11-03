@@ -3,6 +3,9 @@
 Steps:
   eligibility  the eligible instruments of P01..P18 and PC (counts only; D-083), committed as
                reports/wp4/eligibility.json for the maintenance and reported-run campaigns.
+  plan         M4: one campaign plan per period (wp4-<period>) with every arm at 50 runs (D-082);
+               the maintained arms take their period's final library and seeds from the M3
+               campaign (--maintenance wp4). Plans go to CERES (scripts/ceres/tasks.sge).
   runs-study   M2: protocol.md §6.4, 100 runs of arm 2c on the 6 calibration instruments,
                PL1 and PL2 training data; decides 30 or 50 runs per configuration.
 
@@ -92,6 +95,48 @@ def step_runs_study(paths, settings, workers: int, mode: str) -> None:
     print("\n".join(lines[:6]))
 
 
+RUNS = 50  # per configuration (D-082)
+FIXED_ARMS = {  # arm -> library (protocol_wp4 §3)
+    "arm2a": "s2a", "arm2b": "s2b", "arm2c": "s2c", "arm3": "arm3", "arm6": "seed",
+    "armGPconv": "conventional", "armTA": "technical",
+}  # fmt: skip
+MAINTAINED = {"arm4grow": "4-grow", "arm4full": "4-full", "arm5": "5"}
+
+
+def maintained_state(paths, campaign: str, arm: str, period: str) -> dict:
+    """The library state and seed rules after a period's last maintenance cycle, L(p, C)."""
+    from lpstgp.maintenance.cycle import CYCLES
+
+    path = paths.results_dir / "wp3" / "maintenance" / campaign / arm / period / f"c{CYCLES}"
+    record = json.loads((path / "cycle.json").read_text())
+    return record["state_out"]
+
+
+def wp4_configs(paths, settings, period: str, maintenance: str | None) -> list[Config]:
+    """Every arm of protocol_wp4 §3 for one period, at WP2's calibrated parameters."""
+    configs = [Config("arm1", "strategies", kind="select")]
+    configs += [gp_arm(name, lib, settings) for name, lib in FIXED_ARMS.items()]
+    if maintenance is None:
+        return configs
+    for name, arm in MAINTAINED.items():
+        out = maintained_state(paths, maintenance, arm, period)
+        base = gp_arm(name, f"state:{out['state_id']}", settings)
+        rules = tuple(tuple(r) for r in out.get("seed_rules", ()))
+        if arm == "5":  # arm 5 keeps arm 3's library; its seeds vary (WP3 protocol §4.2)
+            base = gp_arm(name, "arm3", settings)
+        configs.append(Config(base.name, base.library, gp=base.gp, seed_rules=rules))
+    return configs
+
+
+def step_plan(paths, settings, periods, maintenance: str | None) -> None:
+    table = json.loads((REPORTS / "eligibility.json").read_text())["eligible"]
+    for period in periods:
+        configs = wp4_configs(paths, settings, period, maintenance)
+        cells = [((inst,), period) for inst in table[period]]
+        name = f"wp4-{period}" if maintenance else f"wp4-{period}-fixed"
+        wp2_pilot.prepare(name, configs, cells, RUNS, paths, settings, 1, "plan")
+
+
 def step_eligibility(paths, settings) -> None:
     table = eligibility.table(paths, settings)
     pairs = sum(len(table[p]) for p in eligibility.WP4_PERIODS if p != "PC")
@@ -110,13 +155,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("step", choices=("eligibility", "runs-study"))
+    parser.add_argument("step", choices=("eligibility", "plan", "runs-study"))
+    parser.add_argument("--periods", default=",".join(eligibility.WP4_PERIODS))
+    parser.add_argument(
+        "--maintenance", default="wp4", help="M3 campaign; 'none' plans the fixed arms only"
+    )
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--mode", choices=("all", "plan", "report"), default="plan")
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
     if args.step == "eligibility":
         step_eligibility(paths, settings)
+    elif args.step == "plan":
+        maintenance = None if args.maintenance == "none" else args.maintenance
+        step_plan(paths, settings, args.periods.split(","), maintenance)
     else:
         step_runs_study(paths, settings, args.workers, args.mode)
 

@@ -20,6 +20,8 @@ from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
 from lpstgp.runner import configs_from_settings, write_atomic
 from lpstgp.strategies.registry import LOCK_FILE as STRATEGY_LOCK
 
+AUTHORED_LOCK = REPO_ROOT / "src" / "lpstgp" / "authoring" / "arm3.lock.toml"
+
 PLAN_SCHEMA = "lpstgp.campaign/1"
 # What makes two plans the same campaign (creation time and code revision do not).
 PLAN_IDENTITY = (
@@ -50,6 +52,8 @@ class Config:
     kind: str = "gp"  # "gp" or "select" (arm 1)
     gp: Mapping[str, Any] = field(default_factory=dict)  # overrides of the settings' [gp]
     fitness: Mapping[str, Any] = field(default_factory=dict)  # overrides of [fitness]
+    # Arm 5 (WP4): the period's admitted LLM rule pairs, placed first in every initial population.
+    seed_rules: tuple[tuple[str, str], ...] = ()
 
     def resolved(self, settings: Mapping[str, Any]) -> tuple[GPConfig, FitnessConfig]:
         gp_cfg, fit_cfg = configs_from_settings(settings, **self.gp)
@@ -68,6 +72,11 @@ class Config:
         }
         if uses_strategies:  # arms 2a-2c also use core operators (logic, glue, data)
             payload["operator_lock"] = _file_digest(OPERATOR_LOCK)
+        # Added keys only when used, so every earlier configuration keeps its digest (D-084).
+        if self.library == "arm3" or self.library.startswith("state:"):
+            payload["authored_lock"] = _file_digest(AUTHORED_LOCK)  # state ids are content hashes
+        if self.seed_rules:
+            payload["seed_rules"] = [list(r) for r in self.seed_rules]
         return digest(payload)
 
 

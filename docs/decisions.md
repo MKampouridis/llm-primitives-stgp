@@ -1050,3 +1050,11 @@ The runs-per-configuration study of `docs/protocol.md` §6.4 (M2 of WP4) ran 100
 - **Rule:** D-009, as in WP1's data report (504 warm-up bars, at least 95% of expected sessions in [fit start, test end)). It counts sessions only (D-017). The table for P01–P18 and PC is committed as `reports/wp4/eligibility.json` (`scripts/wp4.py eligibility`). It gives 496 pairs over P01–P18, the same as the WP1 report: 25 instruments in P01, rising to 31 from P15.
 - **PC** is assessed on [fit start, test start), because the data build ends on 2026-06-30 and its test year is not in the data yet. All 31 instruments qualify. Its test-year coverage is counted at the PC freeze (M7), once its data have been downloaded. An instrument below 95% coverage there is reported as such, but stays in the frozen design, because eligibility must not depend on the test year after the freeze.
 - **Per-period instruments in maintenance.** Each WP4 maintenance cycle runs on its period's eligible instruments (`scripts/maintain.py --wp4`). An instrument's first eligible period is also its first period of evidence for the LLM.
+
+### D-084 WP4 reported-run plans — Decided (engineer, under D-042/D-061; 3 Nov 2026)
+- **One plan per period**, `wp4-<period>` (P01–P18, PC), with every arm of protocol_wp4 §3 at 50 runs on single-instrument cells of the period's eligible instruments (D-083, D-082). This gives about 20,000 tasks for a late period. Plans are written by `scripts/wp4.py plan` once M3 is complete, and go to CERES as in WP2.
+- **Configurations:** arms 2a, 2b, 2c, 3, 6, GP-conv and GP-TA use WP2's calibrated GP parameters and λ, read from the committed WP2 reports (D-054, D-056). Arms 2c, 6 and GP-TA keep the exact configuration digests of the WP2 go/no-go.
+  - Arms 4-grow and 4-full use `state:<id>`, the state after their period's last maintenance cycle.
+  - Arm 5 uses arm 3's library with that cycle's admitted seed rules.
+- **Identity:** a configuration's digest now also covers arm 3's lock (for `arm3` and `state:` libraries) and arm 5's seed rules. These keys are added only when used, so every earlier configuration keeps its registered digest (tested).
+- **Smoke check:** a 2-generation run of GP-conv and of arm 3 on SPX for P01 and PC completed. Its sandbox reads stopped at each stage's horizon. No figure was read.
