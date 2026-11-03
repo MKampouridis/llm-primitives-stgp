@@ -95,7 +95,8 @@ class AuthoringServer:
         log = archive / "evaluations.jsonl"
         if log.exists():
             for line in log.read_text(encoding="utf-8").splitlines():
-                self.used[json.loads(line)["tool"]] += 1
+                tool = json.loads(line)["tool"]
+                self.used[tool] = self.used.get(tool, 0) + 1
 
     def _file(self, name: str | None) -> Path:
         if not name:

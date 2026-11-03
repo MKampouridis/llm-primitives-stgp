@@ -35,4 +35,8 @@ def resolve(name: str, frozen: Sequence[Frozen] | None = None) -> list[OperatorS
         from lpstgp.authoring import registry
 
         return registry.library(name)
-    raise KeyError(f"unknown library {name!r}; known: {NAMES}")
+    if name.startswith("state:"):  # a maintained library state (WP3, arms 4 and 5)
+        from lpstgp.maintenance import state
+
+        return state.library(name)
+    raise KeyError(f"unknown library {name!r}; known: {NAMES} or state:<id>")

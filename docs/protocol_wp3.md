@@ -101,7 +101,7 @@ The maintainer also receives the library's contracts and its own code (arm 3's l
 3. **Paired-seed check:** the patched library's runs (the next cycle's runs) are paired with the previous library's runs at the same seeds, and their final rules are scored on VALIDATE. The patch is admitted unless the median paired difference in validation F is below −0.05 *(provisional)*. This is a guard against harm, not a search for improvement. Because it uses the validation year, it can only *widen* the validation–test gap of the maintained arms, so it works against H3 and is conservative (D-066).
 4. If a patch is rejected, the library stays the same for the next cycle. The rejection and its reason are part of the evidence the LLM sees next.
 
-Arm 5's trees pass gates 1–2 only, as type checks: they add no code.
+Arm 5's trees pass gates 1–2 as type checks (they add no code) and gate 3 like a patch (D-071).
 
 ## 5. Storage and provenance
 
@@ -152,3 +152,11 @@ The dry run checks whether the machinery works. It is not used to choose between
   - The other six domains were accepted at the first attempt. One kind was declared (`DccaBox`).
   - 28 operators frozen (lock `6d97234bda3f`). Report: `reports/wp3/arm3_authoring.md`; catalogue: `docs/operators_arm3.md`.
   - One name coincides with arm 6: `permutation_entropy`.
+- **3 Nov 2026, M3 (maintenance machinery, D-071):** `src/lpstgp/maintenance/` and `scripts/maintain.py` (`--stub`, `--preflight`, the cycles).
+  - The patch format is file-based (grow, refine, or prune by emptying a file). The prune thresholds are provisional.
+  - The LLM is told only admitted or rejected, never a validation figure.
+  - Arm 5 also gets gate 3 (this changes §4.3).
+  - Batches of runs are shared across arms by content.
+  - A token whitelist guards the parsing of arm 5's trees.
+  - The maintainer pre-flight passed for both tool sets.
+

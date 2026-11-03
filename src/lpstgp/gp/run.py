@@ -14,7 +14,7 @@ import random
 import statistics
 import time
 from collections import Counter
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import date
 
@@ -105,9 +105,20 @@ class Problem:
         return totals
 
 
-def _initial(lib: PrimitiveLibrary, gen: Generator, cfg: GPConfig) -> list[Rule]:
+def _initial(
+    lib: PrimitiveLibrary, gen: Generator, cfg: GPConfig, seeded: Sequence[Rule] = ()
+) -> list[Rule]:
+    """Seeded rules first (valid and unique ones only; arm 5, WP3), then random ramped rules."""
     population: list[Rule] = []
     seen: set[str] = set()
+    for rule in seeded:
+        if len(population) >= cfg.population:
+            break
+        if not (valid(rule.entry, lib, cfg.limits) and valid(rule.exit, lib, cfg.limits)):
+            continue
+        if rule.key() not in seen:
+            seen.add(rule.key())
+            population.append(rule.copy())
     attempts = 0
     while len(population) < cfg.population:
         attempts += 1
@@ -179,8 +190,13 @@ def run_gp(
     cfg: GPConfig,
     seed: int,
     progress: Callable[[dict], None] | None = None,
+    seeded: Sequence[Rule] = (),
 ) -> dict:
-    """Evolve one rule. Returns a JSON-serialisable summary (no populations)."""
+    """Evolve one rule. Returns a JSON-serialisable summary (no populations).
+
+    ``seeded`` rules (arm 5, WP3) take the first places of the initial population; without them
+    the run is exactly as before.
+    """
     started = time.perf_counter()
     rng = random.Random(seed)
     gen = Generator(lib, cfg.limits.lookback_max, rng)
@@ -216,7 +232,7 @@ def run_gp(
         eval_seconds += spent
         return spent
 
-    population = _initial(lib, gen, cfg)
+    population = _initial(lib, gen, cfg, seeded)
     spent = evaluate(population)
     hof: dict[str, tuple[float, int, str, Rule]] = {}
     generations = []
@@ -259,6 +275,7 @@ def run_gp(
                 "cache_hit_rate": stats["hit_rate"],
                 "elapsed_s": time.perf_counter() - started,
                 "elite_usage": _usage(elite, lib),
+                "best_usage": sorted(_usage(elite[:1], lib)),  # survival evidence (WP3 §4.1)
             }
         )
         if progress:
@@ -362,4 +379,5 @@ def run_gp(
         "validation_checkpoints": checkpoints,
         "hall_of_fame": hall,
         "selected": selected,
+        "seeded": len(seeded),
     }

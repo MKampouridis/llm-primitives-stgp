@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import resource
 import shutil
 import sys
@@ -22,6 +23,8 @@ from datetime import UTC, datetime
 from multiprocessing import get_context
 from pathlib import Path
 
+from deap import gp
+
 from lpstgp.backtest.costs import from_meta
 from lpstgp.config import load_paths, load_settings
 from lpstgp.data.store import modelling_store
@@ -29,12 +32,14 @@ from lpstgp.data.tier_a import git_revision
 from lpstgp.gp.fitness import FitnessConfig
 from lpstgp.gp.pset import build
 from lpstgp.gp.run import GPConfig, Problem, run_gp
-from lpstgp.gp.variation import Limits
+from lpstgp.gp.variation import Limits, Rule
 from lpstgp.libraries import STRATEGY_LIBRARIES, resolve
+from lpstgp.operators.contract import OperatorSpec
 from lpstgp.operators.registry import read_lock
 from lpstgp.sandbox import Sandbox
 from lpstgp.splits import Stage, all_periods
 from lpstgp.strategies.registry import lock_digest as strategy_lock_digest
+from lpstgp.types import Bool
 
 THREAD_VARS = (
     "OMP_NUM_THREADS",
@@ -56,6 +61,10 @@ class RunTask:
     fitness: FitnessConfig = field(default_factory=FitnessConfig)
     tier: str = "A"
     campaign: tuple[tuple[str, str], ...] = ()  # task id, run index and digests (campaign plans)
+    # WP3 maintenance cycles: knock-out evidence for the hall of fame (FIT only, §4.1), and
+    # arm 5's proposed rules as (entry, exit) tree strings seeded into the initial population.
+    knockouts: bool = False
+    seed_rules: tuple[tuple[str, str], ...] = ()
 
     @property
     def name(self) -> str:
@@ -124,7 +133,19 @@ def execute(
         task.gp.cache_bytes // 4,
     )
     setup_s = time.perf_counter() - started
-    summary = run_gp(lib, fit_problem, val_problem, task.gp, task.seed, progress)
+    seeded = [Rule(parse_tree(e, lib), parse_tree(x, lib)) for e, x in task.seed_rules]
+    summary = run_gp(lib, fit_problem, val_problem, task.gp, task.seed, progress, seeded)
+    if task.knockouts:
+        from lpstgp.maintenance.knockout import contributions
+
+        hall = [
+            Rule(lib.from_names(h["entry"]), lib.from_names(h["exit"]))
+            for h in summary["hall_of_fame"]
+        ]
+        t0 = time.perf_counter()
+        targets = [s.gp_name for s in specs if isinstance(s, OperatorSpec) and s.domain != "core"]
+        summary["knockouts"] = contributions(fit_problem, hall, targets)
+        summary["timings"]["knockout_s"] = time.perf_counter() - t0
     lock = read_lock()
     record = {
         "schema": 1,
@@ -138,6 +159,10 @@ def execute(
             "name": task.library,
             "contracts": {s.key: lock.get(s.key, "") for s in specs},
             "strategies_lock": strategy_lock_digest() if task.library in STRATEGY_LIBRARIES else "",
+            # A maintained state's id pins each operator file's hash (lpstgp.maintenance.state).
+            "state": task.library.removeprefix("state:")
+            if task.library.startswith("state:")
+            else "",
         },
         "instruments": list(task.instruments),
         "period": {k: str(v) for k, v in asdict(period).items()},
@@ -157,6 +182,28 @@ def execute(
         record["record_path"] = str(out)
         record["record_bytes"] = out.stat().st_size
     return record
+
+
+def parse_tree(text: str, lib) -> gp.PrimitiveTree:
+    """A tree from its printed form (as in hall-of-fame ``entry_str``), typed by ``lib``.
+
+    Every token must name a node of the primitive set before deap parses the text: deap would
+    otherwise ``eval`` unknown tokens, and arm 5's text is LLM output.
+    """
+    tokens = [t for t in re.split(r"[\s,()]+", text) if t]
+    unknown = sorted({t for t in tokens if t not in lib.pset.mapping})
+    if not tokens or unknown or not re.fullmatch(r"[\w\s,()]+", text):
+        raise ValueError(f"unknown nodes {unknown[:5]} or characters in: {text[:200]}")
+    tree = gp.PrimitiveTree.from_string(text, lib.pset)
+    if getattr(tree[0], "ret", None) is not Bool:
+        raise ValueError(f"not a Bool tree: {text}")
+    try:
+        complete = tree.searchSubtree(0).stop == len(tree)
+    except IndexError:
+        complete = False
+    if not complete or any(n.arity == 0 and n.name.startswith("ARG") for n in tree):
+        raise ValueError(f"malformed tree (wrong number of arguments): {text}")
+    return tree
 
 
 def record_path(results_dir: Path | str, task: RunTask) -> Path:
