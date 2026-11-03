@@ -7,7 +7,8 @@ before the fit start followed by every bar up to (excluding) the stage horizon:
 * ``Stage.VALIDATE`` horizon = test start: nothing from the test year;
 * ``Stage.TEST``     sealed (``SealedPeriodError``). The only way in is ``open_pilot_test``: a
   pilot period (D-034) whose test year ends within the store's data cap, after a committed
-  freeze manifest exists (``lpstgp.freeze``). WP4 adds the same path for primary periods.
+  freeze manifest exists (``lpstgp.freeze``). WP4's entry is ``open_frozen_test``: a period
+  listed as a test period in a committed freeze manifest's context (P01..P18, or PC on its own).
 
 A horizon past the store's ``max_horizon`` is refused before anything is read. The sandbox keeps
 no reference to the store, so code holding a sandbox cannot reach later rows. Every sandbox
@@ -125,6 +126,34 @@ class Sandbox:
                 f"{period.id}: a committed freeze manifest (FreezeManifest.load_committed) "
                 "listing the frozen rules is required"
             )
+        return cls._open(store, period, Stage.TEST, instruments, lookback_max)
+
+    @classmethod
+    def open_frozen_test(
+        cls,
+        store: DataStore,
+        period: Period,
+        instruments: Iterable[str],
+        lookback_max: int,
+        *,
+        test_periods: Collection[Period],
+        manifest: FreezeManifest,
+    ) -> Sandbox:
+        """TEST stage of a WP4 period, for evaluating rules frozen in a committed manifest that
+        names this period among its test periods (D-079, D-086). The pilots stay on
+        ``open_pilot_test``; their test years are spent."""
+        if not isinstance(manifest, FreezeManifest) or not manifest.verified:
+            raise SealedPeriodError(
+                f"{period.id}: a committed freeze manifest (FreezeManifest.load_committed) "
+                "listing the frozen rules is required"
+            )
+        named = manifest.context.get("test_periods")
+        if period not in test_periods or named != sorted(p.id for p in test_periods):
+            raise SealedPeriodError(f"{period.id}: not a test period of the committed manifest")
+        if period.id.startswith("PL") or period.id == "DEV":
+            raise SealedPeriodError(f"{period.id}: no WP4 test read for this period")
+        if store.max_horizon is None or period.test_end > store.max_horizon:
+            raise SealedPeriodError(f"{period.id}: test year lies beyond the store's data cap")
         return cls._open(store, period, Stage.TEST, instruments, lookback_max)
 
     @classmethod

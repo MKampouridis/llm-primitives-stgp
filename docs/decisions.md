@@ -1065,3 +1065,16 @@ A GP run record is about 70 KB, mostly per-generation aggregates. WP4's roughly 
 - Earlier campaigns keep plain JSON and stay readable. The format is per plan, and every reader (`read_record`) handles both.
 - A truncated or corrupt compressed record never counts as complete (tested).
 - **For the PI:** the Mac's disk is 97% full. WP4's records (about 3 GB) and its test-return series (well under 1 GB) fit, but little else would. Freeing space is the PI's call, because it means deleting files.
+
+### D-086 WP4 freeze and single test read — Decided (engineer, under D-042/D-061; 3 Nov 2026)
+Built before any WP4 run, and rehearsed end to end on synthetic data (`tests/test_wp4_rehearsal.py`):
+- **Freeze (M5, `scripts/wp4.py freeze`).**
+  - Every reported rule of P01–P18 (task → rule hash), with one rule list per period under `results/wp4/freeze/`.
+  - The committed `reports/wp4/freeze_manifest.json` holds each list's size and sha256, not the roughly 250,000 rules themselves: they would not fit the repository's 512 KB file limit, and the digest binds them as tightly.
+  - Its context names the test periods and the digests of the settings, the strategy, operator and arm-3 locks, and every processed tier-A file. It also holds each period plan's settings, source and configuration digests, and the maintenance campaign's specification and lineage manifests.
+- **Test read (M6, `scripts/wp4.py test --decision D-0xx`).**
+  - It refuses unless the named decision's title records the PI's go-ahead for the WP4 test read.
+  - The manifest must be committed and unchanged, and the code must be unchanged since the freeze. Every record must match its period's frozen list, and every list its committed digest.
+  - It then evaluates every frozen rule on each period's **validation** year (the rehearsal, kept as the validation side of H3's gap), claims the read atomically (`reports/wp4/test_claim.json`), and opens each test year once through `Sandbox.open_frozen_test`. That entry admits only periods named in a committed manifest, never a pilot or DEV, and never a test year past the data cap, so PC cannot be read under these settings.
+  - Every run's daily net returns per instrument are saved (`results/wp4/{validation,test}/<period>.npz`) before the primary analysis runs.
+- **Primary analysis** (`lpstgp.analysis.wp4`): concatenated equal-weight portfolios, and the eight one-sided paired stationary-bootstrap comparisons with one Holm family (D-078). The one-sided test (`one_sided_bootstrap`) centres the bootstrap distribution and shifts it to the margin, so a superiority test (margin 0) and H2a's non-inferiority test (margin −0.1) share one code path. Tested for direction and margin.

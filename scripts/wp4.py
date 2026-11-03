@@ -1,4 +1,5 @@
-"""WP4 steps (docs/protocol_wp4.md). Data reads go through the sandbox, FIT/VALIDATE only.
+"""WP4 steps (docs/protocol_wp4.md). Every data read goes through the sandbox: FIT and VALIDATE
+for every step but `test`, which opens the frozen test years once (D-086).
 
 Steps:
   eligibility  the eligible instruments of P01..P18 and PC (counts only; D-083), committed as
@@ -6,6 +7,10 @@ Steps:
   plan         M4: one campaign plan per period (wp4-<period>) with every arm at 50 runs (D-082);
                the maintained arms take their period's final library and seeds from the M3
                campaign (--maintenance wp4). Plans go to CERES (scripts/ceres/tasks.sge).
+  freeze       M5: every reported rule of P01..P18, per-period rule lists under results and
+               their digests in reports/wp4/freeze_manifest.json (commit it).
+  test         M6: --decision D-0xx (the PI's recorded go-ahead). Rehearsal on the validation
+               years, then the single read of the test years; reports/wp4/primary.json.
   runs-study   M2: protocol.md §6.4, 100 runs of arm 2c on the 6 calibration instruments,
                PL1 and PL2 training data; decides 30 or 50 runs per configuration.
 
@@ -18,6 +23,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -141,6 +148,178 @@ def step_plan(paths, settings, periods, maintenance: str | None) -> None:
         print(f"{name}: {len(json.loads(plan.read_text())['tasks'])} tasks")
 
 
+FREEZE_DIR = "wp4/freeze"  # under results: the per-period rule lists, whose digests are committed
+
+
+def plan_path(paths, period: str) -> Path:
+    return paths.results_dir / "campaigns" / f"wp4-{period}" / "tasks.json"
+
+
+def frozen_context(paths, settings, periods, maintenance: str) -> dict:
+    """What the frozen rules' test evaluation depends on besides the rules (D-079, D-086)."""
+    from lpstgp.campaign.execute import load_plan
+    from lpstgp.campaign.plan import AUTHORED_LOCK, settings_digest, tier_digest
+    from lpstgp.operators.registry import LOCK_FILE as OPERATOR_LOCK
+    from lpstgp.strategies import registry
+
+    context = {
+        "test_periods": sorted(periods),
+        "settings_digest": settings_digest(settings),
+        "strategies_lock": registry.lock_digest(),
+        "operator_lock": registry.file_hash(OPERATOR_LOCK),
+        "authored_lock": registry.file_hash(AUTHORED_LOCK),
+        "tier_digest": tier_digest(paths),
+    }
+    for period in periods:
+        plan = load_plan(plan_path(paths, period))
+        context[f"plan:{plan['campaign']}"] = {
+            "settings_digest": plan["settings_digest"],
+            "source_digest": plan["source_digest"],
+            "configs": {k: c["digest"] for k, c in sorted(plan["configs"].items())},
+            "tasks": len(plan["tasks"]),
+        }
+    root = paths.results_dir / "wp3" / "maintenance" / maintenance
+    spec = root / "campaign.json"
+    context["maintenance"] = {
+        "campaign": maintenance,
+        "specification": registry.file_hash(spec) if spec.exists() else None,
+        "lineage": {
+            str(p.relative_to(root)): registry.file_hash(p)
+            for p in sorted(root.glob("*/*/lineage.json"))
+        },
+    }
+    return context
+
+
+def step_freeze(paths, settings, periods, maintenance: str) -> None:
+    """M5: every reported rule of P01..P18 frozen; the committed manifest holds one digest per
+    period's rule list (about 250,000 rules would not fit in git; D-086)."""
+    from lpstgp import pilot
+    from lpstgp.campaign.execute import plan_records
+    from lpstgp.freeze import digest, write_manifest
+
+    if wp2_pilot.source_changed_since("HEAD"):
+        raise SystemExit("commit the code first: the manifest records the code revision")
+    out_dir = paths.results_dir / FREEZE_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    digests = {}
+    for period in periods:
+        rules = pilot.manifest_rules(plan_records(plan_path(paths, period), paths, settings))
+        text = json.dumps(rules, sort_keys=True, separators=(",", ":"))
+        (out_dir / f"{period}.json").write_text(text)
+        digests[period] = {"rules": len(rules), "sha256": digest(rules)}
+        print(f"{period}: {len(rules)} rules frozen")
+    context = frozen_context(paths, settings, periods, maintenance)
+    context["code_version"] = wp2_pilot.revision()
+    write_manifest(REPORTS / "freeze_manifest.json", digests, context)
+    print("commit reports/wp4/freeze_manifest.json before `test`")
+
+
+def period_rules(paths, manifest, period: str) -> dict[str, str]:
+    """A period's frozen rule list, checked against its committed digest."""
+    from lpstgp.freeze import digest
+
+    rules = json.loads((paths.results_dir / FREEZE_DIR / f"{period}.json").read_text())
+    expected = manifest.rules[period]
+    if digest(rules) != expected["sha256"] or len(rules) != expected["rules"]:
+        raise SystemExit(f"{period}: the frozen rule list differs from the committed manifest")
+    return rules
+
+
+def recorded_go_ahead(decision: str) -> None:
+    """The test read needs the PI's go-ahead, recorded as a decision first (CLAUDE.md rule 1)."""
+    text = (REPO_ROOT / "docs" / "decisions.md").read_text()
+    heading = [line for line in text.splitlines() if line.startswith(f"### {decision} ")]
+    if not heading or "test read" not in heading[0].lower() or "PI" not in heading[0]:
+        raise SystemExit(f"{decision}: no decision titled with the PI's WP4 test read")
+
+
+def step_test(paths, settings, periods, maintenance: str, decision: str) -> None:
+    """M6: rehearsal on the validation years, then the single read of P01..P18's test years."""
+    from lpstgp import pilot, wp4_test
+    from lpstgp.analysis import wp4 as analysis
+    from lpstgp.campaign.execute import plan_records
+    from lpstgp.data.store import modelling_store
+    from lpstgp.freeze import FreezeManifest, claim_test_read
+    from lpstgp.runner import configs_from_settings
+    from lpstgp.sandbox import Sandbox
+    from lpstgp.splits import Stage, all_periods
+    from lpstgp.strategies import registry
+
+    recorded_go_ahead(decision)
+    out_json = REPORTS / "primary.json"
+    if out_json.exists():
+        raise SystemExit(f"{out_json} exists: the WP4 test years have already been read")
+    manifest = FreezeManifest.load_committed(REPORTS / "freeze_manifest.json", repo=REPO_ROOT)
+    frozen_code = manifest.context["code_version"]
+    current = frozen_context(paths, settings, periods, maintenance)
+    manifest.check_context(current | {"code_version": frozen_code})
+    if changed := wp2_pilot.source_changed_since(frozen_code):
+        raise SystemExit(f"code changed since the freeze: {', '.join(changed)}")
+    _, cfg = configs_from_settings(settings)
+    frozen = registry.load_frozen()
+    store = modelling_store(paths.tier_dir("A"), settings)
+    lmax = settings["splits"]["lookback_max_bars"]
+    by_id = all_periods(settings)
+    test_periods = tuple(by_id[p] for p in periods)
+    table = json.loads((REPORTS / "eligibility.json").read_text())["eligible"]
+    # 1. Every record checked against the frozen lists before any test bar is read.
+    validated = {}
+    for period in periods:
+        rules = period_rules(paths, manifest, period)
+        recs = plan_records(plan_path(paths, period), paths, settings)
+        if {r["campaign"]["task_id"] for r in recs} != set(rules):
+            raise SystemExit(f"{period}: the records do not match the frozen tasks")
+        for r in recs:
+            if pilot.rule_hash(r) != rules[r["campaign"]["task_id"]]:
+                raise SystemExit(f"{r['campaign']['task_id']}: rule differs from the frozen one")
+        validated[period] = recs
+    # 2. Rehearsal: the whole evaluation on the validation years (VALIDATE data), kept as the
+    #    validation side of H3's gap; any code or data error surfaces before the claim.
+    validation = {}
+    for period in periods:
+        box = Sandbox.open(store, by_id[period], Stage.VALIDATE, table[period], lmax)
+        series = wp4_test.evaluate_period(wp4_test.as_test(box), validated[period], cfg, frozen)
+        wp4_test.save(paths.results_dir / "wp4" / "validation" / f"{period}.npz", series)
+        validation[period] = wp4_test.portfolios(series)
+    arms = sorted(validation[periods[0]])
+    analysis.primary(
+        {a: analysis.concatenate({p: validation[p][a] for p in periods}, periods) for a in arms},
+        resamples=50,
+    )
+    print("rehearsal on the validation years: complete")
+    # 3. The claim, then the one read.
+    claim_test_read(REPORTS / "test_claim.json", manifest)
+    test, access = {}, {}
+    for period in periods:
+        box = Sandbox.open_frozen_test(
+            store, by_id[period], table[period], lmax, test_periods=test_periods,
+            manifest=manifest,
+        )  # fmt: skip
+        series = wp4_test.evaluate_period(box, validated[period], cfg, frozen)
+        wp4_test.save(paths.results_dir / "wp4" / "test" / f"{period}.npz", series)
+        test[period] = wp4_test.portfolios(series)
+        access[period] = [{k: str(v) for k, v in asdict(r).items()} for r in box.access_log]
+    concatenated = {
+        a: analysis.concatenate({p: test[p][a] for p in periods}, periods) for a in arms
+    }
+    result = analysis.primary(concatenated)
+    result |= {
+        "manifest_commit": manifest.commit,
+        "decision": decision,
+        "per_period_sharpe": {
+            p: {a: analysis.portfolio_sharpe(test[p][a]) for a in arms} for p in periods
+        },
+        "per_period_validation_sharpe": {
+            p: {a: analysis.portfolio_sharpe(validation[p][a]) for a in arms} for p in periods
+        },
+        "read_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        "test_access": access,
+    }
+    out_json.write_text(json.dumps(result, indent=1, default=float))
+    print(json.dumps({k: result[k] for k in ("sharpe", "comparisons")}, indent=1, default=float))
+
+
 def step_eligibility(paths, settings) -> None:
     table = eligibility.table(paths, settings)
     pairs = sum(len(table[p]) for p in eligibility.WP4_PERIODS if p != "PC")
@@ -159,7 +338,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("step", choices=("eligibility", "plan", "runs-study"))
+    parser.add_argument("step", choices=("eligibility", "plan", "freeze", "test", "runs-study"))
+    parser.add_argument("--decision", help="test: the decision recording the PI's go-ahead")
     parser.add_argument("--periods", default=",".join(eligibility.WP4_PERIODS))
     parser.add_argument(
         "--maintenance", default="wp4", help="M3 campaign; 'none' plans the fixed arms only"
@@ -170,6 +350,12 @@ def main() -> None:
     paths, settings = load_paths(), load_settings()
     if args.step == "eligibility":
         step_eligibility(paths, settings)
+    elif args.step in ("freeze", "test"):
+        primary = [p for p in args.periods.split(",") if p != "PC"]  # PC is frozen on its own
+        if args.step == "freeze":
+            step_freeze(paths, settings, primary, args.maintenance)
+        else:
+            step_test(paths, settings, primary, args.maintenance, args.decision or "")
     elif args.step == "plan":
         maintenance = None if args.maintenance == "none" else args.maintenance
         step_plan(paths, settings, args.periods.split(","), maintenance)
