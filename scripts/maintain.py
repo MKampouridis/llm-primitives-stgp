@@ -4,6 +4,7 @@ Usage:
   uv run python scripts/maintain.py --stub                    # mechanics test, no LLM, tiny GP
   uv run python scripts/maintain.py --preflight               # isolation of a maintainer session
   uv run python scripts/maintain.py --campaign dryrun [--arms 4-grow,4-full,5] [--workers 6]
+  uv run python scripts/maintain.py --campaign wp4 --wp4 [--arms ...]  # WP4 M3, P01..P18, PC
 
 The dry run (M4) uses PL1 then PL2 training data, three cycles each. A finished cycle is skipped
 on a re-run; an interrupted one resumes (its runs and its session).
@@ -23,6 +24,7 @@ from string import Template
 from lpstgp.config import REPO_ROOT, load_paths
 from lpstgp.maintenance import cycle, session, state, stub
 
+ELIGIBILITY = REPO_ROOT / "reports" / "wp4" / "eligibility.json"
 TOY = REPO_ROOT / "tests" / "authoring" / "fixtures" / "toy_operator.py"
 
 
@@ -116,6 +118,7 @@ def main() -> None:
     parser.add_argument("--stub", action="store_true")
     parser.add_argument("--preflight", action="store_true")
     parser.add_argument("--campaign", default="dryrun")
+    parser.add_argument("--wp4", action="store_true", help="periods and instruments of WP4 (M3)")
     parser.add_argument("--periods", default="PL1,PL2")
     parser.add_argument("--arms", default=",".join(cycle.ARMS))
     parser.add_argument("--workers", type=int, default=6)
@@ -126,8 +129,13 @@ def main() -> None:
     if args.preflight:
         run_preflight()
         return
+    if args.wp4:  # WP4 M3: P01..P18 then PC, each period on its eligible instruments (D-083)
+        table = json.loads(ELIGIBILITY.read_text())["eligible"]
+        periods, instruments = list(table), table
+    else:
+        periods, instruments = args.periods.split(","), cycle.PILOT_INSTRUMENTS
     loop = cycle.Cycle(
-        args.campaign, args.periods.split(","), workers=args.workers,
+        args.campaign, periods, instruments=instruments, workers=args.workers,
         claude_version=claude_version(),
     )  # fmt: skip
     for arm in args.arms.split(","):

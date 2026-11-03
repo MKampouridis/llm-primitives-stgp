@@ -1,6 +1,8 @@
 """WP4 steps (docs/protocol_wp4.md). Data reads go through the sandbox, FIT/VALIDATE only.
 
 Steps:
+  eligibility  the eligible instruments of P01..P18 and PC (counts only; D-083), committed as
+               reports/wp4/eligibility.json for the maintenance and reported-run campaigns.
   runs-study   M2: protocol.md §6.4, 100 runs of arm 2c on the 6 calibration instruments,
                PL1 and PL2 training data; decides 30 or 50 runs per configuration.
 
@@ -21,6 +23,7 @@ import wp2_pilot  # the plan helpers and the calibration instruments
 from lpstgp import runs_study
 from lpstgp.campaign.plan import Config
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
+from lpstgp.data import eligibility
 
 REPORTS = REPO_ROOT / "reports" / "wp4"
 RUNS_STUDY = "wp4-runs-study"
@@ -89,16 +92,33 @@ def step_runs_study(paths, settings, workers: int, mode: str) -> None:
     print("\n".join(lines[:6]))
 
 
+def step_eligibility(paths, settings) -> None:
+    table = eligibility.table(paths, settings)
+    pairs = sum(len(table[p]) for p in eligibility.WP4_PERIODS if p != "PC")
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    out = {
+        "rule": "D-009 (504 warm-up bars, >= 95% session coverage); PC without its test year (D-083)",
+        "primary_pairs": pairs,
+        "eligible": table,
+        "provenance": wp2_pilot.provenance(settings, []),
+    }
+    (REPORTS / "eligibility.json").write_text(json.dumps(out, indent=1, default=str) + "\n")
+    print({p: len(v) for p, v in table.items()}, "pairs P01-P18:", pairs)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("step", choices=("runs-study",))
+    parser.add_argument("step", choices=("eligibility", "runs-study"))
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--mode", choices=("all", "plan", "report"), default="plan")
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
-    step_runs_study(paths, settings, args.workers, args.mode)
+    if args.step == "eligibility":
+        step_eligibility(paths, settings)
+    else:
+        step_runs_study(paths, settings, args.workers, args.mode)
 
 
 if __name__ == "__main__":

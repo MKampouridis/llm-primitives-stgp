@@ -87,7 +87,7 @@ class Cycle:
         self,
         campaign: str,
         periods: Sequence[str],
-        instruments: Sequence[str] = PILOT_INSTRUMENTS,
+        instruments: Sequence[str] | Mapping[str, Sequence[str]] = PILOT_INSTRUMENTS,
         runs: int = RUNS_PER_INSTRUMENT,
         cycles: int = CYCLES,
         workers: int = 6,
@@ -98,7 +98,12 @@ class Cycle:
         self.paths, self.settings = load_paths(), load_settings()
         self.campaign = campaign
         self.periods = tuple(periods)
-        self.instruments = tuple(instruments)
+        # One list for every period, or each period's own (WP4: its eligible instruments, D-083).
+        if isinstance(instruments, Mapping):
+            self.by_period = {p: tuple(instruments[p]) for p in self.periods}
+        else:
+            self.by_period = {p: tuple(instruments) for p in self.periods}
+        self.instruments = tuple(sorted({i for v in self.by_period.values() for i in v}))
         self.runs = runs
         self.cycles = cycles
         self.workers = workers
@@ -135,7 +140,7 @@ class Cycle:
             "schema": SPEC_SCHEMA,
             "campaign": self.campaign,
             "periods": [asdict(periods[p]) for p in self.periods],  # in order (D-081)
-            "instruments": list(self.instruments),
+            "instruments": {p: list(v) for p, v in self.by_period.items()},
             "runs": self.runs,
             "cycles": self.cycles,
             "gp": asdict(self.gp_cfg),
@@ -167,7 +172,7 @@ class Cycle:
     def tasks(self, period: str, arm_state: ArmState) -> list[RunTask]:
         library = state.PREFIX + arm_state.state_id
         out = []
-        for inst in self.instruments:
+        for inst in self.by_period[period]:
             for run in range(1, self.runs + 1):
                 task_id = f"{arm_state.batch_key}/{period}/{inst}/r{run:02d}"
                 out.append(
@@ -236,13 +241,14 @@ class Cycle:
         records = self.batch(period, current)
         rows = evidence.operator_rows(records, names)
         history = self._history(arm, period, c)
-        elite = evidence.elite_rules(records, self.asset_class)
+        classes = {i: self.asset_class[i] for i in self.by_period[period]}
+        elite = evidence.elite_rules(records, classes)
         summary = evidence.summary(records)
         lib = build(state.library(state.PREFIX + current.state_id))
         previous_rows = before.get("evidence") if before else None
         brief = session.render(
             arm, lib, rows, history, summary, elite, before and before.get("decision"),
-            self.asset_class, self.runs, self.gp_cfg, previous_rows,
+            classes, self.runs, self.gp_cfg, previous_rows,
         )  # fmt: skip
         sess_dir = out_dir / "session"
         stored = {e.key: state.states_root(self.paths.results_dir) / lib_state.id / e.file
