@@ -112,10 +112,25 @@ def development_period(settings: Mapping[str, Any]) -> Period:
     return Period("DEV", dev["fit_start"], dev["holdout_start"], dev["end"], dev["end"])
 
 
+def post_cutoff_period(settings: Mapping[str, Any]) -> Period | None:
+    """PC: the primary structure from ``[post_cutoff] fit_start``; its test year starts after the
+    training cutoff of the LLM that wrote every LLM artefact (D-036, D-075)."""
+    pc = settings.get("post_cutoff")
+    if not pc:
+        return None
+    splits = settings["splits"]
+    (generic,) = walk_forward(
+        pc["fit_start"], 1, splits["fit_years"], splits["validation_years"], splits["test_years"]
+    )
+    return replace(generic, id=pc["id"])
+
+
 def all_periods(settings: Mapping[str, Any]) -> dict[str, Period]:
-    """Every named period: primary P01..P18, the pilots and DEV."""
+    """Every named period: primary P01..P18, the post-cutoff period PC, the pilots and DEV."""
+    pc = post_cutoff_period(settings)
     periods = (
         *periods_from_settings(settings),
+        *((pc,) if pc else ()),
         *pilot_periods(settings),
         development_period(settings),
     )

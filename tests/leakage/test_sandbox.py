@@ -107,15 +107,15 @@ def test_scored_masks(tmp_path):
 
 @pytest.mark.realdata
 def test_real_sandboxes_never_reach_their_horizon(tier_a_dir):
-    """Every period readable in WP2 (the pilots, DEV) through the capped modelling store; P01 is
-    refused because its windows overlap the pilot test years (D-047)."""
+    """Every period's FIT and VALIDATE stages through the modelling store (D-080): no bar at or
+    after the stage's horizon, for every instrument; TEST stays sealed."""
     settings = load_settings()
     store = modelling_store(tier_a_dir, settings)
     lmax = settings["splits"]["lookback_max_bars"]
     periods = all_periods(settings)
-    with pytest.raises(SealedPeriodError, match="allowed_periods"):
-        Sandbox.open(store, periods["P01"], Stage.FIT, store.instruments(), lmax)
-    for period in (periods["PL1"], periods["PL2"], periods["DEV"]):
+    with pytest.raises(SealedPeriodError, match="sealed"):
+        Sandbox.open(store, periods["P01"], Stage.TEST, store.instruments(), lmax)
+    for period in periods.values():
         for stage in (Stage.FIT, Stage.VALIDATE):
             sandbox = Sandbox.open(store, period, stage, store.instruments(), lmax)
             for instrument in sandbox.instruments:

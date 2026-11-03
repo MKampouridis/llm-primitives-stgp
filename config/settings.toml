@@ -24,9 +24,16 @@ fit_start = 1995-07-01        # dev-fit [fit_start, holdout_start): all the gene
 holdout_start = 2003-07-01    # dev-holdout [holdout_start, end): scored once per final strategy, never shown
 end = 2005-07-01
 
+[post_cutoff]                 # post-cutoff period PC (D-036, D-075): test from 2026-07-01, after the LLM's cutoff
+id = "PC"
+fit_start = 2023-07-01        # fit 2023-07..2025-06, validation 2025-07..2026-06; test to the PC data freeze
+
 [leakage]
-max_horizon = 2008-07-01      # WP2: no modelling read at or after this date (D-034); lifted in WP4 by decision
-allowed_periods = ["DEV", "PL1", "PL2"]  # WP2: primary periods overlap the pilot test years (D-047)
+# WP4 (D-080): stage sealing replaces WP2's cap of 2008-07-01 (D-034). FIT and VALIDATE of every
+# period may be opened; every TEST stage stays sealed until the freeze-checked WP4 read. The cap
+# keeps PC's test year out of reach of every modelling read.
+max_horizon = 2026-07-01
+allowed_periods = ["DEV", "PL1", "PL2", "P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "PC"]
 
 [quality]
 stale_run_min = 5             # this many identical consecutive closes count as one stale run

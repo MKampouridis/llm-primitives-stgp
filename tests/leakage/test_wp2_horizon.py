@@ -1,4 +1,5 @@
-"""WP2 data cap (2008-07-01), pilot and development periods, and the pilot-only test stage."""
+"""The data-cap mechanism (WP2 cap of 2008-07-01, given explicitly), pilot and development
+periods, the pilot-only test stage, and the WP4 stage sealing (D-080)."""
 
 import ast
 import json
@@ -19,7 +20,7 @@ from lpstgp.splits import Stage, all_periods, development_period, pilot_periods
 from .test_sandbox import LMAX, _frame, _store
 
 SETTINGS = load_settings()
-CAP = SETTINGS["leakage"]["max_horizon"]
+CAP = date(2008, 7, 1)  # the WP2 cap (D-034): the mechanism is tested with it; WP4 uses D-080
 PERIODS = all_periods(SETTINGS)
 PL1, PL2 = pilot_periods(SETTINGS)
 DEV = development_period(SETTINGS)
@@ -47,7 +48,7 @@ def test_pilot_and_development_periods():
     )
     # the development window ends before every pilot validation year
     assert DEV.horizon(Stage.VALIDATE) <= PL1.val_start
-    assert len(PERIODS) == 18 + 2 + 1
+    assert len(PERIODS) == 18 + 1 + 2 + 1  # P01..P18, PC, the pilots, DEV
 
 
 def test_capped_store_refuses_reads_past_the_cap(tmp_path):
@@ -197,15 +198,49 @@ def test_freeze_context_must_be_unchanged_at_the_test_read(tmp_path):
 
 
 @pytest.mark.parametrize("period_id", ["P01", "P02"])
-def test_wp2_settings_refuse_primary_periods_that_overlap_the_pilot_test_years(tmp_path, period_id):
-    from lpstgp.data.store import modelling_store
-
-    _capped(tmp_path, "clean", _frame())
-    store = modelling_store(tmp_path / "clean", SETTINGS)
-    assert store.allowed_periods == frozenset({"DEV", "PL1", "PL2"})
+def test_an_allowed_period_list_refuses_the_others(tmp_path, period_id):
+    """The mechanism WP2 used to keep P01..P18 out while their windows overlapped the pilot test
+    years (D-047)."""
+    store = _capped(tmp_path, "clean", _frame())
+    store.allowed_periods = frozenset({"DEV", "PL1", "PL2"})
     with pytest.raises(SealedPeriodError, match="allowed_periods"):
         Sandbox.open(store, PERIODS[period_id], Stage.FIT, ["TST"], LMAX)
     assert len(Sandbox.open(store, PL1, Stage.VALIDATE, ["TST"], LMAX)["TST"].dates)
+
+
+def test_wp4_settings_open_fit_and_validate_of_every_period_and_cap_at_pc_test():
+    """D-080: stage sealing over P01..P18 and PC; the cap is the PC test start."""
+    from lpstgp.data.store import modelling_store
+
+    pc = PERIODS["PC"]
+    assert (pc.fit_start, pc.val_start, pc.test_start) == (
+        date(2023, 7, 1), date(2025, 7, 1), date(2026, 7, 1),
+    )  # fmt: skip
+    assert SETTINGS["leakage"]["max_horizon"] == pc.test_start == PERIODS["P18"].test_end
+    store = modelling_store(REPO_ROOT / "nowhere", SETTINGS)
+    primary = {f"P{k:02d}" for k in range(1, 19)}
+    assert store.allowed_periods == {"DEV", "PL1", "PL2", "PC", *primary}
+
+
+@pytest.mark.parametrize("period_id", ["P01", "P09", "P18", "PC", "PL1", "DEV"])
+def test_every_test_stage_stays_sealed_under_wp4_settings(tmp_path, period_id):
+    store = _store(tmp_path, "clean", _frame())
+    store.max_horizon = SETTINGS["leakage"]["max_horizon"]
+    period = PERIODS[period_id]
+    with pytest.raises(SealedPeriodError, match="sealed"):
+        Sandbox.open(store, period, Stage.TEST, ["TST"], LMAX)
+    if period_id not in ("PL1", "DEV"):
+        with pytest.raises(SealedPeriodError, match="pilot"):  # no pilot read for them either
+            Sandbox.open_pilot_test(
+                store, period, ["TST"], LMAX, pilot_periods=(PL1, PL2), manifest=None
+            )
+
+
+def test_pc_validation_reads_stop_before_the_cap(tmp_path):
+    store = _store(tmp_path, "clean", _frame())
+    store.max_horizon = SETTINGS["leakage"]["max_horizon"]
+    with pytest.raises(HorizonCapError):
+        store.read("TST", date(2026, 1, 1), date(2026, 7, 2))
 
 
 def test_the_test_read_can_be_claimed_only_once(tmp_path):

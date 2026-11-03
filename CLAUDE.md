@@ -7,7 +7,7 @@ Research code for a journal paper: can an LLM author and maintain the typed prim
 - `docs/research_plan.md` is authoritative (exported from the live plan document). If anything conflicts with it, ask the PI.
 - `docs/decisions.md` records every assumption and choice: number, status (**Decided** = agreed with the PI, **Provisional** = engineer's default, **Open**), the reason, and any departure from the plan. Add an entry for every new choice.
 - Work packages: WP1 (library and harness) is done; WP2 is in progress under `docs/protocol.md` (decisions D-034 onwards). Read the latest `reports/<wp>/` summary and the open entries in `docs/decisions.md` before starting work.
-- WP2 data cap: no modelling read on or after `[leakage] max_horizon` (2008-07-01). Pilot test years are read only through `Sandbox.open_pilot_test` after a committed freeze manifest.
+- Data cap (D-080, WP4): modelling may open the FIT and VALIDATE stages of every period (P01–P18, PC, the pilots, DEV); every TEST stage stays sealed, and no read reaches `[leakage] max_horizon` (2026-07-01, PC's test start). The pilot test years are spent; WP4's test years are read once, after a committed freeze and a recorded PI go-ahead.
 
 ## Hard rules
 
