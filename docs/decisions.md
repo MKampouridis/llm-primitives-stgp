@@ -1010,3 +1010,14 @@ The plan's H2b compares against "STGP with conventional terminals only", and its
 - The test read writes the daily net return series of every frozen rule, so the per-instrument results of the plan exist after one read (D-060).
 - The freeze manifest includes the digests of the arm-3 lock and of every maintained library state and seed set used by a reported run. These come from the lineage manifests of WP3 protocol §5. So no maintained arm can change after the freeze.
 - A validation-year rehearsal of the test path runs before the read, as in WP2 (D-058).
+
+### D-080 WP4 data and the data cap — Decided (engineer, under the PI's delegation reaffirmed on 3 Nov 2026)
+On 3 Nov 2026 the PI reaffirmed that scientific decisions are the engineer's, and that the PI submits CERES runs as in WP2.
+- **Data:** the free tier-A sources as they stand (D-075's default). No vendor data are coming, so this is now final for WP4. The proxies (EIA spot energy, ETF bond proxies), the COMEX roll gaps and the missing Bund are disclosed in the paper's data section. They affect every arm alike.
+- **Data cap.** From M1 of WP4, the WP2 cap of 2008-07-01 is replaced by stage sealing over P01–P18 and PC:
+  - FIT and VALIDATE stages may be opened;
+  - every TEST stage stays sealed until M6.
+
+  Period p's validation year is period p−1's test year (D-017). Reading it for period p's modelling is causal, because period p−1's rules and libraries depend only on earlier data.
+- **Guard against human leakage.** Between M3 and the freeze, run records and cycle records are checked only for completeness, digests and code version, as in WP2 (D-047). Nothing is changed in the protocol, code or configurations on the basis of a P01–P18 validation figure. Validation figures of period p are test-year figures of period p−1, so looking at them would be looking at test data in effect.
+- **The test read (M6, M7)** still needs the PI's explicit go-ahead, recorded here before it happens (CLAUDE.md rule 1).
