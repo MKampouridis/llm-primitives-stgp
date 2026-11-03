@@ -1058,3 +1058,10 @@ The runs-per-configuration study of `docs/protocol.md` §6.4 (M2 of WP4) ran 100
   - Arm 5 uses arm 3's library with that cycle's admitted seed rules.
 - **Identity:** a configuration's digest now also covers arm 3's lock (for `arm3` and `state:` libraries) and arm 5's seed rules. These keys are added only when used, so every earlier configuration keeps its registered digest (tested).
 - **Smoke check:** a 2-generation run of GP-conv and of arm 3 on SPX for P01 and PC completed. Its sandbox reads stopped at each stage's horizon. No figure was read.
+
+### D-085 WP4 run records are gzip-compressed — Decided (engineer, under D-042/D-061; 3 Nov 2026)
+A GP run record is about 70 KB, mostly per-generation aggregates. WP4's roughly 263,000 reported runs would need about 20 GB, and the active Mac had 14 GB free on 3 Nov 2026. WP4 plans therefore set `record_format = "json.gz"`, and each record is written as gzip-compressed JSON (about 12 KB): about 3 GB for all of WP4, on CERES, on the Mac and in the Box mirror.
+- The records' content is unchanged. Only the encoding differs. Compression uses mtime 0, so the same record gives the same bytes on every machine.
+- Earlier campaigns keep plain JSON and stay readable. The format is per plan, and every reader (`read_record`) handles both.
+- A truncated or corrupt compressed record never counts as complete (tested).
+- **For the PI:** the Mac's disk is 97% full. WP4's records (about 3 GB) and its test-return series (well under 1 GB) fit, but little else would. Freeing space is the PI's call, because it means deleting files.

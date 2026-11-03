@@ -123,8 +123,10 @@ def write_plan(
     paths: Paths,
     settings: Mapping[str, Any],
     register: Path | None = REGISTER,
+    record_format: str = "json",
 ) -> Path:
-    """Tasks = configs x cells (instrument set, period) x runs; select configs get one run."""
+    """Tasks = configs x cells (instrument set, period) x runs; select configs get one run.
+    ``record_format="json.gz"`` (WP4, D-085) writes gzip-compressed records."""
     tasks = []
     for config in configs:
         n_runs = 1 if config.kind == "select" else runs
@@ -152,6 +154,10 @@ def write_plan(
         "configs": {c.name: {**asdict(c), "digest": c.digest(settings)} for c in configs},
         "tasks": tasks,
     }
+    if record_format != "json":
+        if record_format != "json.gz":
+            raise ValueError(f"unknown record format {record_format}")
+        plan["record_format"] = record_format
     plan = json.loads(json.dumps(plan, default=str))  # as stored, so plans compare exactly
     out = paths.results_dir / "campaigns" / name / "tasks.json"
     old = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None

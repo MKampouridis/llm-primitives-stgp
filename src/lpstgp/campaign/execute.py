@@ -17,7 +17,7 @@ from lpstgp.config import Paths
 from lpstgp.data.store import modelling_store
 from lpstgp.data.tier_a import git_revision
 from lpstgp.freeze import digest
-from lpstgp.runner import RunTask, execute, record_path, run_many, write_atomic
+from lpstgp.runner import RunTask, execute, read_record, record_path, run_many, write_record
 from lpstgp.sandbox import Sandbox
 from lpstgp.splits import Stage, all_periods
 from lpstgp.strategies import selection
@@ -80,13 +80,14 @@ def run_task(plan: Mapping, task: Mapping, settings: Mapping[str, Any]) -> RunTa
         fitness=fit_cfg,
         campaign=_meta(plan, task),
         seed_rules=_config(plan, task["config"]).seed_rules,
+        compressed=plan.get("record_format") == "json.gz",
     )
 
 
 def is_complete(path: Path, run: RunTask) -> bool:
     try:
-        record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        record = read_record(path)
+    except (OSError, ValueError, EOFError):  # missing, truncated or not JSON
         return False
     if record.get("campaign") != dict(run.campaign):
         return False
@@ -127,7 +128,7 @@ def execute_select(run: RunTask, paths: Paths, settings: Mapping[str, Any], out_
         "selection": selection.select(frozen, fit_box, val_box, costs, run.fitness),
         "wall_clock_s": time.perf_counter() - started,
     }
-    write_atomic(record_path(out_root, run), json.dumps(record, default=str))
+    write_record(record_path(out_root, run), record)
     return record
 
 
@@ -213,7 +214,7 @@ def plan_records(plan_path: Path, paths: Paths, settings: Mapping[str, Any]) -> 
         run = run_task(plan, task, settings)
         path = record_path(out_root, run)
         if is_complete(path, run):
-            records.append(json.loads(path.read_text(encoding="utf-8")))
+            records.append(read_record(path))
         else:
             missing.append(task["id"])
     versions = sorted({r.get("code_version", "") for r in records})

@@ -9,10 +9,11 @@ paths, environment and creation times are expected to differ and are ignored.
 
 from __future__ import annotations
 
-import json
 import math
 import sys
 from pathlib import Path
+
+from lpstgp.runner import read_record
 
 TOLERANCE = 1e-12  # relative: floating-point rounding across CPUs and patch releases (D-048)
 
@@ -43,7 +44,8 @@ def close(a, b) -> bool:
 
 
 def load(folder: Path) -> dict[str, dict]:
-    return {p.name: json.loads(p.read_text()) for p in sorted(folder.glob("tier*/*/*.json"))}
+    files = sorted([*folder.glob("tier*/*/*.json"), *folder.glob("tier*/*/*.json.gz")])
+    return {p.name.removesuffix(".gz"): read_record(p) for p in files}
 
 
 def main() -> None:

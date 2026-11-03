@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import wp2_pilot  # the plan helpers and the calibration instruments
 from lpstgp import runs_study
-from lpstgp.campaign.plan import Config
+from lpstgp.campaign.plan import Config, write_plan
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
 from lpstgp.data import eligibility
 
@@ -134,7 +134,11 @@ def step_plan(paths, settings, periods, maintenance: str | None) -> None:
         configs = wp4_configs(paths, settings, period, maintenance)
         cells = [((inst,), period) for inst in table[period]]
         name = f"wp4-{period}" if maintenance else f"wp4-{period}-fixed"
-        wp2_pilot.prepare(name, configs, cells, RUNS, paths, settings, 1, "plan")
+        plan = write_plan(
+            name, configs, cells, RUNS, paths, settings, register=wp2_pilot.register(),
+            record_format="json.gz",  # about 3 GB for all of WP4 instead of about 20 (D-085)
+        )  # fmt: skip
+        print(f"{name}: {len(json.loads(plan.read_text())['tasks'])} tasks")
 
 
 def step_eligibility(paths, settings) -> None:

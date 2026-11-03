@@ -7,6 +7,7 @@ populations). Parallel runs use separate spawned processes with one BLAS/numba t
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import platform
@@ -15,13 +16,14 @@ import resource
 import shutil
 import sys
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from multiprocessing import get_context
 from pathlib import Path
+from typing import Any
 
 from deap import gp
 
@@ -65,6 +67,8 @@ class RunTask:
     # arm 5's proposed rules as (entry, exit) tree strings seeded into the initial population.
     knockouts: bool = False
     seed_rules: tuple[tuple[str, str], ...] = ()
+    # WP4 (D-085): records are gzip-compressed JSON (``.json.gz``), about 6 times smaller.
+    compressed: bool = False
 
     @property
     def name(self) -> str:
@@ -178,7 +182,7 @@ def execute(
     }
     if results_dir is not None:
         out = record_path(results_dir, task)
-        write_atomic(out, json.dumps(record, separators=(",", ":"), default=str))
+        write_record(out, record)
         record["record_path"] = str(out)
         record["record_bytes"] = out.stat().st_size
     return record
@@ -207,7 +211,29 @@ def parse_tree(text: str, lib) -> gp.PrimitiveTree:
 
 
 def record_path(results_dir: Path | str, task: RunTask) -> Path:
-    return Path(results_dir) / f"tier{task.tier}" / task.experiment / f"{task.name}.json"
+    suffix = ".json.gz" if task.compressed else ".json"
+    return Path(results_dir) / f"tier{task.tier}" / task.experiment / f"{task.name}{suffix}"
+
+
+def write_record(path: Path, record: Mapping[str, Any]) -> None:
+    """A run record, whole or not at all; gzip-compressed if ``path`` ends in ``.gz``."""
+    text = json.dumps(record, separators=(",", ":"), default=str)
+    if path.suffix == ".gz":  # mtime 0: the same record gives the same bytes on every machine
+        write_atomic_bytes(path, gzip.compress(text.encode(), compresslevel=6, mtime=0))
+    else:
+        write_atomic(path, text)
+
+
+def read_record(path: Path) -> dict[str, Any]:
+    data = Path(path).read_bytes()
+    return json.loads(gzip.decompress(data) if Path(path).suffix == ".gz" else data)
+
+
+def write_atomic_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
 
 
 def write_atomic(path: Path, text: str) -> None:

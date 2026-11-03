@@ -192,3 +192,36 @@ def test_source_digest_follows_real_source_edits(tmp_path):
     assert source_digest(root) == first
     (root / "c.py").write_text("")  # a new module counts too
     assert source_digest(root) != first
+
+
+@pytest.mark.slow
+def test_compressed_records_execute_resume_and_collect(campaign_paths):
+    """WP4 plans write gzip-compressed records (D-085): same tasks, results and checks."""
+    import gzip
+    import json
+
+    from lpstgp.campaign.execute import plan_records
+    from lpstgp.runner import read_record
+
+    settings = load_settings()
+    gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
+    configs = [Config("arm_a", "seed", gp=gp)]
+    plan_path = write_plan(
+        "gz", configs, [(("AAA",), "PL1")], 2, campaign_paths, settings, register=None,
+        record_format="json.gz",
+    )  # fmt: skip
+    assert load_plan(plan_path)["record_format"] == "json.gz"
+    assert execute_plan(plan_path, campaign_paths, settings, workers=1)["evolved"] == 2
+    assert execute_plan(plan_path, campaign_paths, settings, workers=1)["skipped"] == 2
+    files = sorted(plan_path.parent.glob("tier*/*/*.json.gz"))
+    assert len(files) == 2
+    assert not list(plan_path.parent.glob("tier*/*/*.json"))
+    record = json.loads(gzip.decompress(files[0].read_bytes()))
+    assert record == read_record(files[0])
+    assert len(plan_records(plan_path, campaign_paths, settings)) == 2
+    assert len(collect(plan_path)) == 2
+    files[0].write_bytes(files[0].read_bytes()[:40])  # a truncated record never counts
+    assert progress(plan_path, settings)["complete"] == 1
+    with pytest.raises(ValueError, match="record format"):
+        write_plan("bad", configs, [(("AAA",), "PL1")], 1, campaign_paths, settings,
+                   register=None, record_format="csv")  # fmt: skip
