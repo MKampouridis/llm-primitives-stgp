@@ -1,0 +1,65 @@
+{
+ "cells": 12,
+ "subset": 30,
+ "draws_per_cell": 2000,
+ "tolerance": 0.05,
+ "p95_deviation": 0.2538990579330034,
+ "runs_per_configuration": 50,
+ "per_cell": {
+  "EURUSD/PL1": {
+   "p95_deviation": 0.25021028237447074,
+   "median_deviation": 0.05968049303716805
+  },
+  "EURUSD/PL2": {
+   "p95_deviation": 0.16477625278263464,
+   "median_deviation": 0.052105018690428384
+  },
+  "GOLD/PL1": {
+   "p95_deviation": 0.3522563625831254,
+   "median_deviation": 0.11801728643462006
+  },
+  "GOLD/PL2": {
+   "p95_deviation": 0.1317440370536206,
+   "median_deviation": 0.040229940370791195
+  },
+  "NATGAS/PL1": {
+   "p95_deviation": 0.3080024154626426,
+   "median_deviation": 0.13095367769590094
+  },
+  "NATGAS/PL2": {
+   "p95_deviation": 0.2360163454319706,
+   "median_deviation": 0.11256135035149328
+  },
+  "NKY/PL1": {
+   "p95_deviation": 0.30826415430864273,
+   "median_deviation": 0.13901210323595747
+  },
+  "NKY/PL2": {
+   "p95_deviation": 0.17245223697942547,
+   "median_deviation": 0.05948280520021165
+  },
+  "SPX/PL1": {
+   "p95_deviation": 0.20524464369365858,
+   "median_deviation": 0.05375166189587954
+  },
+  "SPX/PL2": {
+   "p95_deviation": 0.2080220377746127,
+   "median_deviation": 0.0742219382684417
+  },
+  "USDJPY/PL1": {
+   "p95_deviation": 0.21875174770380068,
+   "median_deviation": 0.08170816255033897
+  },
+  "USDJPY/PL2": {
+   "p95_deviation": 0.28921969365272937,
+   "median_deviation": 0.10681870292470608
+  }
+ },
+ "provenance": {
+  "source_digest": "ae57a7cb34b1d9f4c9864fd02b7929431bfbead5f3fccce2d2378726cfca6191",
+  "settings_digest": "2acb05ce32b2416ea02f0186bc046c625538fb4f207cc4ef1a9509870756d6a2",
+  "plans": {
+   "wp4-runs-study": "313569a1ea1b6361fd6968dbaf93a96f9a614d373cfa81bfa76eb378265ffa2b"
+  }
+ }
+}

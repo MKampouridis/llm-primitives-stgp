@@ -59,7 +59,7 @@ WP4 answers RQ1–RQ4 on the 18 walk-forward periods of tier A. It is the paper'
 
 ## 4. Runs
 
-- **Runs per configuration:** 30 or 50, chosen at M2 by the rule of `docs/protocol.md` §6.4. It uses 100 runs of arm 2c on the six calibration instruments, on PL1 and PL2 training data. 30 runs are kept if the 95th percentile of |median of 30 runs − median of 100| of validation Sharpe is at most 0.05; otherwise 50 are used.
+- **Runs per configuration: 50** (D-082), by the rule of `docs/protocol.md` §6.4. At M2, 100 runs of arm 2c on the six calibration instruments (PL1 and PL2 training data) gave a 95th percentile of |median of 30 − median of 100| of validation Sharpe of 0.254, against a tolerance of 0.05.
 - **Seeds:** sha256 of (instruments, period, run index), as in WP2, so every arm is paired with every other on every unit (instrument, period, run).
 - **Budget:** 17,750 requested evaluations per run for every GP arm (D-056). Arm 1 has no runs.
 - **Maintained arms:**
@@ -141,9 +141,9 @@ Nothing is tuned, re-run or re-selected after a test read. A defect found afterw
 
 | Part | Where | Size | Estimate |
 |---|---|---|---|
-| Runs study (M2) | CERES or Mac | 100 runs × 6 instruments × 2 periods, arm 2c | about 15 core-hours |
+| Runs study (M2), done | Mac | 100 runs × 6 instruments × 2 periods, arm 2c | 1 h 50 min on 6 workers |
 | Maintenance (M3) | Mac | 171 sessions; 171 cycles × about 80 runs each | about 45 Mac-hours plus about 10 h of sessions |
-| Reported runs (M4) | CERES | 10 GP arms × 496 pairs × 30 runs = 148,800 runs (PC adds about 9,300) | about 1,900 core-hours at 30 runs (about 3,200 at 50); 1.5–3 days at 60 concurrent tasks |
+| Reported runs (M4) | CERES | 10 GP arms × 496 pairs × 50 runs = 248,000 runs (PC adds about 15,500) | about 3,200 core-hours; 2–3 days at 60 concurrent tasks |
 | Test read (M6) | Mac | one pass over every frozen rule | hours |
 
 The figures scale the go/no-go's measured cost: about 13 core-hours a period for five GP arms, 22 instruments and 10 runs. Arm 3's runs took about 35 s each on the Mac in WP3. M4 uses CERES under the existing arrangement (D-046). Running it is a **PI** go-ahead.
@@ -171,3 +171,4 @@ The plan puts WP4 at 15 Mar – 14 May 2027. Code and the runs study can start n
 ## 11. Change log
 
 - **3 Nov 2026, draft 0.1:** written (engineer, under D-042/D-061). Decisions D-075–D-079.
+- **3 Nov 2026, M2 (D-082):** the runs study gives 50 runs per configuration; §4 and §8 updated.

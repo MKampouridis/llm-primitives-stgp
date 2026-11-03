@@ -1021,3 +1021,8 @@ On 3 Nov 2026 the PI reaffirmed that scientific decisions are the engineer's, an
   Period p's validation year is period p−1's test year (D-017). Reading it for period p's modelling is causal, because period p−1's rules and libraries depend only on earlier data.
 - **Guard against human leakage.** Between M3 and the freeze, run records and cycle records are checked only for completeness, digests and code version, as in WP2 (D-047). Nothing is changed in the protocol, code or configurations on the basis of a P01–P18 validation figure. Validation figures of period p are test-year figures of period p−1, so looking at them would be looking at test data in effect.
 - **The test read (M6, M7)** still needs the PI's explicit go-ahead, recorded here before it happens (CLAUDE.md rule 1).
+
+### D-082 WP4 uses 50 runs per configuration — Decided (engineer, by the pre-registered rule; 3 Nov 2026)
+The runs-per-configuration study of `docs/protocol.md` §6.4 (M2 of WP4) ran 100 runs of arm 2c on the six calibration instruments, on PL1 and PL2 training data (1,200 runs on the Mac). The 95th percentile of |median of 30 − median of 100| of validation Sharpe was 0.254, against a tolerance of 0.05, so the rule gives **50 runs**. Report: `reports/wp4/runs_study.md`.
+- **Compute:** WP4's reported runs grow to 10 GP arms × 496 pairs × 50 = 248,000 runs, plus about 15,500 for PC. That is about 3,200 core-hours, about 2–3 days on CERES at 60 tasks at a time (protocol_wp4 §8).
+- **Maintenance:** the cycles keep 3 runs per instrument (WP3 protocol 1.0). Their runs are evidence for the LLM, not reported results.
