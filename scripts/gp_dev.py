@@ -21,6 +21,13 @@ E1  2 x 2: training data (one instrument, or pooled over the instruments of an a
     arm 2c, the one with the highest median final validation Sharpe goes on to E2. If none
     passes, development stops for a rethink before any larger run.
 
+    Revised before any confidence-bound run (D-090): only the composite-fitness variants run
+    (RUN_CONFIGS). Across 34,000 evolved rules of WP2 and the runs study, no training measure
+    (composite, Sharpe, half-year Sharpe statistics, return, Calmar, trades, size) predicts the
+    validation Sharpe (Spearman rho -0.05 to +0.05), and the confidence bound over all bars is
+    nearly a constant shift of the Sharpe ratio. E1 therefore tests the data question alone;
+    the plan keeps all four configurations, so it, its digests and its records stay valid.
+
 Usage:  uv run python scripts/gp_dev.py e1 --mode plan|run|report [--workers 6]
 """
 
@@ -49,6 +56,7 @@ E1_RUNS = 10
 ARMS = {"2c": "s2c", "TA": "technical"}
 OBJECTIVES = {"comp": "composite", "lcb": "sharpe_lcb"}
 GAIN_MIN, ALPHA, RHO_MIN = 0.10, 0.05, 0.10
+RUN_CONFIGS = ("e1-2c-comp", "e1-TA-comp")  # D-090 revision: the data question only
 
 
 def e1_configs(settings) -> list[Config]:
@@ -91,11 +99,52 @@ def e1_plan(paths, settings) -> Path:
 # --- analysis ---------------------------------------------------------------------------------
 
 
-def e1_rows(plan_path: Path, paths, settings) -> list[dict]:
-    from lpstgp.campaign.execute import iter_plan_records
+def e1_records(plan_path: Path, settings, configs=RUN_CONFIGS):
+    """The records of ``configs``' tasks; every one must be complete."""
+    from lpstgp.campaign.execute import IncompleteCampaignError, is_complete, load_plan, run_task
+    from lpstgp.runner import read_record, record_path
 
+    plan = load_plan(plan_path)
+    for task in plan["tasks"]:
+        if task["config"] not in configs:
+            continue
+        run = run_task(plan, task, settings)
+        path = record_path(plan_path.parent, run)
+        if not is_complete(path, run):
+            raise IncompleteCampaignError(f"{task['id']}: no complete record")
+        yield read_record(path)
+
+
+def e1_execute(plan_path: Path, paths, settings, workers: int, configs=RUN_CONFIGS) -> dict:
+    """execute_plan restricted to ``configs``' tasks (same checks, same resumable pool)."""
+    from lpstgp.campaign.execute import (
+        PlanMismatchError,
+        is_complete,
+        load_plan,
+        run_task,
+        verify,
+    )  # fmt: skip
+    from lpstgp.runner import record_path, run_many
+
+    plan = load_plan(plan_path)
+    if problems := verify(plan, paths, settings):
+        raise PlanMismatchError("; ".join(problems))
+    pending, done = [], 0
+    for task in plan["tasks"]:
+        if task["config"] not in configs:
+            continue
+        run = run_task(plan, task, settings)
+        if is_complete(record_path(plan_path.parent, run), run):
+            done += 1
+        else:
+            pending.append(run)
+    run_many(pending, workers, plan_path.parent)
+    return {"skipped": done, "evolved": len(pending)}
+
+
+def e1_rows(plan_path: Path, paths, settings) -> list[dict]:
     rows = []
-    for r in iter_plan_records(plan_path, paths, settings):
+    for r in e1_records(plan_path, settings):
         top = r["hall_of_fame"][0]
         per_fit, per_val = top["fit"]["instruments"], top["validation"]["instruments"]
         checkpoints = r["validation_checkpoints"]
@@ -190,9 +239,7 @@ def main() -> None:
         plan = json.loads(plan_path.read_text())
         print(f"{plan_path}: {len(plan['tasks'])} tasks")
     elif args.mode == "run":
-        from lpstgp.campaign.execute import execute_plan
-
-        print(execute_plan(plan_path, paths, settings, workers=args.workers), flush=True)
+        print(e1_execute(plan_path, paths, settings, args.workers), flush=True)
     else:
         summary = e1_summary(e1_rows(plan_path, paths, settings))
         REPORTS.mkdir(parents=True, exist_ok=True)
