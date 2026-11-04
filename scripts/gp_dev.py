@@ -36,7 +36,16 @@ E1b (D-092)  the evidence question with longer training: pooled cells on 6-year 
     p < 0.05. The other marks and the decision rule are E1's. E1's 2-year pooled cells of the
     same pools and validation years are reported alongside.
 
-Usage:  uv run python scripts/gp_dev.py e1|e1b --mode plan|run|report [--workers 6]
+E2 (D-094)  E1b's cells and periods with long-short stop-and-reverse positions sized to 10%
+    annual volatility (trailing 63 bars, capped at 3x), composite fitness, arm 2c and the TA GP,
+    10 runs per cell. The benchmark is the 12-month trend rule (long if the 252-bar log return
+    is positive, short if negative) scored by the same fitness code, sizing and costs on the
+    same validation sandboxes; volatility-sized buy-and-hold is reported beside it.
+    pass marks, fixed before any E2 run: E1b's (a) and (b), and
+      (c) the median over cells of (the cell's median validation Sharpe of the final rule minus
+          the trend rule's validation Sharpe on that cell) is at least 0.
+
+Usage:  uv run python scripts/gp_dev.py e1|e1b|e2 --mode plan|run|report [--workers 6]
 """
 
 from __future__ import annotations
@@ -68,6 +77,10 @@ RUN_CONFIGS = ("e1-2c-comp", "e1-TA-comp")  # D-090 revision: the data question 
 E1B = "gpdev-e1b"
 E1B_PERIODS = ("G1", "G2", "G3")
 E1B_CONFIGS = ("e1b-2c", "e1b-TA")
+E2 = "gpdev-e2"
+E2_CONFIGS = ("e2-2c", "e2-TA")
+E2_FITNESS = {"position_mode": "reverse", "vol_target": 0.10}
+TREND_BARS = 252
 
 
 def e1_configs(settings) -> list[Config]:
@@ -128,6 +141,72 @@ def e1b_plan(paths, settings) -> Path:
         E1B, e1b_configs(settings), e1b_cells(paths, settings), E1_RUNS, paths, settings,
         record_format="json.gz",
     )  # fmt: skip
+
+
+def e2_configs(settings) -> list[Config]:
+    return [
+        Config(f"e2-{arm}", library, gp=wp4.gp_arm(f"e2-{arm}", library, settings).gp,
+               fitness=dict(E2_FITNESS))
+        for arm, library in ARMS.items()
+    ]  # fmt: skip
+
+
+def e2_plan(paths, settings) -> Path:
+    return write_plan(
+        E2, e2_configs(settings), e1b_cells(paths, settings), E1_RUNS, paths, settings,
+        record_format="json.gz",
+    )  # fmt: skip
+
+
+def benchmarks(paths, settings, cells) -> dict[tuple[str, str], dict[str, float]]:
+    """Per cell, the mean over its instruments of the validation Sharpe of the 12-month trend
+    rule and of buy-and-hold, long-short and volatility-sized as E2's rules (VALIDATE only)."""
+    from lpstgp.backtest.costs import from_meta
+    from lpstgp.campaign.plan import Config as _Config
+    from lpstgp.data.store import modelling_store
+    from lpstgp.gp import fitness as fit
+    from lpstgp.sandbox import Sandbox
+    from lpstgp.splits import Stage, all_periods
+
+    _gp, cfg = _Config("b", "technical", fitness=dict(E2_FITNESS)).resolved(settings)
+    store = modelling_store(paths.tier_dir("A"), settings)
+    lmax = settings["splits"]["lookback_max_bars"]
+    out = {}
+    for instruments, pid in cells:
+        period = all_periods(settings)[pid]
+        box = Sandbox.open(store, period, Stage.VALIDATE, instruments, lmax)
+        window = period.scored_window(Stage.VALIDATE)
+        values = {"trend": [], "hold": []}
+        for name in instruments:
+            b = box[name]
+            data = fit.prepare(b.dates, b.log_return, b.calendar, window, from_meta(b.meta),
+                               cfg.segment_months)  # fmt: skip
+            lp = np.asarray(b.log_price, dtype=np.float64)
+            mom = np.full(len(lp), np.nan)
+            mom[TREND_BARS:] = lp[TREND_BARS:] - lp[:-TREND_BARS]
+            signals = {
+                "trend": ((mom > 0).astype(float), (mom < 0).astype(float)),
+                "hold": (np.ones(len(lp)), np.zeros(len(lp))),
+            }
+            for key, (entry, exit_) in signals.items():
+                values[key].append(fit.market_part(entry, exit_, data, cfg)[1].get("sharpe", 0.0))
+        out[("+".join(instruments), pid)] = {k: float(np.mean(v)) for k, v in values.items()}
+    return out
+
+
+def e2_compare(rows: list[dict], bench: dict) -> dict:
+    """Pass mark (c): per variant, the median over cells of (median final validation Sharpe of
+    the cell's runs - the trend rule's), and the same against buy-and-hold."""
+    groups = collections.defaultdict(lambda: collections.defaultdict(list))
+    for r in rows:
+        groups[r["config"]][r["cell"]].append(r["val_sharpe"])
+    out = {}
+    for config, cells in groups.items():
+        d_trend = [float(np.median(v)) - bench[c]["trend"] for c, v in cells.items()]
+        d_hold = [float(np.median(v)) - bench[c]["hold"] for c, v in cells.items()]
+        out[config] = {"vs_trend": float(np.median(d_trend)), "vs_hold": float(np.median(d_hold)),
+                       "pass_benchmark": float(np.median(d_trend)) >= 0}  # fmt: skip
+    return out
 
 
 def e1_plan(paths, settings) -> Path:
@@ -273,15 +352,18 @@ def e1_report(summary: dict, title: str = "E1: one instrument or pooled (composi
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)  # fmt: skip
-    parser.add_argument("experiment", choices=["e1", "e1b"])
+    parser.add_argument("experiment", choices=["e1", "e1b", "e2"])
     parser.add_argument("--mode", choices=["plan", "run", "report"], required=True)
     parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
-    name, configs = (E1, RUN_CONFIGS) if args.experiment == "e1" else (E1B, E1B_CONFIGS)
+    name, configs = {"e1": (E1, RUN_CONFIGS), "e1b": (E1B, E1B_CONFIGS),
+                     "e2": (E2, E2_CONFIGS)}[args.experiment]  # fmt: skip
     plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
     if args.mode == "plan":
-        plan_path = (e1_plan if args.experiment == "e1" else e1b_plan)(paths, settings)
+        plan_path = {"e1": e1_plan, "e1b": e1b_plan, "e2": e2_plan}[args.experiment](
+            paths, settings
+        )
         plan = json.loads(plan_path.read_text())
         print(f"{plan_path}: {len(plan['tasks'])} tasks")
     elif args.mode == "run":
@@ -291,6 +373,22 @@ def main() -> None:
         summary = e1_summary(e1_rows(plan_path, paths, settings, configs), gain_over=over)
         if args.experiment == "e1":
             text = e1_report(summary)
+        elif args.experiment == "e2":
+            rows = e1_rows(plan_path, paths, settings, configs)
+            bench = benchmarks(paths, settings, e1b_cells(paths, settings))
+            versus = e2_compare(rows, bench)
+            for s_ in summary.values():
+                s_ |= versus[s_["config"]]
+                s_["passes"] = s_["passes"] and s_["pass_benchmark"]
+            text = e1_report(summary, "E2: long-short, volatility-targeted, pooled 6-year training",
+                             "runs", "D-094")  # fmt: skip
+            text += "\n| cell | trend rule | buy-and-hold |\n|---|---:|---:|\n" + "".join(
+                f"| {c[1]} {c[0][:30]} | {v['trend']:.2f} | {v['hold']:.2f} |\n"
+                for c, v in bench.items()
+            ) + "\n| variant | GP - trend (median over cells) | GP - hold |\n|---|---:|---:|\n" + (
+                "".join(f"| {k} | {v['vs_trend']:+.2f} | {v['vs_hold']:+.2f} |\n"
+                        for k, v in versus.items())
+            )  # fmt: skip
         else:  # with E1's 2-year pooled cells of the same pools and validation years
             same = {"PL1": "G1", "PL2": "G2", "P01": "G3"}
             pools = {(tuple(sorted(i)), p) for i, p in e1b_cells(paths, settings)}

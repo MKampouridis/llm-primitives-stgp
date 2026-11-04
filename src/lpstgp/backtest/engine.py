@@ -9,6 +9,13 @@ Signals are Kleene arrays (1 true, 0 false, NaN unknown) computed from data up t
   lag = 2 executes one close later (robustness).
 * Costs are charged on every change of the held position, buy and sell rates may differ.
 * Bars with an unknown return (invalid close) contribute 0; the next valid bar's return spans the gap.
+
+``mode="reverse"`` (GP development E2, D-094) is stop-and-reverse long-short with the same two
+trees: flat until the first signal; entry_t = 1 and exit_t != 1 -> long, exit_t = 1 and entry_t
+!= 1 -> short; once in the market the rule is always long or short. ``scale`` (optional, one
+value per bar, known at that bar's close) multiplies the decision before the execution shift, so
+a position is sized with information up to its decision bar only; costs are charged on every
+change of the held position, resizing included.
 """
 
 from __future__ import annotations
@@ -38,11 +45,42 @@ def decide(entry: np.ndarray, exit_: np.ndarray, active_from: int) -> np.ndarray
 
 
 @njit(cache=True)
+def decide_reverse(entry: np.ndarray, exit_: np.ndarray, active_from: int) -> np.ndarray:
+    """Position (-1/0/+1) decided at the close of each bar: stop-and-reverse long-short."""
+    n = len(entry)
+    out = np.zeros(n)
+    state = 0.0
+    for t in range(n):
+        if t >= active_from:
+            go_long = entry[t] == 1.0 and exit_[t] != 1.0
+            go_short = exit_[t] == 1.0 and entry[t] != 1.0
+            if go_long:
+                state = 1.0
+            elif go_short:
+                state = -1.0
+        out[t] = state
+    return out
+
+
+@njit(cache=True)
 def decide_batch(entry: np.ndarray, exit_: np.ndarray, active_from: np.ndarray) -> np.ndarray:
     out = np.empty(entry.shape)
     for k in range(entry.shape[0]):
         out[k] = decide(entry[k], exit_[k], active_from[k])
     return out
+
+
+@njit(cache=True)
+def decide_reverse_batch(
+    entry: np.ndarray, exit_: np.ndarray, active_from: np.ndarray
+) -> np.ndarray:
+    out = np.empty(entry.shape)
+    for k in range(entry.shape[0]):
+        out[k] = decide_reverse(entry[k], exit_[k], active_from[k])
+    return out
+
+
+MODES = ("long_only", "reverse")
 
 
 def held(decisions: np.ndarray, lag: int) -> np.ndarray:
@@ -67,13 +105,20 @@ def run(
     costs: CostModel,
     active_from: int | np.ndarray = 0,
     lag: int = 1,
+    mode: str = "long_only",
+    scale: np.ndarray | None = None,
 ) -> BacktestResult:
     """Backtest one rule (1-d signals) or a batch (2-d: individuals x bars) on one asset."""
+    if mode not in MODES:
+        raise ValueError(f"position mode {mode!r} is not one of {MODES}")
     batch = entry.ndim == 2
     entry2 = np.atleast_2d(np.asarray(entry, dtype=np.float64))
     exit2 = np.atleast_2d(np.asarray(exit_, dtype=np.float64))
     starts = np.broadcast_to(np.asarray(active_from, dtype=np.int64), (entry2.shape[0],)).copy()
-    decisions = decide_batch(entry2, exit2, starts)
+    decide_all = decide_batch if mode == "long_only" else decide_reverse_batch
+    decisions = decide_all(entry2, exit2, starts)
+    if scale is not None:
+        decisions = decisions * np.asarray(scale, dtype=np.float64)
     position = held(decisions, lag)
     simple = np.where(np.isnan(log_return), 0.0, np.expm1(np.nan_to_num(log_return)))
     gross = position * simple

@@ -1232,3 +1232,22 @@ E1b ran as fixed in D-092: 80 runs, pooled, on 6-year windows (`reports/gpdev/e1
 - **Long windows remove the overfitting.** With 6 years, the training Sharpe (0.45–0.46) is about what the rules then earn on the next year (0.36–0.50). The 2–3× gap of the 2-year runs, which sank the pilot's validation-to-test comparison, is gone.
 - **Long-only rules have little edge to find.** Once the training score is honest, it is about 0.45: below buy-and-hold on these instruments and years (median 0.86, D-090) and far below the PI's target. Evolution adds nothing over the random initial population, and the rules trade more (22–37 entries in 6 years) without validating better.
 - **Conclusion.** The remaining problem is edge, not overfitting. Long-only timing rules in these grammars find essentially nothing that holding the market does not already give. The simple benchmark that reached 1.31 (D-090) is long–short, volatility-targeted and diversified, and these runs had none of the three. That points to E2: long–short positions and volatility targeting, on pooled long-window training, against that benchmark. Whether to run E2 is for the PI to decide.
+
+### D-094 GP development E2: long–short, volatility-targeted rules on pooled 6-year training — Decided (engineer, under D-042/D-061, with the PI's go-ahead; 4 Nov 2026)
+E1b (D-093) showed that long windows remove the overfitting, but that long-only rules find little edge. E2 tests the three features of the benchmark that reached 1.31 (D-090), which those runs lacked: short positions, volatility sizing and pooled diversification.
+- **Positions (`engine.run(mode="reverse", scale=...)`).** Stop-and-reverse uses the existing entry and exit trees. The rule is flat until its first signal; then entry (exit not true) goes long and exit (entry not true) goes short, so it is always in the market. Unknown or conflicting bars take no action. The GP grammar is unchanged.
+- **Volatility sizing (`FitnessConfig.vol_target = 0.10`).**
+  - *Size.* The decision of bar t is multiplied by 0.10 / σ_t before the execution shift. σ_t is the annualised volatility of the 63 bars up to and including t, known at its close. The size is capped at 3×, and is 0 while σ is unknown.
+  - *Costs.* They are charged on every change of the held position, resizing included.
+  - *Fitness adjustments.* Drawdowns are expressed in units of the target. Exposure and trade counts use the sign of the position; with long–short, every change of side counts as a trade.
+- **Defaults keep everything earlier unchanged.** The new fields are left out of configuration digests at their defaults, and long-only results are bit-identical (tests).
+  - *Tests:* the state machine, the sizing applied before the shift, the costs of resizing, the short-side P&L, a poisoned future for the volatility estimate and the fitness, and a realised volatility near the target (`tests/backtest/test_long_short.py`).
+  - *Not yet mode-aware:* `pilot._net` and `wp4_test`. They are updated if E2's design is adopted.
+- **Design.** E1b's 4 pooled cells (equities in G1–G3, FX in G3) and validation years 2005–06 to 2007–08, with arm 2c and the TA GP on the composite fitness, at WP2's calibrated budget: 10 runs per cell, 80 runs.
+- **Benchmark.** The 12-month trend rule: long when the 252-bar log return is positive, short when negative. It is written as entry and exit signals and scored by the same `market_part`, with the same sizing and costs, on the same VALIDATE sandboxes. Its per-cell validation Sharpe, computed before the runs as a fixed rule, is 1.10 (G1 equities), 1.46 (G2 equities), −0.34 (G3 equities) and 0.53 (G3 FX). Volatility-sized buy-and-hold scores 1.17, 1.55, −0.91 and 0.03 respectively.
+- **Pass marks, fixed before any E2 run.**
+  - (a) Evolution gain: a median of at least 0.10 and a one-sided Wilcoxon test over runs with p < 0.05.
+  - (b) A median ρ over cells of at least 0.10.
+  - (c) The median over cells of (the cell's median final validation Sharpe minus the trend rule's) is at least 0.
+  A variant passes on all three. Arm 2c decides and the TA GP corroborates.
+- **Outcomes.** If E2 passes, the design (long–short, sizing, pooled long-window training) goes to the PI for WP4. If it fails, GP evolution does not beat a simple trend rule here, and the paper's framing is discussed with the PI before WP4.

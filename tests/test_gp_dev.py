@@ -3,6 +3,7 @@
 import sys
 
 import numpy as np
+import pytest
 
 from lpstgp.config import REPO_ROOT, load_settings
 
@@ -51,3 +52,15 @@ def test_cells_use_only_validation_years_before_wp4s_first_test_year():
     assert all(len(set(i)) == len(i) for i in pooled)
     names = [c.name for c in gp_dev.e1_configs(load_settings())]
     assert names == ["e1-2c-comp", "e1-2c-lcb", "e1-TA-comp", "e1-TA-lcb"]
+
+
+def test_e2_configurations_and_the_benchmark_mark():
+    configs = gp_dev.e2_configs(load_settings())
+    assert [c.name for c in configs] == ["e2-2c", "e2-TA"]
+    assert all(dict(c.fitness) == {"position_mode": "reverse", "vol_target": 0.10} for c in configs)
+    rows = [{"config": "e2-2c", "cell": ("A+B", "G1"), "val_sharpe": v} for v in (0.9, 1.0, 1.1)]
+    rows += [{"config": "e2-2c", "cell": ("C+D", "G3"), "val_sharpe": v} for v in (0.2, 0.3)]
+    bench = {("A+B", "G1"): {"trend": 0.8, "hold": 1.2}, ("C+D", "G3"): {"trend": 0.5, "hold": 0.0}}
+    got = gp_dev.e2_compare(rows, bench)["e2-2c"]
+    assert got["vs_trend"] == pytest.approx(np.median([0.2, -0.25]))
+    assert got["pass_benchmark"] is False  # -0.025 < 0

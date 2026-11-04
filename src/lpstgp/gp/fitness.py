@@ -58,15 +58,44 @@ class FitnessConfig:
     # GP development (D-090): "composite" (above) or "sharpe_lcb"; z of the one-sided bound.
     objective: str = "composite"
     lcb_z: float = 1.645
+    # GP development E2 (D-094): "long_only" or "reverse" (stop-and-reverse long-short), and
+    # volatility targeting (annualised; 0 = off) over a trailing window of bars.
+    position_mode: str = "long_only"
+    vol_target: float = 0.0
+    vol_window: int = 63
 
     def __post_init__(self) -> None:
         if self.objective not in OBJECTIVES:
             raise ValueError(f"fitness objective {self.objective!r} is not one of {OBJECTIVES}")
+        if self.position_mode not in ("long_only", "reverse"):
+            raise ValueError(f"position mode {self.position_mode!r} is not long_only or reverse")
 
 
 OBJECTIVES = ("composite", "sharpe_lcb")
 # Fields added after WP2: left out of configuration digests at their defaults (D-084, D-090).
-DIGEST_DEFAULTS = {"objective": "composite", "lcb_z": 1.645}
+DIGEST_DEFAULTS = {
+    "objective": "composite", "lcb_z": 1.645, "position_mode": "long_only", "vol_target": 0.0,
+    "vol_window": 63,
+}  # fmt: skip
+VOL_CAP = 3.0  # most a volatility-targeted position may be levered (D-094)
+
+
+def trailing_vol(log_return: np.ndarray, window: int, periods_per_year: int) -> np.ndarray:
+    """Annualised volatility of simple returns over the ``window`` bars ending at each bar (that
+    bar included: known at its close); NaN until a full window. Unknown returns count as 0."""
+    simple = np.expm1(np.nan_to_num(np.asarray(log_return, dtype=np.float64)))
+    out = np.full(len(simple), np.nan)
+    if len(simple) >= window:
+        view = np.lib.stride_tricks.sliding_window_view(simple, window)
+        out[window - 1 :] = view.std(axis=1, ddof=1) * np.sqrt(periods_per_year)
+    return out
+
+
+def vol_scale(vol: np.ndarray, target: float) -> np.ndarray:
+    """Position size per bar: target / trailing volatility, capped at VOL_CAP; 0 while unknown."""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        s = np.where(np.isfinite(vol) & (vol > 0), target / vol, 0.0)
+    return np.minimum(s, VOL_CAP)
 
 
 def sharpe_lcb(net: np.ndarray, periods_per_year: int, z: float) -> float:
@@ -108,6 +137,7 @@ class ScoredInstrument:
     periods_per_year: int
     sigma: float  # annualised volatility of the instrument over the scored window
     costs: CostModel
+    vol: np.ndarray | None = None  # trailing annualised volatility per bar (D-094)
 
 
 def prepare(
@@ -129,7 +159,8 @@ def prepare(
     ppy = PERIODS_PER_YEAR[calendar]
     simple = np.expm1(np.nan_to_num(np.asarray(log_return)[start:stop]))
     sigma = float(simple.std(ddof=1) * np.sqrt(ppy)) if stop - start > 2 else float("nan")
-    return ScoredInstrument(np.asarray(log_return), start, stop, segments, ppy, sigma, costs)
+    vol = trailing_vol(log_return, 63, ppy)
+    return ScoredInstrument(np.asarray(log_return), start, stop, segments, ppy, sigma, costs, vol)
 
 
 @dataclass(frozen=True)
@@ -156,16 +187,26 @@ def market_part(
     """Market part of the fitness; ``positions``, if given, is fed the held-position vector of the
     scored window, so that rules which trade identically hash alike (hall of fame, D-029)."""
     costs = data.costs.scaled(cfg.cost_multiplier * data.costs.multiplier)
+    scale = None
+    if cfg.vol_target > 0:
+        vol = data.vol
+        if vol is None or cfg.vol_window != 63:
+            vol = trailing_vol(data.log_return, cfg.vol_window, data.periods_per_year)
+        scale = vol_scale(vol, cfg.vol_target)
     res = engine.run(
-        entry, exit_, data.log_return, costs, active_from=data.active_from, lag=cfg.execution_lag
-    )
+        entry, exit_, data.log_return, costs, active_from=data.active_from,
+        lag=cfg.execution_lag, mode=cfg.position_mode, scale=scale,
+    )  # fmt: skip
     held = res.held
     changes = np.abs(np.diff(held, prepend=0.0))
     window = slice(data.active_from, data.stop)
     if positions is not None:
         positions.update(np.ascontiguousarray(held[window], dtype=np.float64).tobytes())
-    entries = int((np.diff(held, prepend=0.0)[window] > 0).sum())
-    if entries == 0 and held[window].sum() == 0:  # never in the market
+    side = np.sign(held)  # long-only: 0/1; long-short: -1/0/+1 (D-094)
+    moves = np.diff(side, prepend=0.0)[window]
+    # trades: entries into a long position, or (long-short) every change of side
+    entries = int((moves != 0).sum() if cfg.position_mode == "reverse" else (moves > 0).sum())
+    if entries == 0 and np.abs(held[window]).sum() == 0:  # never in the market
         return cfg.no_trade_value, {
             "trades": 0,
             "no_trade": True,
@@ -178,11 +219,13 @@ def market_part(
         if hi - lo < 2:
             continue
         net = res.net[lo:hi]
-        exposed = held[lo:hi].sum()
+        exposed = np.abs(side[lo:hi]).sum()
         sharpes.append(
             float(sharpe(net, data.periods_per_year)) if exposed >= cfg.min_exposure_bars else 0.0
         )
-        drawdowns.append(float(max_drawdown(net)) / data.sigma if data.sigma > 0 else 0.0)
+        # scale-free drawdown: in units of the position's volatility (the target when sized)
+        unit = cfg.vol_target if cfg.vol_target > 0 else data.sigma
+        drawdowns.append(float(max_drawdown(net)) / unit if unit > 0 else 0.0)
         turnovers.append(float(changes[lo:hi].sum() * data.periods_per_year / (hi - lo)))
     if not sharpes:  # every segment shorter than 2 bars: nothing to score
         return cfg.no_trade_value, {"trades": entries, "no_trade": True, "no_segments": True}
@@ -199,7 +242,8 @@ def market_part(
         "max_drawdown": float(max_drawdown(net)),
         "total_return": float(np.prod(1.0 + net) - 1.0),
         "trades": entries,
-        "exposure": float(held[window].mean()),
+        "exposure": float(np.abs(side[window]).mean()),
+        "net_long": float(side[window].mean()),
         "no_trade": False,
     }
     years = (data.stop - data.active_from) / data.periods_per_year  # of bars with data
