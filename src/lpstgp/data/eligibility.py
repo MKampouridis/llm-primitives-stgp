@@ -31,9 +31,11 @@ def assessed(period: Period) -> Period:
     return replace(period, test_end=period.test_start) if period.id == "PC" else period
 
 
-def table(paths: Paths, settings: Mapping[str, Any]) -> dict[str, list[str]]:
-    """period id -> sorted eligible primary instruments, for P01..P18 and PC."""
-    periods = [assessed(all_periods(settings)[p]) for p in WP4_PERIODS]
+def table(
+    paths: Paths, settings: Mapping[str, Any], period_ids=WP4_PERIODS
+) -> dict[str, list[str]]:
+    """period id -> sorted eligible primary instruments, for P01..P18 and PC by default."""
+    periods = [assessed(all_periods(settings)[p]) for p in period_ids]
     lmax = settings["splits"]["lookback_max_bars"]
     coverage = settings["splits"]["min_session_coverage"]
     out: dict[str, list[str]] = {p.id: [] for p in periods}

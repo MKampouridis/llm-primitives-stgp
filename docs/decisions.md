@@ -1208,3 +1208,13 @@ E1 ran as revised in D-090: 1,580 runs, composite fitness, arm 2c and the TA GP,
 - **Still below the simple benchmarks.** Even the best figures (about 0.6–0.76, long-only) are below buy-and-hold on the same instruments and years (median per instrument 0.86, D-090).
 - **This agrees with the literature.** It matches the long-standing finding that GP-evolved technical rules seldom beat buy-and-hold out of sample after costs (e.g. Allen and Karjalainen 1999).
 - The `sharpe_lcb` docstring is corrected here (positive skew narrows the bound; D-090).
+
+### D-092 GP development E1b: pooled training on 6-year windows — Decided (engineer, under D-042/D-061, with the PI's go-ahead; 4 Nov 2026)
+E1 (D-091) showed that pooling halves the overfitting, but that evolution still makes rules worse out of sample. E1b tests whether **more history per search** makes evolution useful.
+- **Periods.** `[gp_development]` adds G1–G3, which have 6-year fit windows (1999-07–2005-06, 2000-07–2006-06 and 2001-07–2007-06) and the same validation years as E1 (2005–06, 2006–07, 2007–08). They have **no test stage** (test end = test start), and no read reaches 2008-07-01. Leakage tests cover the validation horizon, a poisoned future and the sealed test stage (`tests/leakage/test_gp_development_periods.py`). These periods are not WP4 periods.
+- **Cells.** Every asset class with at least two instruments eligible under the usual rule (504 warm-up bars, 95% session coverage) is pooled. That leaves equity indices in G1–G3 and FX in G3: 4 cells. Commodities drop out, because only NATGAS has the history.
+- **Arms and runs.** Arm 2c and the TA GP, composite fitness, WP2's calibrated budget, 10 runs per cell: 80 runs.
+- **Arm 2c's DEV overlap.** Arm 2c's training windows overlap DEV, the years on which its operators' source strategies were written (D-036). That can only flatter its *training* fit; the validation years are after DEV.
+- **Pass marks: E1's, with one change fixed before any run.** With 4 cells, a Wilcoxon test over cells can never reach p < 0.05 (its smallest p is 1/16). The gain test (a) therefore runs **over runs**: each run's last-checkpoint validation Sharpe against its own generation 0, one-sided, p < 0.05, with a median gain of at least 0.10. Mark (b) stays the median over cells of Spearman's ρ, at least 0.10. The decision rule is E1's.
+- **Comparison.** E1's 2-year pooled cells for the same pools and validation years are reported alongside, under the same tests.
+- **Next.** If E1b passes, WP4's training windows would need lengthening, which departs from the research plan's 3-year training and goes to the PI. If it fails, the GP's role is rethought with the PI before WP4.

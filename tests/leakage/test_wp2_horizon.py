@@ -48,7 +48,7 @@ def test_pilot_and_development_periods():
     )
     # the development window ends before every pilot validation year
     assert DEV.horizon(Stage.VALIDATE) <= PL1.val_start
-    assert len(PERIODS) == 18 + 1 + 2 + 1  # P01..P18, PC, the pilots, DEV
+    assert len(PERIODS) == 18 + 1 + 2 + 1 + 3  # P01..P18, PC, the pilots, DEV, G1-G3 (D-092)
 
 
 def test_capped_store_refuses_reads_past_the_cap(tmp_path):
@@ -224,7 +224,7 @@ def test_wp4_settings_open_fit_and_validate_of_every_period_and_cap_at_pc_test()
     assert SETTINGS["leakage"]["max_horizon"] == pc.test_start == PERIODS["P18"].test_end
     store = modelling_store(REPO_ROOT / "nowhere", SETTINGS)
     primary = {f"P{k:02d}" for k in range(1, 19)}
-    assert store.allowed_periods == {"DEV", "PL1", "PL2", "PC", *primary}
+    assert store.allowed_periods == {"DEV", "G1", "G2", "G3", "PL1", "PL2", "PC", *primary}
 
 
 @pytest.mark.parametrize("period_id", ["P01", "P09", "P18", "PC", "PL1", "DEV"])

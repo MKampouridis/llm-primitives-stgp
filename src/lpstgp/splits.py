@@ -112,6 +112,24 @@ def development_period(settings: Mapping[str, Any]) -> Period:
     return Period("DEV", dev["fit_start"], dev["holdout_start"], dev["end"], dev["end"])
 
 
+def gp_development_periods(settings: Mapping[str, Any]) -> tuple[Period, ...]:
+    """GP development periods (D-092): long fit windows ending at consecutive validation years,
+    every one before WP4's first test year, and no test stage (test end = test start)."""
+    cfg = settings.get("gp_development")
+    if not cfg:
+        return ()
+    out = []
+    for k, pid in enumerate(cfg["ids"]):
+        val_start = shift_years(cfg["first_val_start"], k)
+        test_start = shift_years(val_start, cfg["validation_years"])
+        out.append(
+            Period(
+                pid, shift_years(val_start, -cfg["fit_years"]), val_start, test_start, test_start
+            )
+        )
+    return tuple(out)
+
+
 def post_cutoff_period(settings: Mapping[str, Any]) -> Period | None:
     """PC: the primary structure from ``[post_cutoff] fit_start``; its test year starts after the
     training cutoff of the LLM that wrote every LLM artefact (D-036, D-075)."""
@@ -126,13 +144,15 @@ def post_cutoff_period(settings: Mapping[str, Any]) -> Period | None:
 
 
 def all_periods(settings: Mapping[str, Any]) -> dict[str, Period]:
-    """Every named period: primary P01..P18, the post-cutoff period PC, the pilots and DEV."""
+    """Every named period: primary P01..P18, the post-cutoff period PC, the pilots, DEV and the
+    GP development periods."""
     pc = post_cutoff_period(settings)
     periods = (
         *periods_from_settings(settings),
         *((pc,) if pc else ()),
         *pilot_periods(settings),
         development_period(settings),
+        *gp_development_periods(settings),
     )
     return {p.id: p for p in periods}
 

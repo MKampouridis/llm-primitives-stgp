@@ -28,7 +28,15 @@ E1  2 x 2: training data (one instrument, or pooled over the instruments of an a
     nearly a constant shift of the Sharpe ratio. E1 therefore tests the data question alone;
     the plan keeps all four configurations, so it, its digests and its records stay valid.
 
-Usage:  uv run python scripts/gp_dev.py e1 --mode plan|run|report [--workers 6]
+E1b (D-092)  the evidence question with longer training: pooled cells on 6-year fit windows
+    (G1-G3: fit 1999-2005 ... 2001-2007, the same validation years 2005-06 .. 2007-08; no test
+    stage), arm 2c and the TA GP, composite fitness, 10 runs per cell. Only equities (G1-G3) and
+    FX (G3) have the history, so there are 4 cells: the gain test (a) runs over runs (each run
+    against its own generation 0) instead of over cells, which with 4 cells could never reach
+    p < 0.05. The other marks and the decision rule are E1's. E1's 2-year pooled cells of the
+    same pools and validation years are reported alongside.
+
+Usage:  uv run python scripts/gp_dev.py e1|e1b --mode plan|run|report [--workers 6]
 """
 
 from __future__ import annotations
@@ -57,6 +65,9 @@ ARMS = {"2c": "s2c", "TA": "technical"}
 OBJECTIVES = {"comp": "composite", "lcb": "sharpe_lcb"}
 GAIN_MIN, ALPHA, RHO_MIN = 0.10, 0.05, 0.10
 RUN_CONFIGS = ("e1-2c-comp", "e1-TA-comp")  # D-090 revision: the data question only
+E1B = "gpdev-e1b"
+E1B_PERIODS = ("G1", "G2", "G3")
+E1B_CONFIGS = ("e1b-2c", "e1b-TA")
 
 
 def e1_configs(settings) -> list[Config]:
@@ -88,6 +99,35 @@ def e1_cells() -> list[tuple[tuple[str, ...], str]]:
             pooled[classes[name]].append(name)
         cells += [(tuple(sorted(v)), period) for v in pooled.values() if len(v) > 1]
     return cells
+
+
+def e1b_configs(settings) -> list[Config]:
+    return [
+        Config(f"e1b-{arm}", library, gp=wp4.gp_arm(f"e1b-{arm}", library, settings).gp)
+        for arm, library in ARMS.items()
+    ]
+
+
+def e1b_cells(paths, settings) -> list[tuple[tuple[str, ...], str]]:
+    """Every asset class with at least two eligible instruments, pooled, in G1-G3."""
+    from lpstgp.data import eligibility
+
+    classes = {i.id: i.asset_class for i in load_universe()}
+    table = eligibility.table(paths, settings, E1B_PERIODS)
+    cells = []
+    for period in E1B_PERIODS:
+        pooled = collections.defaultdict(list)
+        for name in table[period]:
+            pooled[classes[name]].append(name)
+        cells += [(tuple(sorted(v)), period) for v in pooled.values() if len(v) > 1]
+    return cells
+
+
+def e1b_plan(paths, settings) -> Path:
+    return write_plan(
+        E1B, e1b_configs(settings), e1b_cells(paths, settings), E1_RUNS, paths, settings,
+        record_format="json.gz",
+    )  # fmt: skip
 
 
 def e1_plan(paths, settings) -> Path:
@@ -142,9 +182,9 @@ def e1_execute(plan_path: Path, paths, settings, workers: int, configs=RUN_CONFI
     return {"skipped": done, "evolved": len(pending)}
 
 
-def e1_rows(plan_path: Path, paths, settings) -> list[dict]:
+def e1_rows(plan_path: Path, paths, settings, configs=RUN_CONFIGS) -> list[dict]:
     rows = []
-    for r in e1_records(plan_path, settings):
+    for r in e1_records(plan_path, settings, configs):
         top = r["hall_of_fame"][0]
         per_fit, per_val = top["fit"]["instruments"], top["validation"]["instruments"]
         checkpoints = r["validation_checkpoints"]
@@ -164,7 +204,7 @@ def e1_rows(plan_path: Path, paths, settings) -> list[dict]:
     return rows
 
 
-def e1_summary(rows: list[dict]) -> dict:
+def e1_summary(rows: list[dict], gain_over: str = "cells") -> dict:
     from scipy.stats import spearmanr, wilcoxon
 
     groups = collections.defaultdict(lambda: collections.defaultdict(list))
@@ -180,7 +220,10 @@ def e1_summary(rows: list[dict]) -> dict:
             for v in cells.values()
             if len({r["fit_score"] for r in v}) > 2 and len({r["val_sharpe"] for r in v}) > 2
         ]
-        p = float(wilcoxon(gains, alternative="greater").pvalue) if any(gains) else 1.0
+        tested = gains if gain_over == "cells" else [
+            r["val_last"] - r["val_gen0"] for v in cells.values() for r in v
+        ]  # fmt: skip
+        p = float(wilcoxon(tested, alternative="greater").pvalue) if any(tested) else 1.0
         flat = [r for v in cells.values() for r in v]
         med = {k: float(np.median([r[k] for r in flat])) for k in
                ("fit_sharpe", "val_sharpe", "val_gen0", "val_last", "trades_fit", "exposure_fit",
@@ -197,12 +240,13 @@ def e1_summary(rows: list[dict]) -> dict:
     return out
 
 
-def e1_report(summary: dict) -> str:
+def e1_report(summary: dict, title: str = "E1: one instrument or pooled (composite fitness)",
+              over: str = "cells", decision: str = "D-090") -> str:  # fmt: skip
     lines = [
-        "# GP development E1: more data per search x a confidence-bound fitness",
+        f"# GP development {title}",
         "",
-        f"Pass marks (fixed before the runs, D-090): median evolution gain in validation Sharpe "
-        f">= {GAIN_MIN} with one-sided Wilcoxon p < {ALPHA} over cells; median Spearman rho "
+        f"Pass marks (fixed before the runs, {decision}): median evolution gain in validation "
+        f"Sharpe >= {GAIN_MIN} with one-sided Wilcoxon p < {ALPHA} over {over}; median Spearman rho "
         f"(training fitness, validation Sharpe) >= {RHO_MIN}. Validation years 2005-06, 2006-07 "
         "and 2007-08; no test data.",
         "",
@@ -217,7 +261,7 @@ def e1_report(summary: dict) -> str:
             f"| {s['median_rho']:+.2f} | {s['trades_fit']:.0f} | {s['exposure_fit']:.2f} / "
             f"{s['exposure_val']:.2f} | {'yes' if s['passes'] else 'no'} |"
         )
-    winners = [s for s in summary.values() if s["passes"] and s["config"].startswith("e1-2c")]
+    winners = [s for s in summary.values() if s["passes"] and "-2c" in s["config"]]
     lines += ["", "**Decision (arm 2c):** " + (
         "go to E2 with " + max(winners, key=lambda s: s["val_last"])["config"] + "/"
         + max(winners, key=lambda s: s["val_last"])["data"]
@@ -229,23 +273,39 @@ def e1_report(summary: dict) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)  # fmt: skip
-    parser.add_argument("experiment", choices=["e1"])
+    parser.add_argument("experiment", choices=["e1", "e1b"])
     parser.add_argument("--mode", choices=["plan", "run", "report"], required=True)
     parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
-    plan_path = e1_plan(paths, settings)
+    name, configs = (E1, RUN_CONFIGS) if args.experiment == "e1" else (E1B, E1B_CONFIGS)
+    plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
     if args.mode == "plan":
+        plan_path = (e1_plan if args.experiment == "e1" else e1b_plan)(paths, settings)
         plan = json.loads(plan_path.read_text())
         print(f"{plan_path}: {len(plan['tasks'])} tasks")
     elif args.mode == "run":
-        print(e1_execute(plan_path, paths, settings, args.workers), flush=True)
+        print(e1_execute(plan_path, paths, settings, args.workers, configs), flush=True)
     else:
-        summary = e1_summary(e1_rows(plan_path, paths, settings))
+        over = "cells" if args.experiment == "e1" else "runs"
+        summary = e1_summary(e1_rows(plan_path, paths, settings, configs), gain_over=over)
+        if args.experiment == "e1":
+            text = e1_report(summary)
+        else:  # with E1's 2-year pooled cells of the same pools and validation years
+            same = {"PL1": "G1", "PL2": "G2", "P01": "G3"}
+            pools = {(tuple(sorted(i)), same[p]) for i, p in e1b_cells(paths, settings)}
+            short = [r for r in e1_rows(paths.results_dir / "campaigns" / E1 / "tasks.json",
+                                         paths, settings)
+                     if r["data"] == "pooled" and (tuple(r["cell"][0].split("+")),
+                                                   same[r["cell"][1]]) in pools]  # fmt: skip
+            for r in short:
+                r["data"] = "pooled-2y"
+            summary |= e1_summary(short, gain_over="runs")
+            text = e1_report(summary, "E1b: pooled, 6-year training windows", "runs", "D-092")
         REPORTS.mkdir(parents=True, exist_ok=True)
-        (REPORTS / "e1.json").write_text(json.dumps(summary, indent=2) + "\n")
-        (REPORTS / "e1.md").write_text(e1_report(summary))
-        print(e1_report(summary))
+        (REPORTS / f"{args.experiment}.json").write_text(json.dumps(summary, indent=2) + "\n")
+        (REPORTS / f"{args.experiment}.md").write_text(text)
+        print(text)
 
 
 if __name__ == "__main__":
