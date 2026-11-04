@@ -14,16 +14,49 @@ import wp4
 SETTINGS = load_settings()
 
 
+def fake_cycle_end(root, arm, period, out, cycles=3):
+    """A maintenance campaign's last cycle and lineage, as M3 writes them (spec-checked)."""
+    from lpstgp.freeze import digest
+    from lpstgp.maintenance.cycle import ArmState
+
+    spec_path = root / "campaign.json"
+    if not spec_path.exists():
+        spec_path.parent.mkdir(parents=True, exist_ok=True)
+        spec_path.write_text(json.dumps({"campaign": root.name}))
+    spec = json.loads(spec_path.read_text())
+    d = root / arm / period / f"c{cycles}"
+    d.mkdir(parents=True)
+    (d / "cycle.json").write_text(json.dumps({"state_out": out, "spec_digest": digest(spec)}))
+    row = {"cycle": cycles, "state_out": out["state_id"],
+           "rules_out": ArmState.from_dict(out).batch_key}  # fmt: skip
+    (root / arm / period / "lineage.json").write_text(json.dumps({"cycles": [row]}))
+
+
 def _fake_maintenance(tmp_path, campaign="m"):
+    root = tmp_path / "wp3" / "maintenance" / campaign
     for arm, out in (
         ("4-grow", {"state_id": "aaaa", "seed_rules": []}),
         ("4-full", {"state_id": "bbbb", "seed_rules": []}),
         ("5", {"state_id": "cccc", "seed_rules": [["E1", "X1"], ["E2", "X2"]]}),
     ):
-        d = tmp_path / "wp3" / "maintenance" / campaign / arm / "P03" / "c3"
-        d.mkdir(parents=True)
-        (d / "cycle.json").write_text(json.dumps({"state_out": out}))
+        fake_cycle_end(root, arm, "P03", out)
     return SimpleNamespace(results_dir=tmp_path)
+
+
+def test_a_last_cycle_that_disagrees_with_its_lineage_or_specification_is_refused(tmp_path):
+    import pytest
+
+    paths = _fake_maintenance(tmp_path)
+    root = tmp_path / "wp3" / "maintenance" / "m"
+    lineage = root / "4-full" / "P03" / "lineage.json"
+    good = lineage.read_text()
+    lineage.write_text(good.replace("bbbb", "dddd"))
+    with pytest.raises(SystemExit, match="lineage"):
+        wp4.maintained_state(paths, "m", "4-full", "P03")
+    lineage.write_text(good)
+    (root / "campaign.json").write_text(json.dumps({"campaign": "other"}))
+    with pytest.raises(SystemExit, match="specification"):
+        wp4.maintained_state(paths, "m", "4-full", "P03")
 
 
 def test_every_arm_of_the_protocol_is_configured(tmp_path):

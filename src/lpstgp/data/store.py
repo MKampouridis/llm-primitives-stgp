@@ -110,12 +110,16 @@ class DataStore:
         tier_dir: Path,
         max_horizon: date | None = None,
         allowed_periods: frozenset[str] | None = None,
+        periods: Mapping[str, Any] | None = None,
     ) -> None:
         self._processed = Path(tier_dir) / "processed"
         self.max_horizon = max_horizon
         # Periods a sandbox may open on this store (None: any). In WP2 the primary periods are
         # refused: P01 and P02 windows overlap the pilot test years (D-047).
         self.allowed_periods = allowed_periods
+        # The settings' named periods (None: any). A sandbox opens only a period equal to its
+        # named one, so a period with shifted dates cannot reach another stage's rows (D-087).
+        self.periods = MappingProxyType(dict(periods)) if periods is not None else None
 
     def instruments(self) -> list[str]:
         return sorted(
@@ -171,9 +175,12 @@ class DataStore:
 
 def modelling_store(tier_dir: Path, settings: Mapping[str, Any]) -> DataStore:
     """The store for every modelling entry point, capped at ``settings['leakage']['max_horizon']``."""
+    from lpstgp.splits import all_periods
+
     allowed = settings["leakage"].get("allowed_periods")
     return DataStore(
         tier_dir,
         max_horizon=settings["leakage"]["max_horizon"],
         allowed_periods=frozenset(allowed) if allowed is not None else None,
+        periods=all_periods(settings),
     )

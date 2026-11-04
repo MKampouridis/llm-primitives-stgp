@@ -18,6 +18,7 @@ import sys
 import numpy as np
 import pandas as pd
 import pytest
+from tests.wp4.test_plans import fake_cycle_end
 
 from lpstgp.campaign.plan import Config
 from lpstgp.config import REPO_ROOT, load_paths, load_settings
@@ -64,9 +65,7 @@ def driver(tmp_path, monkeypatch):
         json.dumps({"eligible": {p: list(INSTRUMENTS) for p in PERIODS}})
     )
     (repo / "docs").mkdir()
-    (repo / "docs" / "decisions.md").write_text(
-        "### D-999 WP4 test read: go-ahead (PI, rehearsal)\n"
-    )
+    (repo / "docs" / "decisions.md").write_text("# Decisions\n")
     _git(repo, "init", "-q")
     _git(repo, "config", "user.email", "rehearsal@example.com")
     _git(repo, "config", "user.name", "rehearsal")
@@ -99,18 +98,14 @@ def driver(tmp_path, monkeypatch):
     root = paths.results_dir / "wp3" / "maintenance" / "fake"
     for arm in ("4-grow", "4-full", "5"):
         for period in PERIODS:
-            d = root / arm / period / "c3"
-            d.mkdir(parents=True)
-            (d / "cycle.json").write_text(
-                json.dumps({"state_out": {"state_id": arm3.id, "seed_rules": []}})
-            )
-            (root / arm / period / "lineage.json").write_text("{}")
+            fake_cycle_end(root, arm, period, {"state_id": arm3.id, "seed_rules": []})
     yield wp4, repo, paths
     sys.modules.pop("wp4", None)
 
 
 @pytest.mark.slow
 def test_wp4_plans_freeze_and_reads_the_test_years_once(driver):
+    from lpstgp import wp4_test
     from lpstgp.campaign.execute import execute_plan
 
     wp4, repo, paths = driver
@@ -130,10 +125,22 @@ def test_wp4_plans_freeze_and_reads_the_test_years_once(driver):
         PERIODS, per_period
     )
     assert manifest["context"]["test_periods"] == list(PERIODS)
+    decisions = repo / "docs" / "decisions.md"
+    early = "### D-997 WP4 test read: go-ahead (PI, before the freeze)\n"
+    decisions.write_text(decisions.read_text() + early)
+    _git(repo, "add", "docs/decisions.md")
+    _git(repo, "commit", "-q", "-m", "too early")
     _git(repo, "add", "reports/wp4/freeze_manifest.json")
     _git(repo, "commit", "-q", "-m", "freeze")
-    with pytest.raises(SystemExit, match="no decision"):  # the PI's go-ahead must be recorded
+    with pytest.raises(SystemExit, match="no committed decision"):  # must be recorded
         wp4.step_test(paths, settings, list(PERIODS), "fake", "D-998")
+    with pytest.raises(SystemExit, match="after the freeze"):  # recorded before the freeze
+        wp4.step_test(paths, settings, list(PERIODS), "fake", "D-997")
+    decisions.write_text(decisions.read_text() + "### D-999 WP4 test read: go-ahead (PI)\n")
+    with pytest.raises(SystemExit, match="no committed decision"):  # written, not committed
+        wp4.step_test(paths, settings, list(PERIODS), "fake", "D-999")
+    _git(repo, "add", "docs/decisions.md")
+    _git(repo, "commit", "-q", "-m", "go-ahead")
     wp4.step_test(paths, settings, list(PERIODS), "fake", "D-999")
     result = json.loads((wp4.REPORTS / "primary.json").read_text())
     assert len(result["comparisons"]) == 8
@@ -144,6 +151,16 @@ def test_wp4_plans_freeze_and_reads_the_test_years_once(driver):
     for kind in ("validation", "test"):
         for period in PERIODS:
             assert (paths.results_dir / "wp4" / kind / f"{period}.npz").exists()
+    for period in PERIODS:  # what the secondary analyses need was saved, and replays (D-087)
+        saved = wp4_test.load(paths.results_dir / "wp4" / "test" / f"{period}.npz")
+        assert set(saved.decisions) == set(saved.series)
+        assert set(saved.market) == set(INSTRUMENTS)
+        wp4_test.check_replay(saved, atol=1e-7)  # float32 on disk
     (wp4.REPORTS / "primary.json").unlink()  # even with the result gone, the claim holds
-    with pytest.raises(FreezeError, match="already been claimed"):
+    with pytest.raises(SystemExit, match="claimed"):
+        wp4.step_test(paths, settings, list(PERIODS), "fake", "D-999")
+    _git(repo, "add", wp4.CLAIM)  # committed on one Mac, absent on the other (D-055)
+    _git(repo, "commit", "-q", "-m", "claim")
+    (repo / wp4.CLAIM).unlink()
+    with pytest.raises(SystemExit, match="claimed"):
         wp4.step_test(paths, settings, list(PERIODS), "fake", "D-999")

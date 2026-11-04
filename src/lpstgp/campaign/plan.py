@@ -7,9 +7,14 @@ import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from functools import cache
 from pathlib import Path
 from typing import Any
+
+import numpy as np
+import pandas as pd
+import pyarrow.parquet as pq
 
 from lpstgp.config import REPO_ROOT, Paths
 from lpstgp.data.tier_a import git_revision
@@ -84,9 +89,45 @@ def _file_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else ""
 
 
+# Build provenance in a processed file's metadata: it changes on every rebuild or download and
+# does not change a row (the rows and the rest of the metadata are digested).
+PROVENANCE_META = ("built_at_utc", "code_version", "raw_files", "design_end")
+
+
+@cache
+def digest_horizon() -> date:
+    """Data are digested up to (excluding) PC's test start: every row a modelling read or a
+    P01..P18 test read can reach. Bars added later (PC's test year, D-075) leave every digest of
+    WP3 and WP4 unchanged; any change to an earlier row or to the metadata changes it (D-087)."""
+    from lpstgp.config import load_settings
+    from lpstgp.splits import post_cutoff_period
+
+    settings = load_settings()
+    pc = post_cutoff_period(settings)
+    return pc.test_start if pc is not None else settings["leakage"]["max_horizon"]
+
+
+def rows_digest(path: Path, horizon: date | None = None) -> str:
+    """Digest of a processed file's rows before ``horizon`` and its metadata (less provenance)."""
+    if not path.exists():
+        return ""
+    horizon = horizon or digest_horizon()
+    table = pq.read_table(path)
+    raw = (table.schema.metadata or {}).get(b"lpstgp")
+    meta = json.loads(raw) if raw else {}
+    frame = table.to_pandas(date_as_object=False)
+    frame = frame[frame["date"].to_numpy().astype("datetime64[D]") < np.datetime64(horizon)]
+    h = hashlib.sha256()
+    h.update(json.dumps({k: v for k, v in meta.items() if k not in PROVENANCE_META},
+                        sort_keys=True, default=str).encode())  # fmt: skip
+    h.update(json.dumps([(c, str(frame[c].dtype)) for c in frame.columns]).encode())
+    h.update(pd.util.hash_pandas_object(frame, index=False).to_numpy().tobytes())
+    return h.hexdigest()
+
+
 def data_digest(paths: Paths, instruments: Sequence[str], tier: str = "A") -> dict[str, str]:
     processed = paths.tier_dir(tier) / "processed"
-    return {name: _file_digest(processed / f"{name}.parquet") for name in sorted(instruments)}
+    return {name: rows_digest(processed / f"{name}.parquet") for name in sorted(instruments)}
 
 
 def source_digest(root: Path = SOURCE_ROOT) -> str:
@@ -108,11 +149,18 @@ def tier_digest(paths: Paths, tier: str = "A") -> str:
     """Digest of every processed file of a tier: the data any tool may read, including the
     development cohort of the LLM's ``describe`` tool, not only a campaign's instruments (D-081)."""
     processed = paths.tier_dir(tier) / "processed"
-    return digest({p.name: _file_digest(p) for p in sorted(processed.glob("*.parquet"))})
+    return digest({p.name: rows_digest(p) for p in sorted(processed.glob("*.parquet"))})
+
+
+# Settings that guard or fetch data but do not change a result: ``[leakage]`` (refuses reads
+# only; PC's read raises its cap) and ``[data]`` (download range; the rows are digested). Left out
+# so that PC's test read does not invalidate PC's own records (D-087).
+NOT_RESULT_SETTINGS = ("leakage", "data")
 
 
 def settings_digest(settings: Mapping[str, Any]) -> str:
-    return digest(json.loads(json.dumps(settings, default=str)))
+    kept = {k: v for k, v in settings.items() if k not in NOT_RESULT_SETTINGS}
+    return digest(json.loads(json.dumps(kept, default=str)))
 
 
 def write_plan(
@@ -165,7 +213,7 @@ def write_plan(
     if old is not None and not changed:
         plan = old  # the same plan: left untouched (cluster jobs may be reading it)
     else:
-        if changed and any(out.parent.glob("tier*/*/*.json")):
+        if changed and any(any(out.parent.glob(f"tier*/*/*.{ext}")) for ext in ("json", "json.gz")):
             raise PlanExistsError(
                 f"{out} has run records and differs from the plan now requested in "
                 f"{', '.join(changed)}; move the campaign folder aside or use a new name"

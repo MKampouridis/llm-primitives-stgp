@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -71,15 +71,14 @@ def _net(entry, exit_, bars, start: int, cfg: FitnessConfig) -> Series:
     return bars.dates[start:], res.net[start:]
 
 
-def evaluate_on_test(
+def rule_signals(
     record: Mapping[str, Any],
     box: Sandbox,
-    cfg: FitnessConfig,
     frozen: Sequence[Frozen] = (),
-) -> dict[str, Series]:
-    """Daily net returns of one frozen rule on the test window of ``box`` (a TEST sandbox)."""
+) -> Iterator[tuple[str, Any, int, np.ndarray, np.ndarray]]:
+    """Per instrument of ``box``: (name, bars, first test-window bar, entry, exit signals) of one
+    frozen rule. Signals are causal over the whole sandbox; the rule starts flat at the window."""
     rule = rule_of(record)
-    out: dict[str, Series] = {}
     by_sid = {f.sid: f for f in frozen}
     if rule["kind"] == "gp":
         lib = build(resolve(rule["library"], frozen or None))
@@ -92,8 +91,20 @@ def evaluate_on_test(
             signals = (ev(entry), ev(exit_))
         else:
             signals = by_sid[rule["selected"][name]].strategy.run(bars.log_price, bars.log_return)
-        out[name] = _net(*signals, bars, start, cfg)
-    return out
+        yield name, bars, start, *signals
+
+
+def evaluate_on_test(
+    record: Mapping[str, Any],
+    box: Sandbox,
+    cfg: FitnessConfig,
+    frozen: Sequence[Frozen] = (),
+) -> dict[str, Series]:
+    """Daily net returns of one frozen rule on the test window of ``box`` (a TEST sandbox)."""
+    return {
+        name: _net(entry, exit_, bars, start, cfg)
+        for name, bars, start, entry, exit_ in rule_signals(record, box, frozen)
+    }
 
 
 def buy_and_hold(box: Sandbox, cfg: FitnessConfig) -> dict[str, Series]:

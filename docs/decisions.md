@@ -1078,3 +1078,29 @@ Built before any WP4 run, and rehearsed end to end on synthetic data (`tests/tes
   - It then evaluates every frozen rule on each period's **validation** year (the rehearsal, kept as the validation side of H3's gap), claims the read atomically (`reports/wp4/test_claim.json`), and opens each test year once through `Sandbox.open_frozen_test`. That entry admits only periods named in a committed manifest, never a pilot or DEV, and never a test year past the data cap, so PC cannot be read under these settings.
   - Every run's daily net returns per instrument are saved (`results/wp4/{validation,test}/<period>.npz`) before the primary analysis runs.
 - **Primary analysis** (`lpstgp.analysis.wp4`): concatenated equal-weight portfolios, and the eight one-sided paired stationary-bootstrap comparisons with one Holm family (D-078). The one-sided test (`one_sided_bootstrap`) centres the bootstrap distribution and shifts it to the margin, so a superiority test (margin 0) and H2a's non-inferiority test (margin −0.1) share one code path. Tested for direction and margin.
+
+### D-087 Fixes from an independent review of the WP4 M1 code — Decided (engineer, under D-042/D-061; 4 Nov 2026)
+A fresh Claude agent, given only the code and the review brief, reviewed `b4f4028..0708343` (the M1 commits that no one had yet reviewed). It made 8 findings. I confirmed each in the code, and each is fixed with a test. ChatGPT's external review then reviews the result, as planned. None of them had leaked any data, because no WP4 run or read has happened.
+1. **The single read kept too little (major).** Only net returns were saved, so the cost sweep, lag 1, turnover, the no-trade share and the random-entry null at each rule's trade count (§7) would have needed the test years again: the D-060 problem a second time.
+   - `wp4_test.evaluate_period` now also keeps each run's daily decisions (int8) and each instrument's daily simple returns and buy and sell cost rates over the window.
+   - `replay` recomputes net returns from these at any lag and cost multiplier. It is identical to the backtest engine (tested at lags 1 and 2 and at 0.5–3× costs).
+   - `check_replay` confirms, at the read itself, that the saved arrays reproduce every net series.
+2. **PC could not be frozen or read later without invalidating its own records (major).**
+   - Reading PC needs a later cap and PC's test-year bars in the tier-A files. Both changed digests that every PC record carries.
+   - Data digests (`rows_digest`) now cover each file's rows before PC's test start and its metadata less the build provenance (`built_at_utc`, `code_version`, `raw_files`, `design_end`). The settings digest leaves out `[leakage]` and `[data]`, which only refuse or fetch data.
+   - A revised earlier row, or changed metadata such as costs, still changes the digest (tested).
+   - PC's test-year data are downloaded only after M6. M7 adds its own digest of PC's test rows.
+3. **`open_pilot_test` could open a WP4 test year (major).** It checked a collection the caller passed, so P01 passed as its own "pilot" opened P01's test year. It now admits only periods whose id starts with PL.
+4. **Periods with shifted dates (minor).** `Sandbox.open` accepted a period with P01's id and its test start moved, which read P01's test year as "VALIDATE". The modelling store now carries the settings' named periods, and a sandbox opens only a period equal to its named one.
+   - `open_frozen_test` also requires a claim file matching the manifest's commit, so the one-read rule no longer lives only in the script.
+5. **The go-ahead and the claim (minor).**
+   - The go-ahead decision is read from `HEAD` and must be committed after the freeze manifest.
+   - A claim that is present, or was ever committed, refuses the read, so the other Mac (D-055) cannot read again.
+   - The script tells the operator to commit the claim at once.
+6. **`PlanExistsError` ignored compressed records (minor):** fixed.
+7. **A damaged compressed record crashed a slice (minor):** `zlib.error` now counts as an incomplete record, which is re-run.
+8. **Partial freezes and unchecked maintenance results (minor).**
+   - Freeze and test cover exactly P01–P18.
+   - `maintained_state` requires the last cycle record to carry the campaign's specification digest and to match the last row of its lineage.
+   - The freeze and the read rebuild every configuration from the maintenance campaign and refuse a plan whose configuration digests differ.
+

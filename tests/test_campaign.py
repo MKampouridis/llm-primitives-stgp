@@ -201,6 +201,7 @@ def test_compressed_records_execute_resume_and_collect(campaign_paths):
     import json
 
     from lpstgp.campaign.execute import plan_records
+    from lpstgp.campaign.plan import PlanExistsError
     from lpstgp.runner import read_record
 
     settings = load_settings()
@@ -220,8 +221,17 @@ def test_compressed_records_execute_resume_and_collect(campaign_paths):
     assert record == read_record(files[0])
     assert len(plan_records(plan_path, campaign_paths, settings)) == 2
     assert len(collect(plan_path)) == 2
-    files[0].write_bytes(files[0].read_bytes()[:40])  # a truncated record never counts
+    with pytest.raises(PlanExistsError):  # compressed records also protect the plan (D-087)
+        write_plan("gz", configs, [(("AAA",), "PL1")], 3, campaign_paths, settings,
+                   register=None, record_format="json.gz")  # fmt: skip
+    data = bytearray(files[1].read_bytes())
+    data[len(data) // 2] ^= 0xFF  # a damaged deflate stream counts as incomplete (D-087)
+    files[1].write_bytes(bytes(data))
+    with pytest.raises((ValueError, OSError)):
+        read_record(files[1])
     assert progress(plan_path, settings)["complete"] == 1
+    files[0].write_bytes(files[0].read_bytes()[:40])  # a truncated record never counts
+    assert progress(plan_path, settings)["complete"] == 0
     with pytest.raises(ValueError, match="record format"):
         write_plan("bad", configs, [(("AAA",), "PL1")], 1, campaign_paths, settings,
                    register=None, record_format="csv")  # fmt: skip

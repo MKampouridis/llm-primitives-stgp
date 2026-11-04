@@ -16,6 +16,7 @@ import resource
 import shutil
 import sys
 import time
+import zlib
 from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from concurrent.futures.process import BrokenProcessPool
@@ -225,8 +226,15 @@ def write_record(path: Path, record: Mapping[str, Any]) -> None:
 
 
 def read_record(path: Path) -> dict[str, Any]:
+    """A run record; a damaged one raises ``ValueError`` (or ``OSError``), so it counts as
+    incomplete and is run again (D-087)."""
     data = Path(path).read_bytes()
-    return json.loads(gzip.decompress(data) if Path(path).suffix == ".gz" else data)
+    if Path(path).suffix != ".gz":
+        return json.loads(data)
+    try:
+        return json.loads(gzip.decompress(data))
+    except zlib.error as exc:
+        raise ValueError(f"{path}: damaged compressed record") from exc
 
 
 def write_atomic_bytes(path: Path, data: bytes) -> None:

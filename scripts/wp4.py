@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -111,12 +112,27 @@ MAINTAINED = {"arm4grow": "4-grow", "arm4full": "4-full", "arm5": "5"}
 
 
 def maintained_state(paths, campaign: str, arm: str, period: str) -> dict:
-    """The library state and seed rules after a period's last maintenance cycle, L(p, C)."""
-    from lpstgp.maintenance.cycle import CYCLES
+    """The library state and seed rules after a period's last maintenance cycle, L(p, C): from a
+    cycle record made under the campaign's own specification, and the same as the last row of
+    the period's lineage, whose hash the freeze records (D-087)."""
+    from lpstgp.freeze import digest
+    from lpstgp.maintenance.cycle import CYCLES, ArmState
 
-    path = paths.results_dir / "wp3" / "maintenance" / campaign / arm / period / f"c{CYCLES}"
-    record = json.loads((path / "cycle.json").read_text())
-    return record["state_out"]
+    root = paths.results_dir / "wp3" / "maintenance" / campaign
+    record = json.loads((root / arm / period / f"c{CYCLES}" / "cycle.json").read_text())
+    spec = json.loads((root / "campaign.json").read_text())
+    if record.get("spec_digest") != digest(spec):
+        raise SystemExit(f"{arm} {period}: the last cycle was made under another specification")
+    lineage = json.loads((root / arm / period / "lineage.json").read_text())
+    last = lineage["cycles"][-1]
+    out = record["state_out"]
+    if (last["cycle"], last["state_out"], last["rules_out"]) != (
+        CYCLES,
+        out["state_id"],
+        ArmState.from_dict(out).batch_key,
+    ):
+        raise SystemExit(f"{arm} {period}: the lineage does not end on the last cycle's state")
+    return out
 
 
 def wp4_configs(paths, settings, period: str, maintenance: str | None) -> list[Config]:
@@ -172,6 +188,15 @@ def frozen_context(paths, settings, periods, maintenance: str) -> dict:
     }
     for period in periods:
         plan = load_plan(plan_path(paths, period))
+        # every configuration as M3 left it: a plan built from another maintenance run, or
+        # before M3 finished, is refused here (D-087)
+        expected = {
+            c.name: c.digest(settings) for c in wp4_configs(paths, settings, period, maintenance)
+        }
+        if expected != {k: c["digest"] for k, c in plan["configs"].items()}:
+            raise SystemExit(
+                f"{period}: the plan's configurations differ from maintenance {maintenance}"
+            )
         context[f"plan:{plan['campaign']}"] = {
             "settings_digest": plan["settings_digest"],
             "source_digest": plan["source_digest"],
@@ -226,12 +251,39 @@ def period_rules(paths, manifest, period: str) -> dict[str, str]:
     return rules
 
 
-def recorded_go_ahead(decision: str) -> None:
-    """The test read needs the PI's go-ahead, recorded as a decision first (CLAUDE.md rule 1)."""
-    text = (REPO_ROOT / "docs" / "decisions.md").read_text()
-    heading = [line for line in text.splitlines() if line.startswith(f"### {decision} ")]
+def _git_out(*args) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(REPO_ROOT), *args], capture_output=True, text=True)
+
+
+CLAIM = "reports/wp4/test_claim.json"
+
+
+def recorded_go_ahead(decision: str, manifest_commit: str) -> None:
+    """The test read needs the PI's go-ahead, recorded first (CLAUDE.md rule 1): a decision
+    titled with it, committed after the freeze manifest (D-087)."""
+    shown = _git_out("show", "HEAD:docs/decisions.md")
+    lines = shown.stdout.splitlines() if shown.returncode == 0 else []
+    heading = [line for line in lines if line.startswith(f"### {decision} ")]
     if not heading or "test read" not in heading[0].lower() or "PI" not in heading[0]:
-        raise SystemExit(f"{decision}: no decision titled with the PI's WP4 test read")
+        raise SystemExit(f"{decision}: no committed decision titled with the PI's WP4 test read")
+    added = _git_out(
+        "log", "--format=%H", "--reverse", "-S", heading[0], "--", "docs/decisions.md"
+    ).stdout.split()
+    if (
+        not added
+        or added[0] == manifest_commit
+        or _git_out("merge-base", "--is-ancestor", manifest_commit, added[0]).returncode != 0
+    ):
+        raise SystemExit(f"{decision}: the go-ahead must be committed after the freeze manifest")
+
+
+def never_claimed() -> None:
+    """A claim committed on either Mac (D-055) refuses the read for good, even if the file is
+    gone from this working tree."""
+    if (REPO_ROOT / CLAIM).exists() or _git_out(
+        "log", "--all", "--format=%H", "--", CLAIM
+    ).stdout.strip():
+        raise SystemExit(f"{CLAIM} exists or was committed: the WP4 test years have been claimed")
 
 
 def step_test(paths, settings, periods, maintenance: str, decision: str) -> None:
@@ -246,11 +298,12 @@ def step_test(paths, settings, periods, maintenance: str, decision: str) -> None
     from lpstgp.splits import Stage, all_periods
     from lpstgp.strategies import registry
 
-    recorded_go_ahead(decision)
     out_json = REPORTS / "primary.json"
     if out_json.exists():
         raise SystemExit(f"{out_json} exists: the WP4 test years have already been read")
     manifest = FreezeManifest.load_committed(REPORTS / "freeze_manifest.json", repo=REPO_ROOT)
+    recorded_go_ahead(decision, manifest.commit)
+    never_claimed()
     frozen_code = manifest.context["code_version"]
     current = frozen_context(paths, settings, periods, maintenance)
     manifest.check_context(current | {"code_version": frozen_code})
@@ -280,6 +333,7 @@ def step_test(paths, settings, periods, maintenance: str, decision: str) -> None
     for period in periods:
         box = Sandbox.open(store, by_id[period], Stage.VALIDATE, table[period], lmax)
         series = wp4_test.evaluate_period(wp4_test.as_test(box), validated[period], cfg, frozen)
+        wp4_test.check_replay(series)  # the saved arrays carry every secondary analysis (D-087)
         wp4_test.save(paths.results_dir / "wp4" / "validation" / f"{period}.npz", series)
         validation[period] = wp4_test.portfolios(series)
     arms = sorted(validation[periods[0]])
@@ -289,7 +343,8 @@ def step_test(paths, settings, periods, maintenance: str, decision: str) -> None
     )
     print("rehearsal on the validation years: complete")
     # 3. The claim, then the one read.
-    claim_test_read(REPORTS / "test_claim.json", manifest)
+    claim_test_read(REPO_ROOT / CLAIM, manifest)
+    print(f"claimed: commit {CLAIM} now, on this Mac, before anything else (D-087)")
     test, access = {}, {}
     for period in periods:
         box = Sandbox.open_frozen_test(
@@ -298,6 +353,7 @@ def step_test(paths, settings, periods, maintenance: str, decision: str) -> None
         )  # fmt: skip
         series = wp4_test.evaluate_period(box, validated[period], cfg, frozen)
         wp4_test.save(paths.results_dir / "wp4" / "test" / f"{period}.npz", series)
+        wp4_test.check_replay(series)
         test[period] = wp4_test.portfolios(series)
         access[period] = [{k: str(v) for k, v in asdict(r).items()} for r in box.access_log]
     concatenated = {
@@ -352,6 +408,8 @@ def main() -> None:
         step_eligibility(paths, settings)
     elif args.step in ("freeze", "test"):
         primary = [p for p in args.periods.split(",") if p != "PC"]  # PC is frozen on its own
+        if sorted(primary) != sorted(p for p in eligibility.WP4_PERIODS if p != "PC"):
+            raise SystemExit("freeze and test cover exactly P01-P18 (protocol_wp4 §6; D-087)")
         if args.step == "freeze":
             step_freeze(paths, settings, primary, args.maintenance)
         else:

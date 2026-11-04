@@ -138,6 +138,11 @@ def test_pilot_test_stage_needs_pilot_period_cap_and_committed_manifest(tmp_path
         )
     with pytest.raises(SealedPeriodError):  # the ordinary entry point stays sealed
         Sandbox.open(store, PL1, Stage.TEST, ["TST"], LMAX)
+    with pytest.raises(SealedPeriodError, match="pilot"):  # a WP4 period passed as a pilot
+        Sandbox.open_pilot_test(
+            store, PERIODS["P01"], ["TST"], LMAX, pilot_periods=[PERIODS["P01"]],
+            manifest=manifest,
+        )  # fmt: skip
 
 
 def test_freeze_manifest_must_be_committed_and_intact(tmp_path):
@@ -252,3 +257,48 @@ def test_the_test_read_can_be_claimed_only_once(tmp_path):
     assert json.loads(claim.read_text())["manifest_commit"] == manifest.commit
     with pytest.raises(FreezeError, match="already been claimed"):
         claim_test_read(claim, manifest)  # e.g. a rerun after a crash, or a second process
+
+
+def test_a_period_with_shifted_dates_is_refused_by_the_modelling_store(tmp_path):
+    """D-087: the settings' named periods only; P01 with its test start moved to its test end
+    would otherwise open P01's test year as 'VALIDATE'."""
+    from lpstgp.data.store import modelling_store
+    from lpstgp.splits import all_periods
+
+    _store(tmp_path, "s", _frame())
+    store = modelling_store(tmp_path / "s", SETTINGS)
+    p01 = all_periods(SETTINGS)["P01"]
+    Sandbox.open(store, p01, Stage.VALIDATE, ["TST"], LMAX)
+    shifted = replace(p01, test_start=p01.test_end)
+    with pytest.raises(SealedPeriodError, match="dates differ"):
+        Sandbox.open(store, shifted, Stage.VALIDATE, ["TST"], LMAX)
+
+
+def test_data_digests_ignore_later_bars_and_provenance_but_not_earlier_rows(tmp_path):
+    """D-087: PC's test year, added later, and a rebuild leave every digest unchanged."""
+    import pandas as pd
+    from tests.leakage.test_sandbox import META
+
+    from lpstgp.campaign.plan import digest_horizon, rows_digest
+    from lpstgp.data import schema
+
+    horizon = digest_horizon()
+    dates = pd.bdate_range("2020-01-01", "2027-06-30")
+    rng = np.random.default_rng(9)
+    close = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, len(dates))))
+    frame = pd.DataFrame({"date": dates, "close": close})
+    path = tmp_path / "X.parquet"
+
+    def write(f, **meta):
+        bars, _ = schema.normalise(f)
+        schema.write_parquet(bars, {**META, **meta}, path)
+        return rows_digest(path)
+
+    early = frame[frame["date"] < pd.Timestamp(horizon)]
+    base = write(early)
+    assert write(frame) == base  # bars from the horizon on are not digested
+    assert write(frame, built_at_utc="later", raw_files=[{"file": "x"}]) == base
+    assert write(frame, cost_bps=9.0) != base  # metadata that changes results
+    revised = frame.copy()
+    revised.loc[10, "close"] *= 1.01
+    assert write(revised) != base  # an earlier row revised

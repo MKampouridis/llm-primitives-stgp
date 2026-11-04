@@ -91,10 +91,11 @@ WP4 answers RQ1–RQ4 on the 18 walk-forward periods of tier A. It is the paper'
    - Before the freeze, records are checked only for completeness, current digests and code version. No test-stage figure exists yet, and validation results are not used to change anything.
 2. **M6 test read**, after the PI's go-ahead, recorded as a decision:
    - one pass over P01–P18 opens each period's TEST stage once, through a reader that refuses any rule not in the committed manifest;
-   - it writes the daily net returns of every frozen rule;
-   - a committed claim file then prevents a second read, as in WP2.
+   - it writes the daily net returns of every frozen rule, and with them each run's daily decisions and each instrument's daily returns and cost rates over the window, from which every secondary analysis of §7 that re-evaluates frozen rules (cost sweep, lag 1, turnover, no-trade share, the random-entry null) is recomputed without a second read (D-087);
+   - the go-ahead decision must be committed after the freeze manifest;
+   - a claim file, committed straight after the read, then prevents a second read on either Mac, as in WP2.
 3. **A rehearsal on the validation years** (§8 of WP2) runs the same code path on VALIDATE stages before the real read.
-4. **PC** has its own freeze (M7a) and read (M7b), once its data are final.
+4. **PC** has its own freeze (M7a) and read (M7b), once its data are final. Data digests cover only rows before PC's test start, and the settings digest leaves out `[leakage]` and `[data]`, so adding PC's test year and raising the cap for M7 does not invalidate any WP3 or WP4 record (D-087). M7's manifest adds its own digest of PC's test-year rows. Data for PC are downloaded only after M6.
 
 Nothing is tuned, re-run or re-selected after a test read. A defect found afterwards is reported, not fixed by re-running; this is why the external reviews come first (§10).
 
@@ -172,3 +173,4 @@ The plan puts WP4 at 15 Mar – 14 May 2027. Code and the runs study can start n
 
 - **3 Nov 2026, draft 0.1:** written (engineer, under D-042/D-061). Decisions D-075–D-079.
 - **3 Nov 2026, M2 (D-082):** the runs study gives 50 runs per configuration; §4 and §8 updated.
+- **4 Nov 2026 (D-087):** an independent review of the M1 code: the test read keeps what the secondary analyses need; data digests stop at PC's test start; tighter test-stage guards; §6 updated.

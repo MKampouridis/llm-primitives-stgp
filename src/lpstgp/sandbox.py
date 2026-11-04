@@ -17,6 +17,7 @@ records what it read (``access_log``) for the run record.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -116,8 +117,10 @@ class Sandbox:
         pilot_periods: Collection[Period],
         manifest: FreezeManifest,
     ) -> Sandbox:
-        """TEST stage of a pilot period, for evaluating rules frozen in a committed manifest."""
-        if period not in pilot_periods:
+        """TEST stage of a pilot period, for evaluating rules frozen in a committed manifest.
+        Only the pilots PL1 and PL2 (their test years are spent, D-060); never a WP4 period,
+        whatever ``pilot_periods`` the caller passes (D-087)."""
+        if period not in pilot_periods or not period.id.startswith("PL"):
             raise SealedPeriodError(f"{period.id}: only pilot periods have an open test stage")
         if store.max_horizon is None or period.test_end > store.max_horizon:
             raise SealedPeriodError(f"{period.id}: test year lies beyond the store's data cap")
@@ -154,6 +157,16 @@ class Sandbox:
             raise SealedPeriodError(f"{period.id}: no WP4 test read for this period")
         if store.max_horizon is None or period.test_end > store.max_horizon:
             raise SealedPeriodError(f"{period.id}: test year lies beyond the store's data cap")
+        claim = manifest.path.parent / "test_claim.json"
+        try:
+            claimed = json.loads(claim.read_text(encoding="utf-8")).get("manifest_commit")
+        except (OSError, ValueError):
+            claimed = None
+        if claimed != manifest.commit:
+            raise SealedPeriodError(
+                f"{period.id}: the test read must be claimed for this manifest first "
+                "(lpstgp.freeze.claim_test_read; D-087)"
+            )
         return cls._open(store, period, Stage.TEST, instruments, lookback_max)
 
     @classmethod
@@ -165,6 +178,12 @@ class Sandbox:
         instruments: Iterable[str],
         lookback_max: int,
     ) -> Sandbox:
+        named = getattr(store, "periods", None)
+        if named is not None and named.get(period.id) != period:
+            raise SealedPeriodError(
+                f"{period.id}: not the settings' period of that name (dates differ); a sandbox "
+                "opens only a named period (D-087)"
+            )
         allowed = getattr(store, "allowed_periods", None)
         if allowed is not None and period.id not in allowed:
             raise SealedPeriodError(
