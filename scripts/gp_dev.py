@@ -293,7 +293,7 @@ def main() -> None:
             text = e1_report(summary)
         else:  # with E1's 2-year pooled cells of the same pools and validation years
             same = {"PL1": "G1", "PL2": "G2", "P01": "G3"}
-            pools = {(tuple(sorted(i)), same[p]) for i, p in e1b_cells(paths, settings)}
+            pools = {(tuple(sorted(i)), p) for i, p in e1b_cells(paths, settings)}
             short = [r for r in e1_rows(paths.results_dir / "campaigns" / E1 / "tasks.json",
                                          paths, settings)
                      if r["data"] == "pooled" and (tuple(r["cell"][0].split("+")),

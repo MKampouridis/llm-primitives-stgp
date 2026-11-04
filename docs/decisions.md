@@ -1218,3 +1218,17 @@ E1 (D-091) showed that pooling halves the overfitting, but that evolution still 
 - **Pass marks: E1's, with one change fixed before any run.** With 4 cells, a Wilcoxon test over cells can never reach p < 0.05 (its smallest p is 1/16). The gain test (a) therefore runs **over runs**: each run's last-checkpoint validation Sharpe against its own generation 0, one-sided, p < 0.05, with a median gain of at least 0.10. Mark (b) stays the median over cells of Spearman's ρ, at least 0.10. The decision rule is E1's.
 - **Comparison.** E1's 2-year pooled cells for the same pools and validation years are reported alongside, under the same tests.
 - **Next.** If E1b passes, WP4's training windows would need lengthening, which departs from the research plan's 3-year training and goes to the PI. If it fails, the GP's role is rethought with the PI before WP4.
+
+### D-093 GP development E1b result: overfitting controlled, but no edge in long-only rules — Decided (engineer, under D-042/D-061; 4 Nov 2026)
+E1b ran as fixed in D-092: 80 runs, pooled, on 6-year windows (`reports/gpdev/e1b.md`). **No variant passes.** Under the decision rule, the GP's role is rethought with the PI before anything larger runs.
+
+| pooled, same pools and validation years | training Sharpe | validation, gen 0 | validation, last | gain (p, over runs) | ρ |
+|---|---:|---:|---:|---|---:|
+| 2c, 6-year training | 0.46 | 0.47 | 0.36 | −0.02 (0.54) | −0.07 |
+| TA, 6-year training | 0.45 | 0.42 | 0.50 | +0.03 (0.06) | −0.04 |
+| 2c, 2-year training (E1) | 1.51 | 0.67 | 0.59 | −0.03 (0.73) | −0.30 |
+| TA, 2-year training (E1) | 1.40 | 0.77 | 0.71 | −0.02 (0.61) | +0.32 |
+
+- **Long windows remove the overfitting.** With 6 years, the training Sharpe (0.45–0.46) is about what the rules then earn on the next year (0.36–0.50). The 2–3× gap of the 2-year runs, which sank the pilot's validation-to-test comparison, is gone.
+- **Long-only rules have little edge to find.** Once the training score is honest, it is about 0.45: below buy-and-hold on these instruments and years (median 0.86, D-090) and far below the PI's target. Evolution adds nothing over the random initial population, and the rules trade more (22–37 entries in 6 years) without validating better.
+- **Conclusion.** The remaining problem is edge, not overfitting. Long-only timing rules in these grammars find essentially nothing that holding the market does not already give. The simple benchmark that reached 1.31 (D-090) is long–short, volatility-targeted and diversified, and these runs had none of the three. That points to E2: long–short positions and volatility targeting, on pooled long-window training, against that benchmark. Whether to run E2 is for the PI to decide.
