@@ -1141,3 +1141,44 @@ ChatGPT confirmed D-088's findings 2–4 as fixed. It found finding 1 only partl
    - **What this means for WP4.** Nothing compares a value computed on CERES with one recomputed on the Mac. The freeze, its validation rehearsal (the validation side of H3) and the test read all evaluate on one machine. The GP runs on CERES are reproducible on CERES, since seeds and thread counts are fixed. A rounding-level difference between machines can at most flip a comparison that sits exactly on a threshold. It cannot make a rule depend on the future.
    - **Working practice from now on.** CI's result is checked after every push (`gh run list`), not assumed from the local run.
 
+
+### D-090 GP development before WP4: profitability target, long–short rules, and E1 — Decided (PI: target and long–short; engineer: diagnosis and E1 design, under D-042/D-061; 4 Nov 2026)
+**PI decisions (4 Nov 2026).**
+- **Target.** The paper must show strategies that are profitable, not only better than the other arms: portfolio Sharpe ratios of at least 1–1.5 net of costs, demonstrated at least in some markets.
+- **Long–short.** Rules may go short as well as long. This departs from the research plan's long-only rules (Method §3).
+- **Small, targeted steps.** Each step has a pass mark fixed in advance, and development stops early if one fails. No large-scale run until the GP clears the simplest benchmarks.
+- M3, M4 and WP4 protocol 1.0 wait until the GP is frozen. The code must be final before M3 (`source_digest`).
+
+**Diagnosis from existing records (no new runs; FIT and VALIDATE data only).** Sources: 3,400 single-instrument GP runs, the WP4 runs study (1,200 runs of arm 2c, six instruments, PL1 and PL2) and the WP2 go/no-go (2,200 GP runs, five arms, 22 instruments).
+- **Evolution does not generalise.**
+  - Over 70 generations, training fitness rises from 1.4–1.6 to 2.8, but the validation Sharpe of the best-fit rule stays put (runs study 0.56 → 0.55; go/no-go 0.65 → 0.62). The best rule of the random initial population validates as well as the evolved one.
+  - Across the runs of one cell, training Sharpe does not predict validation Sharpe (Spearman ρ −0.03 to −0.12); within a hall of fame, ρ is about 0.
+  - Selection on the validation year inflates the chosen rule's validation Sharpe (about 1.0–1.2, against 0.55–0.77 for the best-fit rule).
+  - Every arm behaves the same way, the TA GP included, so the cause is the GP set-up, not the primitives.
+- **Likely causes.**
+  - Too little evidence per search: one instrument, about 500 training bars, a median of 13 trades.
+  - A fitness that rewards being out of the market. The median exposure is 31%; days in cash have zero volatility, so a few calm rising stretches give a high half-year Sharpe.
+- **Trade count does not matter; exposure does.** The median validation Sharpe is 0.81 for 0–5 training trades and 0.55 for 26 or more. By training exposure, it is 0.44 below 15% and 1.13 above 70%. The validation years rose, so the exposure effect partly reflects market beta.
+- **Fixed benchmarks, Jul 1996 – Jun 2007.** These rules are not fitted. They use data before 2008-07-01 only, read through the DEV and PL2 VALIDATE sandboxes, with 2-bar lag and costs, as an equal-weight portfolio of the available instruments:
+  - buy-and-hold: Sharpe 1.17;
+  - buy-and-hold with 10% volatility targeting: 1.32;
+  - the 12-month time-series trend rule, long–short: 0.89;
+  - the same with volatility targeting: **1.31**, positive in 10 of 11 years and in both dot-com crash years (+0.48, +1.73).
+
+  A portfolio Sharpe above 1 is therefore reachable with simple long–short rules, and the volatility-targeted 12-month trend rule is the bar a GP must clear.
+
+**E1 (`scripts/gp_dev.py e1`, report `reports/gpdev/e1.md`).**
+- **Design.** A 2 × 2 design on arm 2c and the TA GP at WP2's calibrated budget, 10 runs per cell, under the current long-only rules:
+  - *Training data:* one instrument, or pooled over an asset class's instruments in the same period (the existing pooled fitness, the mean of the instruments' market parts).
+  - *Fitness:* the WP2 composite, or `objective = "sharpe_lcb"`, the 95% one-sided lower confidence bound on the annualised net Sharpe ratio over the scored window (Mertens' standard error, with skewness and kurtosis, as in the Probabilistic Sharpe Ratio). The no-trade rule, the minimum-activity rule and the size penalty apply as before. The new fields are left out of configuration digests at their defaults, so every earlier configuration keeps its digest.
+- **Data.** Validation years 2005–06 (PL1), 2006–07 (PL2) and 2007–08 (P01). All of them are before WP4's first test year, and no read reaches 2008-07-01. DEV is not used, because the LLM's whole strategies, the source of arm 2c's operators, were written on its years (D-036).
+  - The pilot test years 2006–08 were read once in WP2 and fall inside this window. The paper reports that the decision to revisit the GP followed the pilot result.
+  - Using P01's validation year for design is allowed (D-080) and touches no test year.
+- **Scale.** 69 single-instrument cells and 10 pooled cells: 3,160 runs, about 6 hours on the Mac. Every configuration enters the trial register.
+- **Pass marks, fixed before any E1 run.** Per (arm, data, fitness) variant:
+  - **(a) Evolution helps out of sample.** The median over cells of each cell's median gain in validation Sharpe (last checkpoint minus generation 0) is at least 0.10, and a one-sided Wilcoxon signed-rank test over cells gives p < 0.05.
+  - **(b) Training predicts validation.** The median over cells of Spearman's ρ (rank-0 training fitness against validation Sharpe, across the cell's runs) is at least 0.10.
+- **Decision rule.**
+  - A variant passes when it meets both marks. Arm 2c decides, and the TA GP corroborates.
+  - Of arm 2c's passing variants, the one with the highest median final validation Sharpe goes to E2: long–short rules and volatility-targeted positions, compared with the volatility-targeted 12-month trend rule on held-out development years.
+  - If no variant passes, development stops for a rethink before any larger run.

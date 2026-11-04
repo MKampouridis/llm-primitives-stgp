@@ -72,7 +72,7 @@ class Config:
             "library": self.library,
             "kind": self.kind,
             "gp": asdict(gp_cfg) if self.kind == "gp" else {},
-            "fitness": asdict(fit_cfg),
+            "fitness": _fitness_payload(fit_cfg),
             "lock": _file_digest(lock),
         }
         if uses_strategies:  # arms 2a-2c also use core operators (logic, glue, data)
@@ -83,6 +83,16 @@ class Config:
         if self.seed_rules:
             payload["seed_rules"] = [list(r) for r in self.seed_rules]
         return digest(payload)
+
+
+def _fitness_payload(fit_cfg: FitnessConfig) -> dict[str, Any]:
+    """The fitness settings, without fields added later at their defaults (D-090)."""
+    from lpstgp.gp.fitness import DIGEST_DEFAULTS
+
+    return {
+        k: v for k, v in asdict(fit_cfg).items()
+        if not (k in DIGEST_DEFAULTS and v == DIGEST_DEFAULTS[k])
+    }  # fmt: skip
 
 
 def _file_digest(path: Path) -> str:

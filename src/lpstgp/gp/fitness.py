@@ -12,6 +12,17 @@ across asset classes); TO_k is annualised one-way turnover; size_w is the weight
 trees (parameters, data terminals and type constructors weigh 0). A rule that never trades scores
 ``no_trade_value``. With several instruments (pooled fitness) the market part is averaged.
 The weights are placeholders, to be set on a named pilot period in WP2 and then frozen.
+
+``objective = "sharpe_lcb"`` (GP development, D-090) scores the market part instead as a lower
+confidence bound on the annualised net Sharpe ratio over the whole scored window,
+
+    LCB = sqrt(P) * (SR - z * sqrt((1 - g3 * SR + (g4 - 1) / 4 * SR^2) / (n - 1)))
+
+with SR, g3 and g4 the daily Sharpe ratio, skewness and (non-excess) kurtosis of the n daily net
+returns and P bars a year (the standard error of Mertens 2002, as in the Probabilistic Sharpe
+Ratio of Bailey and Lopez de Prado 2012). Few trades, few bars in the market and lumpy, lottery-
+like returns all widen the margin, so a rule scores highly only when its profit is unlikely to be
+luck. The no-trade and minimum-activity rules and the size penalty apply as before.
 """
 
 from __future__ import annotations
@@ -43,6 +54,32 @@ class FitnessConfig:
     # Minimum activity (D-041): fewer entries than ceil(rate x years of the scored window) scores
     # as no trade, so a fit cannot rest on one or two lucky trades. 0 disables the rule.
     min_entries_per_year: float = 2.0  # protocol §5 (D-041)
+    # GP development (D-090): "composite" (above) or "sharpe_lcb"; z of the one-sided bound.
+    objective: str = "composite"
+    lcb_z: float = 1.645
+
+    def __post_init__(self) -> None:
+        if self.objective not in OBJECTIVES:
+            raise ValueError(f"fitness objective {self.objective!r} is not one of {OBJECTIVES}")
+
+
+OBJECTIVES = ("composite", "sharpe_lcb")
+# Fields added after WP2: left out of configuration digests at their defaults (D-084, D-090).
+DIGEST_DEFAULTS = {"objective": "composite", "lcb_z": 1.645}
+
+
+def sharpe_lcb(net: np.ndarray, periods_per_year: int, z: float) -> float:
+    """Annualised lower confidence bound of the Sharpe ratio of daily returns ``net``."""
+    x = np.asarray(net, dtype=np.float64)
+    n = len(x)
+    sd = float(x.std())
+    if n < 3 or sd == 0.0:
+        return 0.0
+    sr = float(x.mean()) / sd
+    centred = (x - x.mean()) / sd
+    skew, kurt = float(np.mean(centred**3)), float(np.mean(centred**4))
+    var = max(1.0 - skew * sr + (kurt - 1.0) / 4.0 * sr * sr, 0.0) / (n - 1)
+    return float(np.sqrt(periods_per_year) * (sr - z * np.sqrt(var)))
 
 
 def add_months(day: date, months: int) -> date:
@@ -169,6 +206,10 @@ def market_part(
     if entries < required:  # it trades, but too rarely: scored as no trade, measured as it is
         components |= {"no_trade": True, "below_min_activity": True, "required_trades": required}
         return cfg.no_trade_value, components
+    if cfg.objective == "sharpe_lcb":
+        value = sharpe_lcb(net, data.periods_per_year, cfg.lcb_z)
+        components["sharpe_lcb"] = value
+        return value, components
     value = median_sharpe - cfg.lambda_drawdown * median_dd - cfg.lambda_turnover * median_to
     return value, components
 
