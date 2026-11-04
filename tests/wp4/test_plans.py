@@ -24,7 +24,9 @@ def fake_cycle_end(root, arm, period, out, cycles=3):
         spec_path.parent.mkdir(parents=True, exist_ok=True)
         spec_path.write_text(json.dumps({"campaign": root.name}))
     spec = json.loads(spec_path.read_text())
-    sys.modules["wp4"]._SPECS[root.name] = spec  # stands in for M3's design specification
+    # stands in for M3's design specification, in whichever copy of the script is loaded
+    for module in {wp4, sys.modules.get("wp4")} - {None}:
+        module._SPECS[root.name] = spec
     d = root / arm / period / f"c{cycles}"
     d.mkdir(parents=True)
     (d / "cycle.json").write_text(json.dumps({"state_out": out, "spec_digest": digest(spec)}))
