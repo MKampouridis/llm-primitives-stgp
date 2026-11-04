@@ -1112,6 +1112,7 @@ ChatGPT reviewed `a14de9e` with D-075–D-087 and made four findings. Each is co
    - Aliases may not be private or dunder names.
    - Modules that the libraries re-export and that reach files, processes or the interpreter (`os`, `sys`, `subprocess`, `ctypes`, `pickle`, `io`, `testing` and others) are refused as attributes too.
    - All 2,822 stored LLM-written files have the same verdict under the old and the new policy, so no admitted or frozen file used the gap.
+   - *Only partly resolved:* a name that exists was still enough, and `typing.get_type_hints` evaluates string annotations. D-089 closes it.
 2. **The test driver held every full record in memory (P1).** About 248,000 decompressed GP records, at around 180 KB each in Python, came to tens of GB.
    - `iter_plan_records` now streams the records.
    - Freeze and test keep only `pilot.slim(record)`: the campaign metadata, the instruments and the selected rule, about 1 KB. `slim` asserts that the rule hash is unchanged.
@@ -1121,4 +1122,22 @@ ChatGPT reviewed `a14de9e` with D-075–D-087 and made four findings. Each is co
 4. **Freeze checked configurations, not coverage (P2).**
    - `plan_tasks` (factored out of `write_plan`) gives the prescribed task list: every configuration × every eligible instrument × runs 1–50 (arm 1 once), with paired seeds and unique ids.
    - Freeze and test refuse a plan whose tasks differ from it in any way. Every task must then have a complete record (`iter_plan_records`), so no portfolio can average over an incomplete design.
+
+### D-089 Fixes from ChatGPT's re-check of D-088 (`3ac2a72`), and CI red since `a26adcf` — Decided (engineer, under D-042/D-061; 4 Nov 2026)
+ChatGPT confirmed D-088's findings 2–4 as fixed. It found finding 1 only partly fixed, and found one new CI failure. Both are confirmed and fixed with tests. Reading the CI logs then showed a second, older CI failure, which is also fixed here.
+1. **Accepted `typing` functions still reached the interpreter (P1).**
+   - `from typing import get_type_hints` passed, because a public name that exists was enough. `get_type_hints` evaluates string annotations: `value: "__import__('builtins').open"` gave back the builtin `open`. Complete frozen strategy and operator modules carrying this probe passed the policy.
+   - `typing` and `collections.abc` now give only an explicit list of names (`EXPLICIT_EXPORTS`): annotation constructs and abstract base classes, none of which evaluates a string. The list applies to `from` imports and to attribute access through any alias (`import typing as t; t.get_type_hints`).
+   - `get_type_hints`, `ForwardRef`, `evaluate_forward_ref`, `get_annotations` and `TypeAliasType` are refused as attributes everywhere.
+   - `import scipy.stats` binds `scipy`, and `import collections.abc` binds `collections`. Attribute chains on such a name must stay within an allowed module, so `collections.namedtuple` and `scipy.LowLevelCallable` are refused.
+   - **Systematic check.** A new test walks every attribute path that the policy admits, three levels deep, from each allowed library and each listed `typing` name. It finds no builtin that opens files or evaluates strings, no import machinery and no process module. A planted `get_type_hints` is caught. Before the fix, numpy, scipy, math and `collections.abc` were already clean at depth 3; the gap was `typing` alone.
+   - All 2,834 stored LLM-written files (2,814 admitted, 20 refused) have the same verdict under the `3ac2a72` policy and this one. None used the gap, and none of their imports is lost.
+2. **A D-088 test needed `config/paths.toml` (P2).** `expected_maintenance_spec` builds a real `Cycle`, which loads the machine paths, and CI has no such file. The test now runs under temporary paths, and it passes with `config/paths.toml` moved aside. The whole CI suite (1,421 tests) also passes locally without that file.
+3. **CI has been red since `a26adcf` (3 Nov), and the engineer had not noticed.**
+   - **What ran.** The pre-commit checks ran on the Mac, where everything passes; the GitHub results were not looked at.
+   - **What failed.** On CI's Linux runner, four frozen arm-3 operators (`gaussian_projection_divergence`, `monotone_rearrangement_index`, `dominant_cycle_phase`, `tsallis_q_index`) failed the bit-exact prefix-invariance check of the frozen-library regression test. `dfa_exponent` also failed the 2 s runtime limit (2.10 s).
+   - **Why this is rounding, not look-ahead.** These operators compute through matrix products. On Linux, NumPy uses OpenBLAS, where the last bits of one row's result can depend on how many rows are multiplied together. On macOS, NumPy uses Apple's BLAS. The authoring gates ran there, and the same check passes bit-exactly on every run. A future bar that leaked into a past value would change it on macOS too, and the gate's adversarial tails change any dependent value by far more than rounding.
+   - **The fix.** The regression test stays bit-exact on macOS. Elsewhere it allows `1e-9` (relative and absolute) and skips the runtime limit, which is the authoring machine's and not a property of the operator. The authoring and maintenance gates themselves are unchanged and stay exact; they run on the Mac.
+   - **What this means for WP4.** Nothing compares a value computed on CERES with one recomputed on the Mac. The freeze, its validation rehearsal (the validation side of H3) and the test read all evaluate on one machine. The GP runs on CERES are reproducible on CERES, since seeds and thread counts are fixed. A rounding-level difference between machines can at most flip a comparison that sits exactly on a threshold. It cannot make a rule depend on the future.
+   - **Working practice from now on.** CI's result is checked after every push (`gh run list`), not assumed from the local run.
 

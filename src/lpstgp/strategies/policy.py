@@ -89,6 +89,24 @@ INTROSPECTION_ATTRS = {
     # modules re-exported by an allowed library that reach files, processes or the interpreter
     "os", "sys", "subprocess", "shutil", "pathlib", "ctypes", "pickle", "socket", "f2py",
     "distutils", "testing", "compat", "io",
+    # string evaluation: ``get_type_hints`` evaluates annotations such as
+    # ``"__import__('builtins').open"`` (D-089, ChatGPT's re-check of D-088)
+    "get_type_hints", "ForwardRef", "evaluate_forward_ref", "get_annotations", "TypeAliasType",
+}  # fmt: skip
+# The only names an LLM module may take from ``typing`` and ``collections.abc``, by ``from``
+# import or by attribute: annotation constructs and abstract base classes, none of which evaluates
+# a string or reaches the interpreter (D-089). Everything else of these two modules is refused.
+EXPLICIT_EXPORTS = {
+    "typing": frozenset({
+        "Any", "Callable", "ClassVar", "Dict", "Final", "FrozenSet", "Iterable", "Iterator",
+        "List", "Literal", "Mapping", "MutableMapping", "MutableSequence", "Optional",
+        "Sequence", "Set", "Tuple", "TypeAlias", "Union",
+    }),
+    "collections.abc": frozenset({
+        "Callable", "Collection", "Container", "Hashable", "ItemsView", "Iterable", "Iterator",
+        "KeysView", "Mapping", "MappingView", "MutableMapping", "MutableSequence", "MutableSet",
+        "Reversible", "Sequence", "Set", "Sized", "ValuesView",
+    }),
 }  # fmt: skip
 CONTRACT_MODULES = {
     "strategy_api": "lpstgp.strategies.api",
@@ -139,6 +157,8 @@ def _importable(module: str, name: str, allowed: tuple[str, ...]) -> bool:
 
     if module == "__future__":
         return name == "annotations"
+    if module in EXPLICIT_EXPORTS:
+        return name in EXPLICIT_EXPORTS[module]
     if _bad_name(name):
         return False
     try:
@@ -155,6 +175,17 @@ def _importable(module: str, name: str, allowed: tuple[str, ...]) -> bool:
     return True
 
 
+def _dotted(node: ast.AST) -> str | None:
+    """``a.b.c`` for an attribute chain on a plain name (the outermost node only)."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not parts or not isinstance(node, ast.Name):
+        return None
+    return ".".join([node.id, *reversed(parts)])
+
+
 def check_strategy_source(source: str) -> list[str]:
     """Problems with a strategy module's source; an empty list means admissible."""
     return check_llm_source(source, "strategy_api", "STRATEGY", "Strategy")
@@ -169,8 +200,35 @@ def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str
     except SyntaxError as exc:
         return [f"does not compile: {exc}"]
     problems: list[str] = []
+    explicit = {  # local name -> module: ``import typing``, ``import collections.abc as c``
+        alias.asname or alias.name: alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.name in EXPLICIT_EXPORTS
+    }
+    packages = {  # ``import scipy.stats`` binds ``scipy``: only its allowed submodules follow
+        alias.name.split(".")[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+        if alias.asname is None and "." in alias.name
+    } - set(allowed)
     for node in ast.walk(tree):
         line = getattr(node, "lineno", 0)
+        dotted = _dotted(node)
+        for local, module in explicit.items():
+            if dotted and dotted.startswith(local + "."):
+                name = dotted[len(local) + 1 :].split(".")[0]
+                if name not in EXPLICIT_EXPORTS[module]:
+                    problems.append(f"line {line}: {module}.{name} is not allowed")
+        if dotted and dotted.split(".")[0] in packages:
+            parts = dotted.split(".")
+            heads = (".".join(parts[:k]) for k in range(2, len(parts) + 1))
+            if not any(_allowed(h, allowed) for h in heads) and not any(
+                a.startswith(dotted + ".") for a in allowed
+            ):
+                problems.append(f"line {line}: {dotted} is not an allowed module")
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if (

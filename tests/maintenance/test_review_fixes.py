@@ -2,6 +2,7 @@
 
 import json
 import threading
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -304,3 +305,112 @@ def test_a_slim_record_keeps_the_rule_and_little_else():
         "library": {"strategies_lock": "L"}, "selection": {"SPX": {"selected": "s01", "f": 2}},
     }  # fmt: skip
     assert pilot.rule_hash(pilot.slim(select)) == pilot.rule_hash(select)
+
+
+# --- ChatGPT's re-check of D-088 (D-089) ---------------------------------------------------
+
+PROBE = (
+    "\nclass Probe:\n    value: \"__import__('builtins').open\"\n\n"
+    "reader = {call}(Probe)['value']\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("imports", "call"),
+    [
+        ("from typing import get_type_hints", "get_type_hints"),
+        ("import typing", "typing.get_type_hints"),
+        ("import typing as t", "t.get_type_hints"),
+        ("from typing import ForwardRef", "ForwardRef"),
+        ("import collections.abc", "collections.namedtuple"),
+        ("import scipy.stats", "scipy.LowLevelCallable"),
+    ],
+)
+def test_string_evaluation_is_refused_in_frozen_modules(imports, call):
+    """ChatGPT's probe appended to a real frozen strategy and a real frozen operator."""
+    from lpstgp.authoring.loader import check_source
+    from lpstgp.strategies.policy import check_strategy_source
+
+    root = Path(__file__).resolve().parents[2] / "src" / "lpstgp"
+    strategy = (root / "strategies" / "generated" / "fractal" / "s17__v1.py").read_text()
+    operator = root / "authoring" / "generated" / "arm3" / "fractal" / "dfa_exponent__v1.py"
+    probe = f"{imports}\n{PROBE.format(call=call)}"
+    assert check_strategy_source(strategy) == []
+    assert check_source(operator.read_text()) == []
+    assert check_strategy_source(strategy + probe)
+    assert check_source(operator.read_text() + probe)
+
+
+def test_typing_and_collections_abc_give_only_their_listed_names():
+    from lpstgp.strategies.policy import check_llm_source
+
+    def check(body):
+        return check_llm_source(f"{body}\nOPERATOR = 1\n", "operator_api", "OPERATOR", "Operator")
+
+    assert check("from typing import Any, Optional\nimport typing\nx: typing.Sequence = ()") == []
+    assert check("import collections.abc as c\nx: c.Mapping = {}\nimport scipy.stats") == []
+    assert check("import scipy.stats\ny = scipy.stats.rankdata\nz = scipy.special.ndtr") == []
+    assert check("from typing import cast")
+    assert check("import typing\nx = typing.TYPE_CHECKING")
+    assert check("from collections.abc import sys")
+
+
+@pytest.mark.slow
+def test_nothing_reaches_the_interpreter_through_the_allowed_libraries():
+    """Every attribute path the policy admits, three levels deep from each allowed library
+    and each listed typing name, avoids builtins that open files or evaluate strings, the
+    import machinery and the process modules (D-088, D-089)."""
+    import builtins
+    import importlib
+    import inspect
+    import io
+    import os
+    import types
+    import typing
+    import warnings
+
+    from lpstgp.strategies import policy
+
+    banned = {getattr(builtins, n) for n in sorted(policy.FORBIDDEN_NAMES - {"__builtins__"})}
+    banned |= {typing.get_type_hints, typing.ForwardRef, importlib.import_module,
+               inspect.currentframe, io.open, os.system, os.popen}  # fmt: skip
+    banned_ids = {id(b) for b in banned}
+    modules = {"os", "sys", "subprocess", "builtins", "importlib", "inspect", "io", "pathlib",
+               "ctypes", "pickle", "socket", "shutil", "typing", "runpy", "code", "pydoc",
+               "tempfile", "threading", "multiprocessing", "signal"}  # fmt: skip
+    hits, seen = [], set()
+
+    def walk(obj, path, depth):
+        if id(obj) in banned_ids:
+            hits.append(path)
+            return
+        if isinstance(obj, types.ModuleType) and obj.__name__.split(".")[0] in modules:
+            hits.append(f"{path} -> {obj.__name__}")
+            return
+        if depth == 0 or id(obj) in seen:
+            return
+        seen.add(id(obj))
+        try:
+            names = dir(obj)
+        except Exception:
+            return
+        for name in names:
+            if policy._bad_name(name):
+                continue
+            try:
+                value = getattr(obj, name)
+            except Exception:
+                continue
+            walk(value, f"{path}.{name}", depth - 1)
+
+    roots = {m: importlib.import_module(m) for m in policy.COMMON_IMPORTS
+             if m not in ("__future__", *policy.EXPLICIT_EXPORTS)}  # fmt: skip
+    for module, names in policy.EXPLICIT_EXPORTS.items():
+        for name in names:
+            roots[f"{module}.{name}"] = getattr(importlib.import_module(module), name)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for path, obj in roots.items():
+            seen.clear()
+            walk(obj, path, 3)
+    assert not hits, hits[:20]

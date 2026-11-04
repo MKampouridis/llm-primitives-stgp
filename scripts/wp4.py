@@ -259,8 +259,11 @@ def step_freeze(paths, settings, periods, maintenance: str) -> None:
     from lpstgp.campaign.execute import iter_plan_records
     from lpstgp.freeze import digest, write_manifest
 
-    if wp2_pilot.source_changed_since("HEAD"):
-        raise SystemExit("commit the code first: the manifest records the code revision")
+    if changed := wp2_pilot.source_changed_since("HEAD"):
+        raise SystemExit(
+            "commit the code first: the manifest records the code revision "
+            f"({', '.join(changed[:5])}{' ...' if len(changed) > 5 else ''})"
+        )
     out_dir = paths.results_dir / FREEZE_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     digests = {}

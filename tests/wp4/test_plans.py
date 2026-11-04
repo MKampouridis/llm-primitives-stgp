@@ -102,18 +102,25 @@ def test_a_maintenance_campaign_under_another_design_is_refused(tmp_path):
         wp4.maintained_state(paths, "stale", "4-full", "P03")
 
 
-def test_the_expected_maintenance_specification_is_maintain_py_wp4s():
+def test_the_expected_maintenance_specification_is_maintain_py_wp4s(tmp_path, monkeypatch):
+    """Runs on a clean checkout (no ``config/paths.toml``, no data): temporary paths (D-089)."""
+    from lpstgp.config import load_paths
     from lpstgp.maintenance import cycle
 
+    paths_file = tmp_path / "paths.toml"
+    paths_file.write_text(
+        f'data_dir = "{tmp_path / "data"}"\nresults_dir = "{tmp_path / "results"}"\n'
+        f'reports_dir = "{tmp_path / "reports"}"\ncache_dir = "{tmp_path / "cache"}"\n'
+    )
+    monkeypatch.setenv("LPSTGP_PATHS", str(paths_file))
     spec = wp4.expected_maintenance_spec("pytest-never-written")
     assert [p["id"] for p in spec["periods"]] == [*(f"P{k:02d}" for k in range(1, 19)), "PC"]
     assert spec["runs"] == cycle.RUNS_PER_INSTRUMENT
     assert spec["cycles"] == cycle.CYCLES
     table = json.loads((REPO_ROOT / "reports" / "wp4" / "eligibility.json").read_text())
     assert spec["instruments"] == table["eligible"]
-    from lpstgp.config import load_paths
-
     assert not (load_paths().results_dir / "wp3" / "maintenance" / "pytest-never-written").exists()
+    wp4._SPECS.pop("pytest-never-written")  # built under temporary paths: not for other tests
 
 
 def test_design_tasks_cover_every_instrument_run_and_seed(tmp_path):

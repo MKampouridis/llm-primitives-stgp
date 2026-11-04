@@ -1,7 +1,9 @@
 """The frozen arm-3 library: verbatim files under a lock, a separate named library (D-063)."""
 
 import shutil
+import sys
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 
@@ -65,5 +67,20 @@ def test_freezing_twice_is_refused():
 @pytest.mark.slow
 @pytest.mark.parametrize("spec", registry.load_library("arm3"), ids=lambda s: s.name)
 def test_frozen_operators_still_pass_the_synthetic_gates(spec):
-    failures = [r for r in gates.synthetic_gates(spec) if not r["passed"]]
+    """Bit-exact on macOS, where the gates admitted them (Apple's BLAS). Elsewhere (CI's Linux,
+    CERES: OpenBLAS) a matrix product's last bits can depend on how many rows are multiplied,
+    so past values may differ by rounding when bars are appended: allowed up to 1e-9, a million
+    times below any change an appended adversarial bar would make; the runtime limit is the
+    authoring machine's and is not re-checked on slower runners (D-089)."""
+    if sys.platform == "darwin":
+        failures = [r for r in gates.synthetic_gates(spec) if not r["passed"]]
+    else:
+        loose = replace(spec, tolerance=max(spec.tolerance, CROSS_PLATFORM_TOLERANCE))
+        failures = [
+            r for r in gates.synthetic_gates(loose)
+            if not r["passed"] and not r["check"].startswith("runtime")
+        ]  # fmt: skip
     assert not failures, failures
+
+
+CROSS_PLATFORM_TOLERANCE = 1e-9
