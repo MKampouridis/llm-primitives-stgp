@@ -1251,3 +1251,21 @@ E1b (D-093) showed that long windows remove the overfitting, but that long-only 
   - (c) The median over cells of (the cell's median final validation Sharpe minus the trend rule's) is at least 0.
   A variant passes on all three. Arm 2c decides and the TA GP corroborates.
 - **Outcomes.** If E2 passes, the design (long–short, sizing, pooled long-window training) goes to the PI for WP4. If it fails, GP evolution does not beat a simple trend rule here, and the paper's framing is discussed with the PI before WP4.
+
+### D-095 GP development E2 result: the fitness function excludes trend rules — Decided (engineer, under D-042/D-061; 4 Nov 2026)
+E2 ran as fixed in D-094: 80 runs (`reports/gpdev/e2.md`). **No variant passes.**
+- **Results.** The median final validation Sharpe is 0.08 for arm 2c and −0.01 for TA. The trend rule's median over cells is 0.81. Arm 2c trails it by 0.68 and TA by 0.55.
+  - TA's evolution gain passes (+0.16, p = 0.024), but its ρ does not (+0.05).
+  - Arm 2c's ρ passes (+0.37, the first positive in any experiment), but its gain does not.
+- **What the rules did.** The evolved rules are short-window volatility and quantile-regime conditions. In G3 they learnt a 70% net-long stance in 2001–07 and kept it into 2007–08 (equities −0.6). In G1 and G2 they were only −0.04 to +0.27 net long, and missed rising markets.
+- **Why: the fitness excludes trend rules.** Scored on the *training* years with E2's fitness, the trend rules and buy-and-hold come out as follows (mean over a cell's instruments):
+  - *12-month trend rule:* training Sharpe 0.53, 0.68, 0.91 and 0.31 becomes fitness 0.07, 0.16, −0.13 and 0.09.
+  - *50/200-day moving-average cross:* fitness −0.96, −1.00, −1.00 and −0.70.
+  - *Buy-and-hold:* fitness −1.00 everywhere.
+- **The two causes.**
+  1. *The minimum-activity rule (D-041).* At least 2 entries a year (12 over 6 years) scores slower rules as "no trade" (−1). It was meant to stop long-only rules scoring on a few lucky trades, which cannot happen to a rule that is always in the market.
+  2. *The composite.* The median half-year Sharpe, less a drawdown penalty, discounts returns that come in a few large moves, which is how trend rules earn.
+
+  Both were designed for 2-year, long-only training, and neither suits long–short rules on 6-year windows.
+- **Next (for the PI).** E3: E2 unchanged except the fitness, which becomes the full-window net Sharpe ratio of the volatility-targeted positions, with the minimum-activity rule off and the size penalty kept. Pass marks as E2's.
+- **A caution.** E1, E1b, E2 and an E3 would all use the same three validation years. Every configuration is in the trial register, and the WP4 test years stay the honest check. The number of further development iterations on these years should stay small.
