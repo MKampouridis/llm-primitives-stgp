@@ -1192,3 +1192,19 @@ ChatGPT confirmed D-088's findings 2–4 as fixed. It found finding 1 only partl
   - *Positive skew.* The `sharpe_lcb` docstring and the E1 text above say that lumpy, lottery-like returns widen the margin. That is only partly true: with SR > 0, positive skew *narrows* it (the −g3·SR term), so a few large wins raise the bound, and only fat tails and negative skew lower it. The unit test passed because kurtosis dominated in its constructed example. The docstring is corrected once E1 has finished, since a change to the package source would make the running plan stale.
   - *Per-trade bound.* The same Probabilistic Sharpe Ratio bound, computed on **per-trade** returns with a minimum number of trades, makes the evidence the number of independent bets. It was suggested by the PI's regime-fusion-gp analysis and goes on E2's candidate list if pooling passes E1.
   - *Against it, from our own records.* Trade count does not predict validation here: the median validation Sharpe is 0.81 for 0–5 training trades and 0.55 for 26 or more.
+
+### D-091 GP development E1 result: no variant passes — development stops for a rethink — Decided (engineer, under D-042/D-061; 4 Nov 2026)
+E1 ran as revised in D-090: 1,580 runs, composite fitness, arm 2c and the TA GP, 69 single-instrument and 10 pooled cells, with validation years 2005–06, 2006–07 and 2007–08 (`reports/gpdev/e1.md`). **No variant meets the pass marks**, so under D-090's rule nothing larger runs.
+
+| variant | training Sharpe | validation, gen 0 | validation, gen 70 | gain (p) | ρ(training, validation) |
+|---|---:|---:|---:|---|---:|
+| 2c pooled | 1.40 | 0.76 | 0.61 | −0.02 (0.81) | +0.09 |
+| 2c single | 2.35 | 0.42 | 0.42 | +0.03 (0.32) | +0.01 |
+| TA pooled | 1.32 | 0.75 | 0.66 | −0.03 (0.81) | +0.17 |
+| TA single | 2.14 | 0.56 | 0.51 | −0.07 (0.86) | +0.01 |
+
+- **Pooling halves the overfitting but does not make evolution useful.** Training Sharpe falls from 2.1–2.4 to 1.3–1.4. Validation Sharpe is higher (0.61–0.66 against 0.42–0.51). Training begins to predict validation weakly (ρ +0.09 and +0.17).
+- **Evolution itself hurts out of sample.** For pooled arm 2c, validation falls steadily with the generations while training fitness rises (0.76 → 0.68 → 0.63 → 0.61 at generations 0, 10, 30 and 70). The best rule of the random initial population is the best out of sample. The search finds structure in two years of ten instruments that does not recur in the following year.
+- **Still below the simple benchmarks.** Even the best figures (about 0.6–0.76, long-only) are below buy-and-hold on the same instruments and years (median per instrument 0.86, D-090).
+- **This agrees with the literature.** It matches the long-standing finding that GP-evolved technical rules seldom beat buy-and-hold out of sample after costs (e.g. Allen and Karjalainen 1999).
+- The `sharpe_lcb` docstring is corrected here (positive skew narrows the bound; D-090).

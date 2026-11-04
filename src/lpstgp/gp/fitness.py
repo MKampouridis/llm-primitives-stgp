@@ -20,9 +20,10 @@ confidence bound on the annualised net Sharpe ratio over the whole scored window
 
 with SR, g3 and g4 the daily Sharpe ratio, skewness and (non-excess) kurtosis of the n daily net
 returns and P bars a year (the standard error of Mertens 2002, as in the Probabilistic Sharpe
-Ratio of Bailey and Lopez de Prado 2012). Few trades, few bars in the market and lumpy, lottery-
-like returns all widen the margin, so a rule scores highly only when its profit is unlikely to be
-luck. The no-trade and minimum-activity rules and the size penalty apply as before.
+Ratio of Bailey and Lopez de Prado 2012). Fat tails and negative skew widen the margin; positive
+skew narrows it. On daily returns every rule of one window has the same n, so the bound is close
+to a constant shift of the Sharpe ratio and barely changes the ranking: it was not run in E1
+(D-090). The no-trade and minimum-activity rules and the size penalty apply as before.
 """
 
 from __future__ import annotations
