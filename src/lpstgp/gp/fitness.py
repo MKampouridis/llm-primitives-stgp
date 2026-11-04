@@ -55,7 +55,8 @@ class FitnessConfig:
     # Minimum activity (D-041): fewer entries than ceil(rate x years of the scored window) scores
     # as no trade, so a fit cannot rest on one or two lucky trades. 0 disables the rule.
     min_entries_per_year: float = 2.0  # protocol §5 (D-041)
-    # GP development (D-090): "composite" (above) or "sharpe_lcb"; z of the one-sided bound.
+    # GP development (D-090, D-096): "composite" (above), "sharpe_lcb" (z: the one-sided bound)
+    # or "sharpe", the net Sharpe ratio over the whole scored window.
     objective: str = "composite"
     lcb_z: float = 1.645
     # GP development E2 (D-094): "long_only" or "reverse" (stop-and-reverse long-short), and
@@ -71,7 +72,7 @@ class FitnessConfig:
             raise ValueError(f"position mode {self.position_mode!r} is not long_only or reverse")
 
 
-OBJECTIVES = ("composite", "sharpe_lcb")
+OBJECTIVES = ("composite", "sharpe_lcb", "sharpe")
 # Fields added after WP2: left out of configuration digests at their defaults (D-084, D-090).
 DIGEST_DEFAULTS = {
     "objective": "composite", "lcb_z": 1.645, "position_mode": "long_only", "vol_target": 0.0,
@@ -251,6 +252,8 @@ def market_part(
     if entries < required:  # it trades, but too rarely: scored as no trade, measured as it is
         components |= {"no_trade": True, "below_min_activity": True, "required_trades": required}
         return cfg.no_trade_value, components
+    if cfg.objective == "sharpe":
+        return components["sharpe"], components
     if cfg.objective == "sharpe_lcb":
         value = sharpe_lcb(net, data.periods_per_year, cfg.lcb_z)
         components["sharpe_lcb"] = value

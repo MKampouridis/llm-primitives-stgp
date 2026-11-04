@@ -45,7 +45,11 @@ E2 (D-094)  E1b's cells and periods with long-short stop-and-reverse positions s
       (c) the median over cells of (the cell's median validation Sharpe of the final rule minus
           the trend rule's validation Sharpe on that cell) is at least 0.
 
-Usage:  uv run python scripts/gp_dev.py e1|e1b|e2 --mode plan|run|report [--workers 6]
+E3 (D-096)  E2 with one change, the fitness: the net Sharpe ratio of the sized positions over
+    the whole training window (objective "sharpe"), the minimum-activity rule off, the size
+    penalty kept. E2's cells, runs, benchmark and pass marks.
+
+Usage:  uv run python scripts/gp_dev.py e1|e1b|e2|e3 --mode plan|run|report [--workers 6]
 """
 
 from __future__ import annotations
@@ -81,6 +85,9 @@ E2 = "gpdev-e2"
 E2_CONFIGS = ("e2-2c", "e2-TA")
 E2_FITNESS = {"position_mode": "reverse", "vol_target": 0.10}
 TREND_BARS = 252
+E3 = "gpdev-e3"
+E3_CONFIGS = ("e3-2c", "e3-TA")
+E3_FITNESS = {**E2_FITNESS, "objective": "sharpe", "min_entries_per_year": 0.0}
 
 
 def e1_configs(settings) -> list[Config]:
@@ -149,6 +156,21 @@ def e2_configs(settings) -> list[Config]:
                fitness=dict(E2_FITNESS))
         for arm, library in ARMS.items()
     ]  # fmt: skip
+
+
+def e3_configs(settings) -> list[Config]:
+    return [
+        Config(f"e3-{arm}", library, gp=wp4.gp_arm(f"e3-{arm}", library, settings).gp,
+               fitness=dict(E3_FITNESS))
+        for arm, library in ARMS.items()
+    ]  # fmt: skip
+
+
+def e3_plan(paths, settings) -> Path:
+    return write_plan(
+        E3, e3_configs(settings), e1b_cells(paths, settings), E1_RUNS, paths, settings,
+        record_format="json.gz",
+    )  # fmt: skip
 
 
 def e2_plan(paths, settings) -> Path:
@@ -352,16 +374,16 @@ def e1_report(summary: dict, title: str = "E1: one instrument or pooled (composi
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)  # fmt: skip
-    parser.add_argument("experiment", choices=["e1", "e1b", "e2"])
+    parser.add_argument("experiment", choices=["e1", "e1b", "e2", "e3"])
     parser.add_argument("--mode", choices=["plan", "run", "report"], required=True)
     parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
     name, configs = {"e1": (E1, RUN_CONFIGS), "e1b": (E1B, E1B_CONFIGS),
-                     "e2": (E2, E2_CONFIGS)}[args.experiment]  # fmt: skip
+                     "e2": (E2, E2_CONFIGS), "e3": (E3, E3_CONFIGS)}[args.experiment]  # fmt: skip
     plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
     if args.mode == "plan":
-        plan_path = {"e1": e1_plan, "e1b": e1b_plan, "e2": e2_plan}[args.experiment](
+        plan_path = {"e1": e1_plan, "e1b": e1b_plan, "e2": e2_plan, "e3": e3_plan}[args.experiment](
             paths, settings
         )
         plan = json.loads(plan_path.read_text())
@@ -373,15 +395,19 @@ def main() -> None:
         summary = e1_summary(e1_rows(plan_path, paths, settings, configs), gain_over=over)
         if args.experiment == "e1":
             text = e1_report(summary)
-        elif args.experiment == "e2":
+        elif args.experiment in ("e2", "e3"):
             rows = e1_rows(plan_path, paths, settings, configs)
             bench = benchmarks(paths, settings, e1b_cells(paths, settings))
             versus = e2_compare(rows, bench)
             for s_ in summary.values():
                 s_ |= versus[s_["config"]]
                 s_["passes"] = s_["passes"] and s_["pass_benchmark"]
-            text = e1_report(summary, "E2: long-short, volatility-targeted, pooled 6-year training",
-                             "runs", "D-094")  # fmt: skip
+            title = {
+                "e2": "E2: long-short, volatility-targeted, pooled 6-year training",
+                "e3": "E3: E2 with the full-window Sharpe fitness",
+            }[args.experiment]
+            text = e1_report(summary, title, "runs",
+                             {"e2": "D-094", "e3": "D-096"}[args.experiment])  # fmt: skip
             text += "\n| cell | trend rule | buy-and-hold |\n|---|---:|---:|\n" + "".join(
                 f"| {c[1]} {c[0][:30]} | {v['trend']:.2f} | {v['hold']:.2f} |\n"
                 for c, v in bench.items()

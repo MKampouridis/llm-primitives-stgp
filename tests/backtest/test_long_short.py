@@ -109,3 +109,18 @@ def test_new_position_settings_leave_earlier_digests_unchanged():
     assert e2.digest(settings) != plain.digest(settings)
     with pytest.raises(ValueError, match="position mode"):
         FitnessConfig(position_mode="short_only")
+
+
+def test_the_sharpe_objective_scores_slow_trend_rules_by_their_sharpe_ratio():
+    """E3 (D-096): a rule trading rarely is scored, not floored, once the activity rule is off."""
+    dates = pd.bdate_range("2002-01-01", periods=1100).to_numpy().astype("datetime64[D]")
+    lr = np.random.default_rng(4).normal(3e-4, 0.01, len(dates))
+    data = _scored(lr, dates)
+    entry = np.zeros(len(dates))
+    entry[data.active_from] = 1.0  # long once, held
+    cfg = FitnessConfig(position_mode="reverse", vol_target=0.10, objective="sharpe",
+                        min_entries_per_year=0.0)  # fmt: skip
+    value, parts = market_part(entry, np.zeros(len(dates)), data, cfg)
+    assert value == parts["sharpe"] != cfg.no_trade_value
+    floored = FitnessConfig(position_mode="reverse", vol_target=0.10, objective="sharpe")
+    assert market_part(entry, np.zeros(len(dates)), data, floored)[0] == floored.no_trade_value

@@ -80,7 +80,9 @@ def driver(tmp_path, monkeypatch):
     monkeypatch.setenv("LPSTGP_PATHS", str(paths_file))  # inherited by the spawned workers
     monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
     wp4 = importlib.import_module("wp4")
-    wp2 = importlib.import_module("wp2_pilot")
+    # the copy wp4 itself uses: another test may have replaced sys.modules["wp2_pilot"], and
+    # patching that copy left wp4's guard reading the real repository (fails when it is dirty)
+    wp2 = wp4.wp2_pilot
     monkeypatch.setattr(wp4, "REPO_ROOT", repo)
     monkeypatch.setattr(wp4, "REPORTS", reports)
     monkeypatch.setattr(wp4, "RUNS", 2)
