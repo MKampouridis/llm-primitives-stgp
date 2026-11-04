@@ -86,6 +86,9 @@ INTROSPECTION_ATTRS = {
     "modules", "argv", "environ", "stdin", "stdout", "stderr", "system", "popen", "spawn",
     "builtins", "inspect", "importlib", "import_module", "loader", "spec", "func_globals",
     "co_consts", "co_code", "mro", "subclasses",
+    # modules re-exported by an allowed library that reach files, processes or the interpreter
+    "os", "sys", "subprocess", "shutil", "pathlib", "ctypes", "pickle", "socket", "f2py",
+    "distutils", "testing", "compat", "io",
 }  # fmt: skip
 CONTRACT_MODULES = {
     "strategy_api": "lpstgp.strategies.api",
@@ -115,6 +118,43 @@ def _allowed(module: str, allowed: tuple[str, ...] = ALLOWED_IMPORTS) -> bool:
     return any(module == a or module.startswith(a + ".") for a in allowed)
 
 
+def _bad_name(name: str) -> bool:
+    """A name an LLM module may never bind or import: private or dunder (``__builtins__``),
+    or one of the forbidden names, attributes or introspection hooks."""
+    return (
+        name == "*"
+        or name.startswith("_")
+        or name in FORBIDDEN_NAMES
+        or name in FORBIDDEN_ATTRS
+        or name in INTROSPECTION_ATTRS
+    )
+
+
+def _importable(module: str, name: str, allowed: tuple[str, ...]) -> bool:
+    """``from module import name`` is allowed only for a public name the trusted library really
+    has, and a module only if it is itself an allowed import (D-088: an allowlist, not a
+    blocklist; ``from numpy import __builtins__`` reached ``open``)."""
+    import importlib
+    import types
+
+    if module == "__future__":
+        return name == "annotations"
+    if _bad_name(name):
+        return False
+    try:
+        value = getattr(importlib.import_module(module), name)
+    except (ImportError, AttributeError):
+        try:  # a submodule not yet imported as an attribute
+            value = importlib.import_module(f"{module}.{name}")
+        except ImportError:
+            return False
+    if isinstance(value, types.ModuleType):
+        return _allowed(value.__name__, allowed) and not any(
+            _bad_name(part) for part in value.__name__.split(".")
+        )
+    return True
+
+
 def check_strategy_source(source: str) -> list[str]:
     """Problems with a strategy module's source; an empty list means admissible."""
     return check_llm_source(source, "strategy_api", "STRATEGY", "Strategy")
@@ -137,6 +177,7 @@ def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str
                     not _allowed(alias.name, allowed)
                     or alias.name.startswith("numpy.")
                     or alias.name == api  # the contract only through ``from api import name``
+                    or (alias.asname is not None and _bad_name(alias.asname))
                 ):
                     problems.append(f"line {line}: import {alias.name} is not allowed")
         elif isinstance(node, ast.ImportFrom):
@@ -149,11 +190,18 @@ def check_llm_source(source: str, api: str, required: str, cls: str) -> list[str
                     problems.append(
                         f"line {line}: {', '.join(extra)} is not part of {api}'s contract"
                     )
-            elif module.split(".")[0] == "numpy":
-                bad = [a.name for a in node.names if a.name in FORBIDDEN_ATTRS or a.name == "*"]
-                if module != "numpy" or bad:
+            elif module.split(".")[0] == "numpy" and module != "numpy":
+                problems.append(f"line {line}: from {module} import ... is not allowed")
+            else:  # every other allowed library: public names it really has (D-088)
+                bad = [
+                    a.name
+                    for a in node.names
+                    if not _importable(module, a.name, allowed)
+                    or (a.asname is not None and _bad_name(a.asname))
+                ]
+                if bad:
                     problems.append(
-                        f"line {line}: from {module} import {bad or '...'} is not allowed"
+                        f"line {line}: from {module} import {', '.join(bad)} is not allowed"
                     )
         elif isinstance(node, ast.Name) and (
             node.id in FORBIDDEN_NAMES or (node.id.startswith("__") and node.id != "__name__")

@@ -111,6 +111,22 @@ FIXED_ARMS = {  # arm -> library (protocol_wp4 §3)
 MAINTAINED = {"arm4grow": "4-grow", "arm4full": "4-full", "arm5": "5"}
 
 
+_SPECS: dict[str, dict] = {}
+
+
+def expected_maintenance_spec(campaign: str) -> dict:
+    """The specification M3 runs under (``scripts/maintain.py --wp4``): P01..P18 then PC, each
+    period on its eligible instruments, the WP3 protocol's runs, cycles and GP budget, and the
+    current settings, data and source digests. Built without writing anything."""
+    if campaign not in _SPECS:
+        from lpstgp.maintenance import cycle
+
+        table = json.loads((REPORTS / "eligibility.json").read_text())["eligible"]
+        loop = cycle.Cycle(campaign, list(table), instruments=table, check=False)
+        _SPECS[campaign] = json.loads(json.dumps(loop.spec, default=str))
+    return _SPECS[campaign]
+
+
 def maintained_state(paths, campaign: str, arm: str, period: str) -> dict:
     """The library state and seed rules after a period's last maintenance cycle, L(p, C): from a
     cycle record made under the campaign's own specification, and the same as the last row of
@@ -121,6 +137,11 @@ def maintained_state(paths, campaign: str, arm: str, period: str) -> dict:
     root = paths.results_dir / "wp3" / "maintenance" / campaign
     record = json.loads((root / arm / period / f"c{CYCLES}" / "cycle.json").read_text())
     spec = json.loads((root / "campaign.json").read_text())
+    if spec != expected_maintenance_spec(campaign):
+        raise SystemExit(
+            f"maintenance {campaign}: its specification is not WP4's M3 design under the current "
+            "code, settings and data (D-088)"
+        )
     if record.get("spec_digest") != digest(spec):
         raise SystemExit(f"{arm} {period}: the last cycle was made under another specification")
     lineage = json.loads((root / arm / period / "lineage.json").read_text())
@@ -151,11 +172,23 @@ def wp4_configs(paths, settings, period: str, maintenance: str | None) -> list[C
     return configs
 
 
-def step_plan(paths, settings, periods, maintenance: str | None) -> None:
+def design_cells(period: str) -> list[tuple[tuple[str, ...], str]]:
     table = json.loads((REPORTS / "eligibility.json").read_text())["eligible"]
+    return [((inst,), period) for inst in table[period]]
+
+
+def design_tasks(paths, settings, period: str, maintenance: str | None) -> list[dict]:
+    """The tasks protocol_wp4 §4 prescribes for a period, as a plan stores them."""
+    from lpstgp.campaign.plan import plan_tasks
+
+    configs = wp4_configs(paths, settings, period, maintenance)
+    return json.loads(json.dumps(plan_tasks(configs, design_cells(period), RUNS)))
+
+
+def step_plan(paths, settings, periods, maintenance: str | None) -> None:
     for period in periods:
         configs = wp4_configs(paths, settings, period, maintenance)
-        cells = [((inst,), period) for inst in table[period]]
+        cells = design_cells(period)
         name = f"wp4-{period}" if maintenance else f"wp4-{period}-fixed"
         plan = write_plan(
             name, configs, cells, RUNS, paths, settings, register=wp2_pilot.register(),
@@ -197,6 +230,9 @@ def frozen_context(paths, settings, periods, maintenance: str) -> dict:
             raise SystemExit(
                 f"{period}: the plan's configurations differ from maintenance {maintenance}"
             )
+        # and every task of the design: each eligible instrument, every run, its paired seed
+        if plan["tasks"] != design_tasks(paths, settings, period, maintenance):
+            raise SystemExit(f"{period}: the plan's tasks are not WP4's design (D-088)")
         context[f"plan:{plan['campaign']}"] = {
             "settings_digest": plan["settings_digest"],
             "source_digest": plan["source_digest"],
@@ -220,7 +256,7 @@ def step_freeze(paths, settings, periods, maintenance: str) -> None:
     """M5: every reported rule of P01..P18 frozen; the committed manifest holds one digest per
     period's rule list (about 250,000 rules would not fit in git; D-086)."""
     from lpstgp import pilot
-    from lpstgp.campaign.execute import plan_records
+    from lpstgp.campaign.execute import iter_plan_records
     from lpstgp.freeze import digest, write_manifest
 
     if wp2_pilot.source_changed_since("HEAD"):
@@ -229,7 +265,8 @@ def step_freeze(paths, settings, periods, maintenance: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     digests = {}
     for period in periods:
-        rules = pilot.manifest_rules(plan_records(plan_path(paths, period), paths, settings))
+        records = iter_plan_records(plan_path(paths, period), paths, settings, keep=pilot.slim)
+        rules = pilot.manifest_rules(list(records))
         text = json.dumps(rules, sort_keys=True, separators=(",", ":"))
         (out_dir / f"{period}.json").write_text(text)
         digests[period] = {"rules": len(rules), "sha256": digest(rules)}
@@ -290,7 +327,7 @@ def step_test(paths, settings, periods, maintenance: str, decision: str) -> None
     """M6: rehearsal on the validation years, then the single read of P01..P18's test years."""
     from lpstgp import pilot, wp4_test
     from lpstgp.analysis import wp4 as analysis
-    from lpstgp.campaign.execute import plan_records
+    from lpstgp.campaign.execute import iter_plan_records
     from lpstgp.data.store import modelling_store
     from lpstgp.freeze import FreezeManifest, claim_test_read
     from lpstgp.runner import configs_from_settings
@@ -320,7 +357,8 @@ def step_test(paths, settings, periods, maintenance: str, decision: str) -> None
     validated = {}
     for period in periods:
         rules = period_rules(paths, manifest, period)
-        recs = plan_records(plan_path(paths, period), paths, settings)
+        # slim records: the rule and metadata only, about 1 KB instead of about 180 KB (D-088)
+        recs = list(iter_plan_records(plan_path(paths, period), paths, settings, keep=pilot.slim))
         if {r["campaign"]["task_id"] for r in recs} != set(rules):
             raise SystemExit(f"{period}: the records do not match the frozen tasks")
         for r in recs:

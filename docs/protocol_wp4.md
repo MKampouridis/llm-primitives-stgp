@@ -174,3 +174,4 @@ The plan puts WP4 at 15 Mar – 14 May 2027. Code and the runs study can start n
 - **3 Nov 2026, draft 0.1:** written (engineer, under D-042/D-061). Decisions D-075–D-079.
 - **3 Nov 2026, M2 (D-082):** the runs study gives 50 runs per configuration; §4 and §8 updated.
 - **4 Nov 2026 (D-087):** an independent review of the M1 code: the test read keeps what the secondary analyses need; data digests stop at PC's test start; tighter test-stage guards; §6 updated.
+- **4 Nov 2026 (D-088):** ChatGPT's review of `a14de9e`: an import allowlist in the source policy; streamed, slim records at freeze and test; the M3 specification and the full task design are checked at planning, freeze and test.

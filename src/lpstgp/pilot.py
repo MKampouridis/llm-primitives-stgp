@@ -55,6 +55,29 @@ def rule_of(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def slim(record: Mapping[str, Any]) -> dict[str, Any]:
+    """What a frozen rule's evaluation needs from a run record: its campaign metadata, its
+    instruments and its rule, with the same ``rule_hash``; a full GP record also holds every
+    generation and the whole hall of fame (D-088)."""
+    out: dict[str, Any] = {"campaign": record["campaign"], "instruments": record["instruments"]}
+    if record.get("kind") == "select":
+        out |= {
+            "kind": "select",
+            "library": {"strategies_lock": record["library"]["strategies_lock"]},
+            "selection": {k: {"selected": v["selected"]} for k, v in record["selection"].items()},
+        }
+    else:
+        best = record["hall_of_fame"][record["selected"]]
+        out |= {
+            "library": {"name": record["library"]["name"]},
+            "hall_of_fame": [{"entry": best["entry"], "exit": best["exit"]}],
+            "selected": 0,
+        }
+    if rule_hash(out) != rule_hash(record):
+        raise AssertionError("a slim record must keep its rule")
+    return out
+
+
 def rule_hash(record: Mapping[str, Any]) -> str:
     text = json.dumps(rule_of(record), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode()).hexdigest()

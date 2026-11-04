@@ -251,3 +251,56 @@ def test_the_source_digest_covers_prompts_and_other_resources(tmp_path):
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "__pycache__" / "a.pyc").write_bytes(b"junk")
     assert source_digest(tmp_path) == source_digest(tmp_path)
+
+
+# --- ChatGPT's review of the WP4 M1 code (D-088) -------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "from numpy import __builtins__ as b",
+        "from scipy.stats import _stats_py",
+        "from scipy.special import inspect",
+        "from numpy import os",
+        "from numpy.linalg import norm",
+        "from math import sqrt as __s",
+        "import numpy as _np",
+        "from scipy.stats import no_such_name",
+        "from typing import *",
+    ],
+)
+def test_from_imports_are_an_allowlist_of_public_names(line):
+    from lpstgp.strategies.policy import check_llm_source
+
+    assert check_llm_source(f"{line}\nOPERATOR = 1\n", "operator_api", "OPERATOR", "Operator")
+
+
+def test_ordinary_imports_still_pass():
+    from lpstgp.strategies.policy import check_llm_source
+
+    ok = (
+        "from __future__ import annotations\nimport math\nimport numpy as np\n"
+        "from numpy import linalg\nfrom scipy.stats import norm, rankdata\n"
+        "from typing import Any\nfrom collections.abc import Sequence\nOPERATOR = 1\n"
+    )
+    assert check_llm_source(ok, "operator_api", "OPERATOR", "Operator") == []
+
+
+def test_a_slim_record_keeps_the_rule_and_little_else():
+    from lpstgp import pilot
+
+    gp = {
+        "campaign": {"task_id": "t", "config": "arm3", "run": "1"}, "instruments": ["SPX"],
+        "library": {"name": "arm3", "lock": "x"}, "selected": 1,
+        "hall_of_fame": [{"entry": "a", "exit": "b"}, {"entry": "c", "exit": "d", "f": 1}],
+        "generations": [{"best": 0.1}] * 70,
+    }  # fmt: skip
+    small = pilot.slim(gp)
+    assert pilot.rule_hash(small) == pilot.rule_hash(gp)
+    assert "generations" not in small
+    select = {
+        "campaign": {"task_id": "s"}, "instruments": ["SPX"], "kind": "select",
+        "library": {"strategies_lock": "L"}, "selection": {"SPX": {"selected": "s01", "f": 2}},
+    }  # fmt: skip
+    assert pilot.rule_hash(pilot.slim(select)) == pilot.rule_hash(select)

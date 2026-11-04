@@ -24,6 +24,7 @@ def fake_cycle_end(root, arm, period, out, cycles=3):
         spec_path.parent.mkdir(parents=True, exist_ok=True)
         spec_path.write_text(json.dumps({"campaign": root.name}))
     spec = json.loads(spec_path.read_text())
+    sys.modules["wp4"]._SPECS[root.name] = spec  # stands in for M3's design specification
     d = root / arm / period / f"c{cycles}"
     d.mkdir(parents=True)
     (d / "cycle.json").write_text(json.dumps({"state_out": out, "spec_digest": digest(spec)}))
@@ -87,3 +88,38 @@ def test_seed_rules_and_authored_libraries_enter_the_configuration_digest():
         if r.split(",")[1:3] == ["wp2-gonogo-PL1", "arm2c"]
     ]
     assert wp2.digest(SETTINGS) == registered[0]
+
+
+def test_a_maintenance_campaign_under_another_design_is_refused(tmp_path):
+    """D-088 (ChatGPT): a self-consistent campaign with stale digests or runs=1 is not M3."""
+    import pytest
+
+    paths = _fake_maintenance(tmp_path, campaign="stale")
+    wp4._SPECS["stale"] = {"campaign": "stale", "runs": 3}  # what M3 would be now
+    with pytest.raises(SystemExit, match="not WP4's M3 design"):
+        wp4.maintained_state(paths, "stale", "4-full", "P03")
+
+
+def test_the_expected_maintenance_specification_is_maintain_py_wp4s():
+    from lpstgp.maintenance import cycle
+
+    spec = wp4.expected_maintenance_spec("pytest-never-written")
+    assert [p["id"] for p in spec["periods"]] == [*(f"P{k:02d}" for k in range(1, 19)), "PC"]
+    assert spec["runs"] == cycle.RUNS_PER_INSTRUMENT
+    assert spec["cycles"] == cycle.CYCLES
+    table = json.loads((REPO_ROOT / "reports" / "wp4" / "eligibility.json").read_text())
+    assert spec["instruments"] == table["eligible"]
+    from lpstgp.config import load_paths
+
+    assert not (load_paths().results_dir / "wp3" / "maintenance" / "pytest-never-written").exists()
+
+
+def test_design_tasks_cover_every_instrument_run_and_seed(tmp_path):
+    paths = _fake_maintenance(tmp_path)
+    tasks = wp4.design_tasks(paths, SETTINGS, "P03", "m")
+    table = json.loads((REPO_ROOT / "reports" / "wp4" / "eligibility.json").read_text())
+    n = len(table["eligible"]["P03"])
+    assert len(tasks) == n * (1 + 10 * wp4.RUNS)  # arm 1 once, ten GP arms x 50 runs
+    assert len({t["id"] for t in tasks}) == len(tasks)
+    seeds = {(tuple(t["instruments"]), t["run"]): t["seed"] for t in tasks}
+    assert all(seeds[(tuple(t["instruments"]), t["run"])] == t["seed"] for t in tasks)  # paired

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 import warnings
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -204,20 +204,31 @@ def plan_records(plan_path: Path, paths: Paths, settings: Mapping[str, Any]) -> 
     Only the plan's own tasks are read (a stray file in the folder is ignored), and each must be
     complete for this plan's settings, configuration and data digests.
     """
+    return list(iter_plan_records(plan_path, paths, settings))
+
+
+def iter_plan_records(
+    plan_path: Path, paths: Paths, settings: Mapping[str, Any], keep=None
+) -> Iterator[dict]:
+    """``plan_records`` one record at a time (WP4: about 14,000 full records per period would
+    not fit in memory; D-088). ``keep(record)`` maps each record to what the caller holds on to.
+    The completeness check runs after the last task, so a caller must consume every record."""
     plan = load_plan(plan_path)
     problems = verify(plan, paths, settings)
     if problems:
         raise PlanMismatchError("; ".join(problems))
     out_root = Path(plan_path).parent
-    records, missing = [], []
+    missing, versions_seen = [], set()
     for task in plan["tasks"]:
         run = run_task(plan, task, settings)
         path = record_path(out_root, run)
         if is_complete(path, run):
-            records.append(read_record(path))
+            record = read_record(path)
+            versions_seen.add(record.get("code_version", ""))
+            yield keep(record) if keep else record
         else:
             missing.append(task["id"])
-    versions = sorted({r.get("code_version", "") for r in records})
+    versions = sorted(versions_seen)
     if len(versions) > 1:  # allowed (e.g. a docs-only commit mid-campaign) but never silent
         warnings.warn(
             f"{plan['campaign']}: records come from {len(versions)} code revisions "
@@ -229,4 +240,3 @@ def plan_records(plan_path: Path, paths: Paths, settings: Mapping[str, Any]) -> 
             f"{plan['campaign']}: {len(missing)} of {len(plan['tasks'])} tasks have no complete "
             f"record (first: {missing[0]})"
         )
-    return records

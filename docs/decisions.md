@@ -1104,3 +1104,21 @@ A fresh Claude agent, given only the code and the review brief, reviewed `b4f402
    - `maintained_state` requires the last cycle record to carry the campaign's specification digest and to match the last row of its lineage.
    - The freeze and the read rebuild every configuration from the maintenance campaign and refuse a plan whose configuration digests differ.
 
+### D-088 Fixes from ChatGPT's review of the WP4 code (`a14de9e`) — Decided (engineer, under D-042/D-061; 4 Nov 2026)
+ChatGPT reviewed `a14de9e` with D-075–D-087 and made four findings. Each is confirmed and fixed with tests.
+1. **The source policy still reached the builtins (P1).**
+   - `from numpy import __builtins__ as b` passed, because `from` imports from the trusted libraries were checked only against a short blocklist.
+   - `from` imports are now an allowlist. A name must be public, must really exist in the named library, and must not be a forbidden or introspection name. A module counts only if it is itself an allowed import.
+   - Aliases may not be private or dunder names.
+   - Modules that the libraries re-export and that reach files, processes or the interpreter (`os`, `sys`, `subprocess`, `ctypes`, `pickle`, `io`, `testing` and others) are refused as attributes too.
+   - All 2,822 stored LLM-written files have the same verdict under the old and the new policy, so no admitted or frozen file used the gap.
+2. **The test driver held every full record in memory (P1).** About 248,000 decompressed GP records, at around 180 KB each in Python, came to tens of GB.
+   - `iter_plan_records` now streams the records.
+   - Freeze and test keep only `pilot.slim(record)`: the campaign metadata, the instruments and the selected rule, about 1 KB. `slim` asserts that the rule hash is unchanged.
+3. **A stale maintenance campaign could become WP4's arms (P1).** The D-087 check proved only that a campaign agreed with itself.
+   - `expected_maintenance_spec` now builds the specification that `scripts/maintain.py --wp4` runs under: P01–P18 then PC, the eligible instruments, the protocol's runs, cycles and GP budget, and the current settings, data and source digests. It writes nothing (`Cycle(..., check=False)`).
+   - Planning, freeze and test refuse a campaign whose `campaign.json` differs from it.
+4. **Freeze checked configurations, not coverage (P2).**
+   - `plan_tasks` (factored out of `write_plan`) gives the prescribed task list: every configuration × every eligible instrument × runs 1–50 (arm 1 once), with paired seeds and unique ids.
+   - Freeze and test refuse a plan whose tasks differ from it in any way. Every task must then have a complete record (`iter_plan_records`), so no portfolio can average over an incomplete design.
+

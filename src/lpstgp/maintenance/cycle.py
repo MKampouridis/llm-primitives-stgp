@@ -94,6 +94,7 @@ class Cycle:
         gp_overrides: Mapping[str, Any] | None = None,
         claude_version: str = "",
         session_runner=None,  # tests: a stand-in for session.run (same signature)
+        check: bool = True,  # False: only compute the specification (WP4's check; D-088)
     ) -> None:
         self.paths, self.settings = load_paths(), load_settings()
         self.campaign = campaign
@@ -118,7 +119,8 @@ class Cycle:
         self._check_periods(self.periods)
         self.spec = self.specification()
         self.spec_digest = digest(self.spec)
-        self._check_specification()
+        if check:
+            self._check_specification()
 
     # --- what a campaign's results depend on (D-074) ----------------------------------------
 

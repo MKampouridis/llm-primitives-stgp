@@ -118,6 +118,14 @@ def test_wp4_plans_freeze_and_reads_the_test_years_once(driver):
         execute_plan(wp4.plan_path(paths, period), paths, settings, workers=2)
     with pytest.raises(FreezeError, match="not tracked"):  # nothing frozen yet
         wp4.step_test(paths, settings, list(PERIODS), "fake", "D-999")
+    plan_file = wp4.plan_path(paths, PERIODS[0])
+    full = plan_file.read_text()
+    short = json.loads(full)
+    short["tasks"] = [t for t in short["tasks"] if t["run"] == 1]  # every config kept (D-088)
+    plan_file.write_text(json.dumps(short))
+    with pytest.raises(SystemExit, match="not WP4's design"):
+        wp4.step_freeze(paths, settings, list(PERIODS), "fake")
+    plan_file.write_text(full)
     wp4.step_freeze(paths, settings, list(PERIODS), "fake")
     manifest = json.loads((wp4.REPORTS / "freeze_manifest.json").read_text())
     per_period = len(INSTRUMENTS) * (1 + 10 * 2)  # arm 1 + 10 GP arms x 2 runs

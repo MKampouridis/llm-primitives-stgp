@@ -163,18 +163,10 @@ def settings_digest(settings: Mapping[str, Any]) -> str:
     return digest(json.loads(json.dumps(kept, default=str)))
 
 
-def write_plan(
-    name: str,
-    configs: Sequence[Config],
-    cells: Sequence[tuple[tuple[str, ...], str]],
-    runs: int,
-    paths: Paths,
-    settings: Mapping[str, Any],
-    register: Path | None = REGISTER,
-    record_format: str = "json",
-) -> Path:
-    """Tasks = configs x cells (instrument set, period) x runs; select configs get one run.
-    ``record_format="json.gz"`` (WP4, D-085) writes gzip-compressed records."""
+def plan_tasks(
+    configs: Sequence[Config], cells: Sequence[tuple[tuple[str, ...], str]], runs: int
+) -> list[dict[str, Any]]:
+    """Every task of a design, in plan order, with its paired seed; ids are unique."""
     tasks = []
     for config in configs:
         n_runs = 1 if config.kind == "select" else runs
@@ -190,6 +182,24 @@ def write_plan(
                         "seed": run_seed(instruments, period, run),
                     }
                 )
+    if len({t["id"] for t in tasks}) != len(tasks):
+        raise ValueError("two tasks of a plan share an id")
+    return tasks
+
+
+def write_plan(
+    name: str,
+    configs: Sequence[Config],
+    cells: Sequence[tuple[tuple[str, ...], str]],
+    runs: int,
+    paths: Paths,
+    settings: Mapping[str, Any],
+    register: Path | None = REGISTER,
+    record_format: str = "json",
+) -> Path:
+    """Tasks = configs x cells (instrument set, period) x runs; select configs get one run.
+    ``record_format="json.gz"`` (WP4, D-085) writes gzip-compressed records."""
+    tasks = plan_tasks(configs, cells, runs)
     instruments = sorted({i for cell, _ in cells for i in cell})
     plan = {
         "schema": PLAN_SCHEMA,
