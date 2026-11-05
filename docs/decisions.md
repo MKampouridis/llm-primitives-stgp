@@ -1285,3 +1285,26 @@ E3 ran as fixed in D-096: 80 runs (`reports/gpdev/e3.md`). **No variant passes.*
   - Across one and pooled instruments, 2- and 6-year windows, long-only and long–short positions, and three fitness functions, GP evolution never improved out-of-sample performance over its own random initial population. Its rules stayed below both the volatility-targeted trend rule and buy-and-hold on the validation years.
   - What works is design, not search. Long windows remove the gap between training and validation scores. Long–short positions and volatility sizing are what give the benchmark its Sharpe above 1.
 - **Development on the 2005–08 validation years ends here, as agreed in D-096.** The choice of what role the GP plays, and so how the paper is framed, goes to the PI before WP4.
+
+### D-098 GP's role: A (significance gate with trend fallback), B (ensembles) and C (a different problem) — E4 design — Decided (PI: A, B and C; engineer: E4 design, under D-042/D-061; 4 Nov 2026)
+The PI chose all three options of D-097:
+- **A:** the GP as an improver on a strong baseline.
+- **B:** ensembles.
+- **C:** a different problem.
+
+C's form (weekly bars, or tier-B cross-sectional stocks, which needs vendor data) is the PI's choice and is set separately. **E4** tests A and B together. Both are applied *after* evolution and decide on training data only, so they share one set of GP runs.
+- **Fresh development years.** `[gp_development_early]` adds H1–H7: 6-year fit windows with validation years 1998–99, 1999–2000, …, 2004–05. No design choice has used these years, and the periods have no test stage. The validation years are inside DEV (1995–2005), where the LLM wrote the whole strategies, so **only the TA GP** is used (human-designed terminals). Arm 2c meets A and B first in WP4.
+- **Runs.** E3's configuration (pooled, long–short, volatility-targeted, full-window Sharpe fitness): every asset class with at least two eligible instruments per period, 10 runs per cell.
+- **Methods per cell.** Validation Sharpe is the mean over the cell's instruments, net of costs, with the same sizing; rules are re-evaluated bar by bar on the FIT and VALIDATE sandboxes.
+  - *trend:* the 12-month trend rule (D-094).
+  - *free:* each run's training-best rule (hall-of-fame rank 0, **not** the validation-selected one), as in E1–E3; the median over runs.
+  - *gated (A):* each run's rank-0 rule if its **training** excess Sharpe over the trend rule (the mean over instruments of the annualised Sharpe of rule minus trend daily net returns) exceeds the expected maximum Sharpe of N null strategies, √(P/T)·[(1−γ)Φ⁻¹(1−1/N) + γΦ⁻¹(1−1/(Ne))] (Bailey and López de Prado's False Strategy Theorem, γ the Euler–Mascheroni constant, N the run's unique evaluations, T the training bars); otherwise the trend rule. The median over runs.
+  - *ensemble (B):* per instrument, the average of the 10 runs' rank-0 positions, net of the costs of the averaged position.
+  - *gated ensemble (A + B):* the same over the gated rules.
+- **Pass marks, fixed before any E4 run.**
+  - **Success.** For each of free, gated, ensemble and gated ensemble, compute the per-cell difference from the trend rule. A method **beats the trend rule** when the median difference is above 0 and a one-sided Wilcoxon test over cells, Holm-adjusted across the four methods, gives p < 0.05.
+  - **Non-inferiority.** Reported for each method: a median difference of at least −0.10.
+  - **Decision rule.** If a method beats the trend rule, it goes to the PI as the WP4 design (arm 2c then included). If none does but gated or gated-ensemble is non-inferior, the GP adds no measurable value over the baseline. The portfolios are then profitable by design, and the arm comparison becomes a question of how often each primitive set passes the gate. That framing goes to the PI.
+- **Cells (fixed before any E4 run).** Only equity indices meet the eligibility rule in H1–H7; the commodities fall below 95% session coverage. One pool per period would give 7 cells, too few for a Holm-adjusted Wilcoxon test: it would pass only if all 7 differences were positive. Each period's equities are therefore pooled by region, giving **14 cells**:
+  - Americas and Europe: SPX, NDX, CAC, DAX, UKX, SMI;
+  - Asia-Pacific: NKY, HSI, AS51, KOSPI.

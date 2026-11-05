@@ -23,6 +23,15 @@ def test_validation_years_end_by_p01s_test_start_and_there_is_no_test_year():
         assert pid in SETTINGS["leakage"]["allowed_periods"]
 
 
+def test_e4_periods_are_fresh_six_year_fits_ending_before_g1s_validation_year():
+    periods = all_periods(SETTINGS)
+    for k in range(1, 8):
+        p = periods[f"H{k}"]
+        assert p.val_start == date(1997 + k, 7, 1)
+        assert (p.val_start - p.fit_start).days >= 6 * 365
+        assert p.test_end == p.test_start <= periods["G1"].val_start
+
+
 def _store(root, poison_from=None):
     import numpy as np
     import pandas as pd
@@ -31,7 +40,7 @@ def _store(root, poison_from=None):
     from lpstgp.data.store import DataStore
 
     rng = np.random.default_rng(3)
-    dates = pd.bdate_range("1995-01-02", "2010-12-31")
+    dates = pd.bdate_range("1988-01-04", "2010-12-31")
     frame = pd.DataFrame({"date": dates,
                           "close": 100 * np.exp(np.cumsum(rng.normal(0, 0.01, len(dates))))})  # fmt: skip
     if poison_from:
@@ -46,7 +55,7 @@ def _store(root, poison_from=None):
     return DataStore(root, periods=all_periods(SETTINGS))
 
 
-@pytest.mark.parametrize("pid", ["G1", "G2", "G3"])
+@pytest.mark.parametrize("pid", ["G1", "G2", "G3", "H1", "H7"])
 def test_their_sandboxes_ignore_a_poisoned_future_and_the_test_stage_is_sealed(tmp_path, pid):
     import numpy as np
 

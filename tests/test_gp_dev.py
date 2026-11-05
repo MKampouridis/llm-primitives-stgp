@@ -64,3 +64,26 @@ def test_e2_configurations_and_the_benchmark_mark():
     got = gp_dev.e2_compare(rows, bench)["e2-2c"]
     assert got["vs_trend"] == pytest.approx(np.median([0.2, -0.25]))
     assert got["pass_benchmark"] is False  # -0.025 < 0
+
+
+def test_the_gate_bar_is_the_expected_maximum_of_null_sharpe_ratios():
+    rng = np.random.default_rng(0)
+    n, bars = 500, 1500
+    maxima = [max(rng.normal(0, 1 / np.sqrt(bars), n)) * np.sqrt(252) for _ in range(300)]
+    assert gp_dev.expected_max_sharpe(n, bars, 252) == pytest.approx(np.mean(maxima), rel=0.08)
+    assert gp_dev.expected_max_sharpe(1, bars, 252) == 0.0
+    assert gp_dev.expected_max_sharpe(5000, bars, 252) > gp_dev.expected_max_sharpe(50, bars, 252)
+
+
+def test_e4_decision_needs_a_positive_median_and_a_holm_adjusted_p():
+    cells = {str(k): {"trend": 0.5, "free": 0.5 + 0.1 * (k + 1), "gated": 0.5,
+                      "ensemble": 0.5 - 0.05, "gated_ensemble": 0.5 + 0.01 * (-1) ** k}
+             for k in range(14)}  # fmt: skip
+    d = gp_dev.e4_decision(cells)
+    assert d["free"]["beats_trend"]
+    assert d["free"]["p_holm"] >= d["free"]["p"]
+    assert not d["gated"]["beats_trend"]
+    assert d["gated"]["non_inferior"]
+    assert not d["ensemble"]["beats_trend"]
+    assert d["ensemble"]["non_inferior"]
+    assert not d["gated_ensemble"]["beats_trend"]

@@ -30,6 +30,12 @@ first_val_start = 2005-07-01
 fit_years = 6
 validation_years = 1
 
+[gp_development_early]        # GP development E4 (D-098): 6-year fits, fresh validation years
+ids = ["H1", "H2", "H3", "H4", "H5", "H6", "H7"]   # 1998-99 .. 2004-05; no test stage
+first_val_start = 1998-07-01
+fit_years = 6
+validation_years = 1
+
 [post_cutoff]                 # post-cutoff period PC (D-036, D-075): test from 2026-07-01, after the LLM's cutoff
 id = "PC"
 fit_start = 2023-07-01        # fit 2023-07..2025-06, validation 2025-07..2026-06; test to the PC data freeze
@@ -39,7 +45,7 @@ fit_start = 2023-07-01        # fit 2023-07..2025-06, validation 2025-07..2026-0
 # period may be opened; every TEST stage stays sealed until the freeze-checked WP4 read. The cap
 # keeps PC's test year out of reach of every modelling read.
 max_horizon = 2026-07-01
-allowed_periods = ["DEV", "G1", "G2", "G3", "PL1", "PL2", "P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "PC"]
+allowed_periods = ["DEV", "G1", "G2", "G3", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "PL1", "PL2", "P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15", "P16", "P17", "P18", "PC"]
 
 [quality]
 stale_run_min = 5             # this many identical consecutive closes count as one stale run

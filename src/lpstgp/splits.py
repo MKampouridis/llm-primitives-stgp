@@ -115,18 +115,16 @@ def development_period(settings: Mapping[str, Any]) -> Period:
 def gp_development_periods(settings: Mapping[str, Any]) -> tuple[Period, ...]:
     """GP development periods (D-092): long fit windows ending at consecutive validation years,
     every one before WP4's first test year, and no test stage (test end = test start)."""
-    cfg = settings.get("gp_development")
-    if not cfg:
-        return ()
     out = []
-    for k, pid in enumerate(cfg["ids"]):
-        val_start = shift_years(cfg["first_val_start"], k)
-        test_start = shift_years(val_start, cfg["validation_years"])
-        out.append(
-            Period(
-                pid, shift_years(val_start, -cfg["fit_years"]), val_start, test_start, test_start
-            )
-        )
+    for section in ("gp_development", "gp_development_early"):  # D-092, D-098
+        cfg = settings.get(section)
+        if not cfg:
+            continue
+        for k, pid in enumerate(cfg["ids"]):
+            val_start = shift_years(cfg["first_val_start"], k)
+            test_start = shift_years(val_start, cfg["validation_years"])
+            fit_start = shift_years(val_start, -cfg["fit_years"])
+            out.append(Period(pid, fit_start, val_start, test_start, test_start))
     return tuple(out)
 
 

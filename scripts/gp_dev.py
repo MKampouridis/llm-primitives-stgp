@@ -49,7 +49,14 @@ E3 (D-096)  E2 with one change, the fitness: the net Sharpe ratio of the sized p
     the whole training window (objective "sharpe"), the minimum-activity rule off, the size
     penalty kept. E2's cells, runs, benchmark and pass marks.
 
-Usage:  uv run python scripts/gp_dev.py e1|e1b|e2|e3 --mode plan|run|report [--workers 6]
+E4 (D-098)  A and B on fresh years: E3's configuration, TA GP only, H1-H7 (validation
+    1998-99 .. 2004-05), equities pooled by region (14 cells), 10 runs. After evolution, on
+    training data only: the gate (rank-0 rule if its training excess Sharpe over the trend rule
+    beats the expected maximum of N null Sharpe ratios, else the trend rule) and ensembles of
+    the cell's 10 rank-0 (or gated) rules; each method is compared with the trend rule on the
+    validation years (one-sided Wilcoxon over cells, Holm over the four methods).
+
+Usage:  uv run python scripts/gp_dev.py e1|e1b|e2|e3|e4 --mode plan|run|report [--workers 6]
 """
 
 from __future__ import annotations
@@ -88,6 +95,12 @@ TREND_BARS = 252
 E3 = "gpdev-e3"
 E3_CONFIGS = ("e3-2c", "e3-TA")
 E3_FITNESS = {**E2_FITNESS, "objective": "sharpe", "min_entries_per_year": 0.0}
+E4 = "gpdev-e4"
+E4_CONFIGS = ("e4-TA",)
+E4_PERIODS = tuple(f"H{k}" for k in range(1, 8))
+REGIONS = {"americas_europe": ("SPX", "NDX", "CAC", "DAX", "UKX", "SMI"),
+           "asia_pacific": ("NKY", "HSI", "AS51", "KOSPI")}  # fmt: skip
+E4_METHODS = ("free", "gated", "ensemble", "gated_ensemble")
 
 
 def e1_configs(settings) -> list[Config]:
@@ -171,6 +184,191 @@ def e3_plan(paths, settings) -> Path:
         E3, e3_configs(settings), e1b_cells(paths, settings), E1_RUNS, paths, settings,
         record_format="json.gz",
     )  # fmt: skip
+
+
+def e4_cells(paths, settings) -> list[tuple[tuple[str, ...], str]]:
+    """Each H period's eligible equity indices, pooled by region (D-098)."""
+    from lpstgp.data import eligibility
+
+    table = eligibility.table(paths, settings, E4_PERIODS)
+    cells = []
+    for period in E4_PERIODS:
+        for members in REGIONS.values():
+            pool = tuple(sorted(n for n in table[period] if n in members))
+            if len(pool) > 1:
+                cells.append((pool, period))
+    return cells
+
+
+def e4_plan(paths, settings) -> Path:
+    config = Config("e4-TA", "technical", gp=wp4.gp_arm("e4-TA", "technical", settings).gp,
+                    fitness=dict(E3_FITNESS))  # fmt: skip
+    return write_plan(E4, [config], e4_cells(paths, settings), E1_RUNS, paths, settings,
+                      record_format="json.gz")  # fmt: skip
+
+
+def expected_max_sharpe(n_trials: int, bars: int, periods_per_year: int) -> float:
+    """Annualised expected maximum Sharpe ratio of ``n_trials`` strategies with no skill over
+    ``bars`` bars (False Strategy Theorem, Bailey and Lopez de Prado 2014)."""
+    from scipy.stats import norm
+
+    if n_trials < 2:
+        return 0.0
+    gamma = 0.5772156649015329
+    z = (1 - gamma) * norm.ppf(1 - 1 / n_trials) + gamma * norm.ppf(1 - 1 / (n_trials * np.e))
+    return float(np.sqrt(periods_per_year / bars) * z)
+
+
+def _positions(entry, exit_, bars, lo, hi, cfg):
+    """Held positions and net returns of a rule over [lo, hi) bars, E2's sizing and costs."""
+    from lpstgp.backtest import engine
+    from lpstgp.backtest.costs import from_meta
+    from lpstgp.gp import fitness as fit
+
+    costs = from_meta(bars.meta)
+    vol = fit.trailing_vol(bars.log_return, cfg.vol_window, fit.PERIODS_PER_YEAR[bars.calendar])
+    res = engine.run(entry, exit_, bars.log_return, costs, active_from=lo, lag=cfg.execution_lag,
+                     mode=cfg.position_mode, scale=fit.vol_scale(vol, cfg.vol_target))  # fmt: skip
+    return res.held, res.net[lo:hi]
+
+
+def _net_of(held, bars, lo, hi):
+    """Net returns of a given held-position path (the averaged positions of an ensemble)."""
+    from lpstgp.backtest.costs import from_meta
+
+    lr = bars.log_return
+    simple = np.where(np.isnan(lr), 0.0, np.expm1(np.nan_to_num(lr)))
+    change = np.diff(held, prepend=0.0)
+    buy, sell = from_meta(bars.meta).rates(len(held))
+    cost = np.where(change > 0, change * buy, -change * sell)
+    return (held * simple - cost)[lo:hi]
+
+
+def _sharpe(x, ppy):
+    from lpstgp.backtest.metrics import sharpe
+
+    return float(sharpe(np.asarray(x), ppy))
+
+
+def e4_evaluate(plan_path: Path, paths, settings, configs=E4_CONFIGS) -> dict:
+    """Per cell: the validation Sharpe of every method (mean over instruments), and gate counts."""
+    from lpstgp.campaign.plan import Config as _Config
+    from lpstgp.data.store import modelling_store
+    from lpstgp.gp import fitness as fit
+    from lpstgp.pilot import rule_signals
+    from lpstgp.sandbox import Sandbox
+    from lpstgp.splits import Stage, all_periods
+
+    _gp, cfg = _Config("e", "technical", fitness=dict(E3_FITNESS)).resolved(settings)
+    store = modelling_store(paths.tier_dir("A"), settings)
+    lmax = settings["splits"]["lookback_max_bars"]
+    by_cell = collections.defaultdict(list)
+    for r in e1_records(plan_path, settings, configs):
+        by_cell[(tuple(r["instruments"]), r["period"]["id"])].append(r)
+    out = {}
+    for (instruments, pid), recs in sorted(by_cell.items()):
+        period = all_periods(settings)[pid]
+        boxes = {st: Sandbox.open(store, period, st, instruments, lmax)
+                 for st in (Stage.FIT, Stage.VALIDATE)}  # fmt: skip
+        per_inst = {}
+        gated_runs = 0
+        for name in instruments:
+            stage_data = {}
+            for st, box in boxes.items():
+                b = box[name]
+                lo_d, hi_d = period.scored_window(st)
+                lo = int(np.searchsorted(b.dates, np.datetime64(lo_d)))
+                hi = int(np.searchsorted(b.dates, np.datetime64(hi_d)))
+                lp = np.asarray(b.log_price, dtype=np.float64)
+                mom = np.full(len(lp), np.nan)
+                mom[TREND_BARS:] = lp[TREND_BARS:] - lp[:-TREND_BARS]
+                trend = _positions((mom > 0).astype(float), (mom < 0).astype(float), b, lo, hi, cfg)
+                rules = []
+                for r in recs:
+                    rank0 = {**r, "selected": 0}  # the training-best rule, not validation's
+                    sub = replace_box(box, name)
+                    ((_n, _b, _s, entry, exit_),) = rule_signals(rank0, sub)
+                    rules.append(_positions(entry, exit_, b, lo, hi, cfg))
+                stage_data[st] = (b, lo, hi, trend, rules)
+            per_inst[name] = stage_data
+        # the gate, on training data: the mean over instruments of the excess Sharpe
+        ppy = fit.PERIODS_PER_YEAR[boxes[Stage.FIT][instruments[0]].calendar]
+        gate = []
+        for k, r in enumerate(recs):
+            excess = []
+            for name in instruments:
+                b, lo, hi, trend, rules = per_inst[name][Stage.FIT]
+                excess.append(_sharpe(rules[k][1] - trend[1], ppy))
+            bars = per_inst[instruments[0]][Stage.FIT][2] - per_inst[instruments[0]][Stage.FIT][1]
+            bar = expected_max_sharpe(int(r["budget"]["unique_evaluations"]), bars, ppy)
+            gate.append(float(np.mean(excess)) > bar)
+        gated_runs = int(sum(gate))
+        methods = {m: [] for m in ("trend", *E4_METHODS)}
+        for name in instruments:
+            b, lo, hi, trend, rules = per_inst[name][Stage.VALIDATE]
+            methods["trend"].append(_sharpe(trend[1], ppy))
+            free = [_sharpe(net, ppy) for _held, net in rules]
+            chosen = [rules[k] if gate[k] else trend for k in range(len(rules))]
+            methods["free"].append(float(np.median(free)))
+            methods["gated"].append(float(np.median([_sharpe(net, ppy) for _h, net in chosen])))
+            for key, members in (("ensemble", rules), ("gated_ensemble", chosen)):
+                avg = np.mean([h for h, _net in members], axis=0)
+                methods[key].append(_sharpe(_net_of(avg, b, lo, hi), ppy))
+        out[f"{pid} {'+'.join(instruments)}"] = {
+            **{m: float(np.mean(v)) for m, v in methods.items()}, "gated_runs": gated_runs,
+            "runs": len(recs),
+        }  # fmt: skip
+    return out
+
+
+def replace_box(box, name):
+    from dataclasses import replace as _replace
+    from types import MappingProxyType
+
+    return _replace(box, bars=MappingProxyType({name: box[name]}))
+
+
+def e4_decision(cells: dict) -> dict:
+    """D-098's pass marks: each method against the trend rule over cells, Holm over methods."""
+    from scipy.stats import wilcoxon
+
+    raw = {}
+    for m in E4_METHODS:
+        diffs = [c[m] - c["trend"] for c in cells.values()]
+        p = float(wilcoxon(diffs, alternative="greater").pvalue) if any(diffs) else 1.0
+        raw[m] = {"median_diff": float(np.median(diffs)), "p": p}
+    order = sorted(raw, key=lambda m: raw[m]["p"])
+    running = 0.0
+    for i, m in enumerate(order):
+        running = max(running, min(1.0, (len(order) - i) * raw[m]["p"]))
+        raw[m]["p_holm"] = running
+        raw[m]["beats_trend"] = raw[m]["median_diff"] > 0 and running < ALPHA
+        raw[m]["non_inferior"] = raw[m]["median_diff"] >= -0.10
+    return raw
+
+
+def e4_report(cells: dict, decision: dict) -> str:
+    lines = ["# GP development E4: significance gate (A) and ensembles (B), fresh years", "",
+             "TA GP, E3's configuration, H1-H7 (validation 1998-99 .. 2004-05), equities pooled "
+             "by region, 10 runs per cell. Validation Sharpe, mean over a cell's instruments, "
+             "net of costs, volatility-targeted long-short. Pass marks fixed before the runs "
+             "(D-098). No test data.", "",
+             "| cell | trend | free | gated | ensemble | gated ensemble | runs gated in |",
+             "|---|---:|---:|---:|---:|---:|---:|"]  # fmt: skip
+    for k, c in cells.items():
+        lines.append(f"| {k[:40]} | {c['trend']:.2f} | {c['free']:.2f} | {c['gated']:.2f} | "
+                     f"{c['ensemble']:.2f} | {c['gated_ensemble']:.2f} | "
+                     f"{c['gated_runs']}/{c['runs']} |")  # fmt: skip
+    means = {m: float(np.mean([c[m] for c in cells.values()])) for m in ("trend", *E4_METHODS)}
+    lines.append("| **mean** | " + " | ".join(f"**{means[m]:.2f}**" for m in ("trend", *E4_METHODS))
+                 + " | |")  # fmt: skip
+    lines += ["", "| method | median diff vs trend | p | p (Holm) | beats trend | non-inferior |",
+              "|---|---:|---:|---:|---|---|"]  # fmt: skip
+    for m, d in decision.items():
+        lines.append(f"| {m} | {d['median_diff']:+.2f} | {d['p']:.3f} | {d['p_holm']:.3f} | "
+                     f"{'yes' if d['beats_trend'] else 'no'} | "
+                     f"{'yes' if d['non_inferior'] else 'no'} |")  # fmt: skip
+    return "\n".join(lines) + "\n"
 
 
 def e2_plan(paths, settings) -> Path:
@@ -374,22 +572,31 @@ def e1_report(summary: dict, title: str = "E1: one instrument or pooled (composi
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)  # fmt: skip
-    parser.add_argument("experiment", choices=["e1", "e1b", "e2", "e3"])
+    parser.add_argument("experiment", choices=["e1", "e1b", "e2", "e3", "e4"])
     parser.add_argument("--mode", choices=["plan", "run", "report"], required=True)
     parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args()
     paths, settings = load_paths(), load_settings()
     name, configs = {"e1": (E1, RUN_CONFIGS), "e1b": (E1B, E1B_CONFIGS),
-                     "e2": (E2, E2_CONFIGS), "e3": (E3, E3_CONFIGS)}[args.experiment]  # fmt: skip
+                     "e2": (E2, E2_CONFIGS), "e3": (E3, E3_CONFIGS),
+                     "e4": (E4, E4_CONFIGS)}[args.experiment]  # fmt: skip
     plan_path = paths.results_dir / "campaigns" / name / "tasks.json"
     if args.mode == "plan":
-        plan_path = {"e1": e1_plan, "e1b": e1b_plan, "e2": e2_plan, "e3": e3_plan}[args.experiment](
-            paths, settings
-        )
+        plans = {"e1": e1_plan, "e1b": e1b_plan, "e2": e2_plan, "e3": e3_plan, "e4": e4_plan}
+        plan_path = plans[args.experiment](paths, settings)
         plan = json.loads(plan_path.read_text())
         print(f"{plan_path}: {len(plan['tasks'])} tasks")
     elif args.mode == "run":
         print(e1_execute(plan_path, paths, settings, args.workers, configs), flush=True)
+    elif args.experiment == "e4":
+        cells = e4_evaluate(plan_path, paths, settings)
+        decision = e4_decision(cells)
+        text = e4_report(cells, decision)
+        REPORTS.mkdir(parents=True, exist_ok=True)
+        (REPORTS / "e4.json").write_text(json.dumps({"cells": cells, "decision": decision},
+                                                    indent=2) + "\n")  # fmt: skip
+        (REPORTS / "e4.md").write_text(text)
+        print(text)
     else:
         over = "cells" if args.experiment == "e1" else "runs"
         summary = e1_summary(e1_rows(plan_path, paths, settings, configs), gain_over=over)
