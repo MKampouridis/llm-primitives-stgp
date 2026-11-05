@@ -1,0 +1,160 @@
+{
+  "cells": {
+    "H4 AS51+HSI+NKY": {
+      "trend": 0.6353627954798132,
+      "free": -0.41444443149534166,
+      "gated": 0.6353627954798132,
+      "ensemble": -0.5158516379582825,
+      "gated_ensemble": 0.6353627954798132,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H5 AS51+HSI+NKY": {
+      "trend": 0.43871708407318083,
+      "free": -0.16992988405829426,
+      "gated": 0.43871708407318083,
+      "ensemble": -0.14844384384140888,
+      "gated_ensemble": 0.43871708407318083,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H6 AS51+HSI+NKY": {
+      "trend": 0.8511540713397582,
+      "free": -1.2104257926683348,
+      "gated": 0.8511540713397582,
+      "ensemble": -1.2710645072656295,
+      "gated_ensemble": 0.8511540713397582,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H7 AS51+HSI+NKY": {
+      "trend": 0.9700096981945427,
+      "free": -0.2960331800389094,
+      "gated": 0.9700096981945427,
+      "ensemble": -0.9028011725476288,
+      "gated_ensemble": 0.9700096981945426,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H2 CAC+DAX+NDX+SMI+SPX+UKX": {
+      "trend": 0.5490272553283467,
+      "free": 0.8267343089932918,
+      "gated": 0.5490272553283467,
+      "ensemble": 0.8463098822323643,
+      "gated_ensemble": 0.5490272553283466,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H3 CAC+DAX+NDX+SMI+SPX+UKX": {
+      "trend": -0.29870284230646005,
+      "free": -0.7819576617523528,
+      "gated": -0.29870284230646005,
+      "ensemble": -0.7227692479702214,
+      "gated_ensemble": -0.2987028423064601,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H4 CAC+DAX+NDX+SMI+SPX+UKX": {
+      "trend": 1.3736626034548396,
+      "free": -0.5076706987928614,
+      "gated": 1.3736626034548396,
+      "ensemble": -0.925018428747108,
+      "gated_ensemble": 1.3736626034548394,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H5 CAC+DAX+NDX+SMI+SPX+UKX": {
+      "trend": 0.12531016321038857,
+      "free": -0.1503059906505765,
+      "gated": 0.12531016321038857,
+      "ensemble": -0.10845775713896011,
+      "gated_ensemble": 0.12531016321038854,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H6 CAC+DAX+NDX+SMI+SPX+UKX": {
+      "trend": 0.41790924210437197,
+      "free": -0.22444497464014357,
+      "gated": 0.41790924210437197,
+      "ensemble": -0.36560178465435883,
+      "gated_ensemble": 0.417909242104372,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H7 CAC+DAX+NDX+SMI+SPX+UKX": {
+      "trend": 0.9140063872165043,
+      "free": -0.07565505085403443,
+      "gated": 0.9140063872165043,
+      "ensemble": -0.46672576542337124,
+      "gated_ensemble": 0.9140063872165042,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H1 CAC+DAX+NDX+SPX+UKX": {
+      "trend": -0.25253518707528844,
+      "free": 1.0815862080025067,
+      "gated": -0.25253518707528844,
+      "ensemble": 0.915512989734171,
+      "gated_ensemble": -0.25253518707528844,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H1 HSI+NKY": {
+      "trend": -0.7476313108381739,
+      "free": 0.7580086329624899,
+      "gated": -0.7476313108381739,
+      "ensemble": 1.0849065169931413,
+      "gated_ensemble": -0.7476313108381738,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H2 HSI+NKY": {
+      "trend": -0.08966675795610496,
+      "free": 0.1324332975917623,
+      "gated": -0.08966675795610496,
+      "ensemble": 0.14468829863314744,
+      "gated_ensemble": -0.08966675795610501,
+      "gated_runs": 0,
+      "runs": 10
+    },
+    "H3 HSI+NKY": {
+      "trend": 0.45275152244113004,
+      "free": 0.012046539379858133,
+      "gated": 0.45275152244113004,
+      "ensemble": 0.23052658016109545,
+      "gated_ensemble": 0.45275152244113015,
+      "gated_runs": 0,
+      "runs": 10
+    }
+  },
+  "decision": {
+    "free": {
+      "median_diff": -0.5459508937886839,
+      "p": 0.947998046875,
+      "p_holm": 1.0,
+      "beats_trend": false,
+      "non_inferior": false
+    },
+    "gated": {
+      "median_diff": 0.0,
+      "p": 1.0,
+      "p_holm": 1.0,
+      "beats_trend": false,
+      "non_inferior": true
+    },
+    "ensemble": {
+      "median_diff": -0.5056136667891755,
+      "p": 0.947998046875,
+      "p_holm": 1.0,
+      "beats_trend": false,
+      "non_inferior": false
+    },
+    "gated_ensemble": {
+      "median_diff": -1.3877787807814457e-17,
+      "p": 0.8615564427480633,
+      "p_holm": 1.0,
+      "beats_trend": false,
+      "non_inferior": true
+    }
+  }
+}

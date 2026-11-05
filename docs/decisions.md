@@ -1308,3 +1308,16 @@ C's form (weekly bars, or tier-B cross-sectional stocks, which needs vendor data
 - **Cells (fixed before any E4 run).** Only equity indices meet the eligibility rule in H1–H7; the commodities fall below 95% session coverage. One pool per period would give 7 cells, too few for a Holm-adjusted Wilcoxon test: it would pass only if all 7 differences were positive. Each period's equities are therefore pooled by region, giving **14 cells**:
   - Americas and Europe: SPX, NDX, CAC, DAX, UKX, SMI;
   - Asia-Pacific: NKY, HSI, AS51, KOSPI.
+
+### D-099 GP development E4 result: no evolved rule passes the gate; ensembles do not help — Decided (engineer, under D-042/D-061; 5 Nov 2026)
+E4 ran as fixed in D-098: 140 runs of the TA GP on fresh years, with validation 1998–99 to 2004–05 (`reports/gpdev/e4.md`).
+- **The gate.** **No run's evolved rule passed it**: 0 of 140. The gated methods are therefore identical to the trend rule (mean validation Sharpe 0.38 over the 14 cells). They are non-inferior by construction and do not beat it.
+- **Free rules and ensembles.** The free training-best rules average −0.07 and their ensembles −0.16. Their median differences from the trend rule are −0.55 and −0.51, with one-sided p = 0.95 for both and Holm-adjusted p = 1.
+  - The evolved rules beat the trend rule only in H1 (1998–99, both regions) and H2 (Americas and Europe), and lose in 11 of 14 cells.
+  - Averaging the 10 runs' positions made matters worse, not better: the rules' errors are not independent noise around a real edge.
+- **Under D-098's decision rule,** the GP adds no measurable value over the baseline on these fresh years. The 2005–08 experiments (D-091 to D-097) found the same.
+- **The trend rule per instrument.** Its mean per-instrument Sharpe is 0.38 here. The portfolio figure of 1.31 (D-090) comes from diversification across asset classes, not from any single market.
+- **Next, for the PI.**
+  1. A planted-signal recovery test on synthetic data, which checks that the GP machinery can find an edge that is known to be there.
+  2. The form of option C.
+  3. The paper's framing.
