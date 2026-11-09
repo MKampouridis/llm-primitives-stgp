@@ -1321,3 +1321,15 @@ E4 ran as fixed in D-098: 140 runs of the TA GP on fresh years, with validation 
   1. A planted-signal recovery test on synthetic data, which checks that the GP machinery can find an edge that is known to be there.
   2. The form of option C.
   3. The paper's framing.
+
+### D-100 The project moves to rag-server; all compute on CERES — Decided (PI; 5–9 Nov 2026)
+The PI moved the project off the MacBook Pro to **rag-server** (Ubuntu 26.04, x86-64, 4 cores, 15 GB), where further GP projects are being consolidated.
+- **The transfer.**
+  - *What moved.* The server cloned the repository from GitHub at `ef347d0`. Data and results (14,534 files, 880 MB) were copied by rsync, and a checksum comparison found no differences. The locked environment was installed with `uv sync --locked --all-extras`.
+  - *Tests.* The full suite passes there: 1,557 passed, and 2 macOS-sandbox tests skipped.
+  - *Not moved.* Caches were not copied (disposable).
+- **The server is the only working copy from now on.** The two-Macs hand-over (D-055, `scripts/handover.py`) is retired.
+- **All compute goes to CERES, however small (the PI's instruction).** The server is for editing, git, planning, reports and test suites, run at low priority, because it also hosts the PI's live RAG Policies service.
+- **Backups.** GitHub holds the code and reports, and CERES holds its own campaigns. The rest — data, the LLM session archives of WP2 and WP3, and the Mac-run campaigns — is mirrored from the server to the Box folder on the Mac at milestones.
+- **Before M3.** The LLM sandbox (`strategies/execute.py`) uses macOS `sandbox-exec`, so it is ported to bubblewrap and its boundary re-checked before M3. The PI will install bubblewrap.
+- **Numerics.** Mac-run results are not bit-reproducible on x86 Linux (D-089). Each campaign runs on one platform.
