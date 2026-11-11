@@ -206,9 +206,12 @@ def write_plan(
     settings: Mapping[str, Any],
     register: Path | None = REGISTER,
     record_format: str = "json",
+    tier: str = "A",
 ) -> Path:
     """Tasks = configs x cells (instrument set, period) x runs; select configs get one run.
-    ``record_format="json.gz"`` (WP4, D-085) writes gzip-compressed records."""
+    ``record_format="json.gz"`` (WP4, D-085) writes gzip-compressed records. ``tier`` is the data
+    tier the runs read (D-101: "S", the synthetic planted-signal data); it enters the plan only
+    when it is not "A", so every earlier plan stays the same."""
     tasks = plan_tasks(configs, cells, runs)
     instruments = sorted({i for cell, _ in cells for i in cell})
     plan = {
@@ -217,7 +220,7 @@ def write_plan(
         "created_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "code_version": git_revision(),
         "settings_digest": settings_digest(settings),
-        "data_digest": data_digest(paths, instruments),
+        "data_digest": data_digest(paths, instruments, tier),
         "source_digest": source_digest(),
         "configs": {c.name: {**asdict(c), "digest": c.digest(settings)} for c in configs},
         "tasks": tasks,
@@ -226,10 +229,14 @@ def write_plan(
         if record_format != "json.gz":
             raise ValueError(f"unknown record format {record_format}")
         plan["record_format"] = record_format
+    if tier != "A":
+        plan["tier"] = tier
     plan = json.loads(json.dumps(plan, default=str))  # as stored, so plans compare exactly
     out = paths.results_dir / "campaigns" / name / "tasks.json"
     old = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
-    changed = [k for k in PLAN_IDENTITY if old is not None and old.get(k) != plan[k]]
+    # "tier" is compared apart from PLAN_IDENTITY, whose keys every stored plan has (WP2's
+    # report provenance digests them, D-051).
+    changed = [k for k in (*PLAN_IDENTITY, "tier") if old is not None and old.get(k) != plan.get(k)]
     if old is not None and not changed:
         plan = old  # the same plan: left untouched (cluster jobs may be reading it)
     else:

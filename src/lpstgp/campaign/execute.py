@@ -45,7 +45,7 @@ def verify(plan: Mapping, paths: Paths, settings: Mapping[str, Any]) -> list[str
     problems = []
     if settings_digest(settings) != plan["settings_digest"]:
         problems.append("settings changed since the plan was written")
-    if data_digest(paths, plan["data_digest"]) != plan["data_digest"]:
+    if data_digest(paths, plan["data_digest"], plan.get("tier", "A")) != plan["data_digest"]:
         problems.append("data files changed since the plan was written")
     if source_digest() != plan.get("source_digest"):
         problems.append("source code (src/lpstgp) changed since the plan was written")
@@ -78,6 +78,7 @@ def run_task(plan: Mapping, task: Mapping, settings: Mapping[str, Any]) -> RunTa
         seed=task["seed"],
         gp=gp_cfg,
         fitness=fit_cfg,
+        tier=plan.get("tier", "A"),
         campaign=_meta(plan, task),
         seed_rules=_config(plan, task["config"]).seed_rules,
         compressed=plan.get("record_format") == "json.gz",

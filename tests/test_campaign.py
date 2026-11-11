@@ -235,3 +235,38 @@ def test_compressed_records_execute_resume_and_collect(campaign_paths):
     with pytest.raises(ValueError, match="record format"):
         write_plan("bad", configs, [(("AAA",), "PL1")], 1, campaign_paths, settings,
                    register=None, record_format="csv")  # fmt: skip
+
+
+def test_a_plan_names_its_data_tier_only_when_it_is_not_tier_a(campaign_paths):
+    """D-101: tier S plans digest, verify and run on tier S; tier A plans are unchanged."""
+    from lpstgp.campaign.execute import run_task
+    from lpstgp.runner import record_path
+
+    settings = load_settings()
+    write_synthetic_tier(campaign_paths.tier_dir("S"))
+    (campaign_paths.tier_dir("S") / "processed" / "BBB.parquet").unlink()  # only AAA in tier S
+    gp = {k: v for k, v in TINY.items() if k != "cache_mb"} | {"cache_bytes": 32 * 2**20}
+    config = [Config("arm_b", "technical", gp=gp)]
+    cells = [(("AAA",), "G1")]
+    plan_a = load_plan(write_plan("ta", config, cells, 1, campaign_paths, settings, register=None))
+    plan_s = load_plan(
+        write_plan("ts", config, cells, 1, campaign_paths, settings, register=None, tier="S")
+    )
+    assert "tier" not in plan_a
+    assert plan_s["tier"] == "S"
+    assert plan_a["data_digest"] == plan_s["data_digest"]  # the same rows, read from each tier
+    assert verify(plan_s, campaign_paths, settings) == []
+    run = run_task(plan_s, plan_s["tasks"][0], settings)
+    assert run.tier == "S"
+    assert run_task(plan_a, plan_a["tasks"][0], settings).tier == "A"
+    assert record_path("out", run).parts[1] == "tierS"
+    (campaign_paths.tier_dir("S") / "processed" / "AAA.parquet").unlink()
+    assert verify(plan_s, campaign_paths, settings) == [
+        "data files changed since the plan was written"
+    ]
+    assert verify(plan_a, campaign_paths, settings) == []
+    with pytest.raises(PlanMismatchError):
+        execute_slice(
+            campaign_paths.results_dir / "campaigns" / "ts" / "tasks.json",
+            campaign_paths, settings, 0,
+        )  # fmt: skip

@@ -1,0 +1,27 @@
+#!/bin/bash
+# E5 (D-101): writes the synthetic planted-signal data (tier S, 624 files) and the campaign plan
+# on CERES, where the runs read them. One core, about 10 minutes. Submit from the repository
+# folder, after `git pull`:
+#
+#   mkdir -p logs
+#   qsub scripts/ceres/e5_data.sge
+#
+# Worlds are deterministic and complete ones are kept, so the job is safe to repeat. When it has
+# finished, its log ends with the task count; then submit the runs (docs/CERES.md, section 7).
+#$ -N lpstgp-e5-data
+#$ -S /bin/bash
+#$ -q all.q
+#$ -cwd
+#$ -j y
+#$ -o logs/
+set -eo pipefail   # not -u: conda's own activation scripts use variables that may be unset
+unset PYTHONPATH   # CERES sets one for its own Pythons; the environment's Python would load their packages
+source "$HOME/miniforge3/etc/profile.d/conda.sh"
+conda activate lpstgp
+export LPSTGP_PATHS="${LPSTGP_PATHS:-$PWD/config/paths.ceres.toml}"
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1
+export NUMBA_CACHE_DIR="${TMPDIR:-/tmp}/numba-cache-$USER"   # compiled code kept on the node, not on NFS
+echo "$(date -u +%FT%TZ) $(hostname) E5 data and plan"
+python scripts/gp_dev.py e5 --mode data --workers 1
+python scripts/gp_dev.py e5 --mode plan
+echo "$(date -u +%FT%TZ) done"

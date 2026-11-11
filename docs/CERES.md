@@ -116,3 +116,31 @@ The budget check (`budget-check`) and the go/no-go (`gonogo`, two plans: `wp2-go
 - **Stopping elements:** `qdel <job>` stops a whole array; `qdel <job> -t 5-9` stops some of its elements.
 - **Short tasks:** `COUNT=K` in `-v` makes each element do K tasks. `campaign_tasks.py status --count K` prints the matching `-t` range.
 - **`PlanMismatchError`:** the data, settings or a library lock on CERES differ from the Mac's. Pull the code, or copy the data again.
+
+## 7. E5: the planted-signal test (D-101)
+
+The project now lives on rag-server (D-100), and all compute goes to CERES. E5 reads synthetic data (tier S), so nothing is copied up: the data and the plan are written on CERES by a small job, and the runs follow.
+
+**On the CERES login node:**
+
+```bash
+source ~/miniforge3/etc/profile.d/conda.sh && conda activate lpstgp
+unset PYTHONPATH && export LPSTGP_PATHS=~/llm-primitives-stgp/config/paths.ceres.toml
+cd ~/llm-primitives-stgp && git pull && mkdir -p logs
+qsub scripts/ceres/e5_data.sge                                         # tier S (624 files) and the plan: one core, about 10 minutes
+qstat -u $USER                                                         # wait until it has gone
+tail -3 logs/lpstgp-e5-data.o*                                         # ends with "1040 tasks" and "done"
+python scripts/campaign_tasks.py status --campaign gpdev-e5 --count 4  # 260 elements of 4 tasks
+qsub -t 1-2 -tc 2 -v CAMPAIGN=gpdev-e5,COUNT=4 scripts/ceres/tasks.sge   # test elements; check logs/
+qsub -t 3-260 -tc 60 -v CAMPAIGN=gpdev-e5,COUNT=4 scripts/ceres/tasks.sge
+```
+
+**On rag-server, when the runs have finished.** The report reads the data as well as the records:
+
+```bash
+rsync -av ceres:lpstgp-data/data/tierS data/
+rsync -av ceres:lpstgp-data/results/campaigns/gpdev-e5 results/campaigns/
+nice -n 19 uv run python scripts/gp_dev.py e5 --mode report            # reports/gpdev/e5.md, about 5 minutes on one core
+```
+
+The configuration is entered in the trial register on rag-server (`gp_dev.py e5 --mode register`), not by the plan, so the CERES checkout stays clean.
